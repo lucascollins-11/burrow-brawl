@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 /** Pan/zoom controller for an orthographic camera looking at the z=0 play plane. */
 export class PanZoomCamera {
@@ -13,18 +13,21 @@ export class PanZoomCamera {
   private lastY = 0;
   private readonly keys = new Set<string>();
 
-  constructor(private readonly el: HTMLElement, viewHeight = 1200) {
+  constructor(
+    private readonly el: HTMLElement,
+    viewHeight = 1200,
+  ) {
     this.viewHeight = viewHeight;
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 5000);
     this.camera.position.set(1024, -512, 1000);
     this.resize();
-    el.addEventListener('pointerdown', this.onDown);
-    window.addEventListener('pointermove', this.onMove);
-    window.addEventListener('pointerup', this.onUp);
-    el.addEventListener('wheel', this.onWheel, { passive: false });
-    window.addEventListener('keydown', (e) => this.keys.add(e.key.toLowerCase()));
-    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
-    window.addEventListener('resize', () => this.resize());
+    el.addEventListener("pointerdown", this.onDown);
+    window.addEventListener("pointermove", this.onMove);
+    window.addEventListener("pointerup", this.onUp);
+    el.addEventListener("wheel", this.onWheel, { passive: false });
+    window.addEventListener("keydown", (e) => this.keys.add(e.key.toLowerCase()));
+    window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
+    window.addEventListener("resize", () => this.resize());
   }
 
   resize(): void {
@@ -53,10 +56,10 @@ export class PanZoomCamera {
     const speed = this.viewHeight * 0.8 * dt;
     let dx = 0;
     let dy = 0;
-    if (this.keys.has('a') || this.keys.has('arrowleft')) dx -= 1;
-    if (this.keys.has('d') || this.keys.has('arrowright')) dx += 1;
-    if (this.keys.has('w') || this.keys.has('arrowup')) dy += 1;
-    if (this.keys.has('s') || this.keys.has('arrowdown')) dy -= 1;
+    if (this.keys.has("a") || this.keys.has("arrowleft")) dx -= 1;
+    if (this.keys.has("d") || this.keys.has("arrowright")) dx += 1;
+    if (this.keys.has("w") || this.keys.has("arrowup")) dy += 1;
+    if (this.keys.has("s") || this.keys.has("arrowdown")) dy -= 1;
     this.camera.position.x += dx * speed;
     this.camera.position.y += dy * speed;
   }
@@ -86,7 +89,10 @@ export class PanZoomCamera {
     const rect = this.el.getBoundingClientRect();
     const before = this.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
     const factor = Math.exp(e.deltaY * 0.001);
-    this.viewHeight = Math.min(this.maxViewHeight, Math.max(this.minViewHeight, this.viewHeight * factor));
+    this.viewHeight = Math.min(
+      this.maxViewHeight,
+      Math.max(this.minViewHeight, this.viewHeight * factor),
+    );
     this.resize();
     // Keep the point under the cursor fixed.
     const after = this.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);

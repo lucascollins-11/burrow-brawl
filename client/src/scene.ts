@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 /** Placeholder diorama: backdrop layers, a play-plane grid and a 2048x1024 bounds box. */
 export function buildScene(): THREE.Scene {
@@ -41,7 +41,7 @@ export function buildScene(): THREE.Scene {
     new THREE.MeshStandardMaterial({ color: 0xe0805a, roughness: 0.8 }),
   );
   cube.position.set(1024, -512, 30);
-  cube.name = 'test-cube';
+  cube.name = "test-cube";
   scene.add(cube);
 
   return scene;

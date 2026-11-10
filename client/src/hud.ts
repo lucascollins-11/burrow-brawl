@@ -16,7 +16,13 @@ export class DebugHud {
     }
   }
 
-  render(info: { camX: number; camY: number; viewHeight: number; cursorX: number; cursorY: number }): void {
+  render(info: {
+    camX: number;
+    camY: number;
+    viewHeight: number;
+    cursorX: number;
+    cursorY: number;
+  }): void {
     this.el.textContent =
       `fps    ${this.fps.toFixed(0)}\n` +
       `cam    ${info.camX.toFixed(0)}, ${info.camY.toFixed(0)}\n` +
