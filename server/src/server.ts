@@ -11,6 +11,8 @@ export interface GameServerOptions {
   /** Injectable clock (ms). Defaults to Date.now. */
   now?: () => number;
   codeGen?: () => string;
+  /** "manual" stops matches from ticking on their own (tests). */
+  ticker?: "realtime" | "manual";
 }
 
 export interface GameServer {
@@ -31,6 +33,7 @@ export function createGameServer(config: ServerConfig, opts: GameServerOptions =
     resumeWindowMs: config.resumeWindowMs,
     emptyRoomTtlMs: config.emptyRoomTtlMs,
     ...(opts.codeGen ? { codeGen: opts.codeGen } : {}),
+    ...(opts.ticker ? { ticker: opts.ticker } : {}),
   });
   const live = new Map<string, Connection>();
   const all = new Set<Connection>();

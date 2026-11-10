@@ -18,6 +18,7 @@ import {
   type ServerMessage,
   type TeamSetup,
 } from "@burrow-brawl/shared/src/net";
+import { MatchRunner } from "../match/runner";
 
 /** What a room needs from a live connection. */
 export interface Peer {
@@ -34,8 +35,13 @@ interface MemberRec extends Member {
 
 export type LobbyMessage = Extract<
   ClientMessage,
-  { t: `lobby.${string}` } | { t: "chat" } | { t: "room.sync" }
+  { t: `lobby.${string}` } | { t: "chat" } | { t: "room.sync" } | { t: "input" } | { t: "desync" }
 >;
+
+export interface RoomOptions {
+  /** Match tick source; tests use "manual" and drive Room.match.advance(). */
+  ticker: "realtime" | "manual";
+}
 
 const DEFAULT_CRITTER_NAMES = ["Pip", "Nib", "Moss", "Tuck"];
 const CHAT_MIN_INTERVAL_MS = 1_000;
@@ -51,12 +57,15 @@ export class Room {
   private teams: TeamSetup[] = [];
   private settings: MatchSettings = { ...DEFAULT_SETTINGS };
   private nextTeamNo = 1;
+  /** The running match, while phase is "match". */
+  match: MatchRunner | null = null;
 
   constructor(
     readonly code: string,
     hostId: string,
     private readonly now: () => number,
     private readonly onRemove: (id: string) => void = () => {},
+    private readonly opts: RoomOptions = { ticker: "realtime" },
   ) {
     this.hostId = hostId;
     this.lastActiveAt = now();
@@ -144,6 +153,8 @@ export class Room {
         : { t: "room.joined", re, room: this.state() },
     );
     this.broadcast({ t: "room.update", room: this.state() }, id);
+    // Back into a running match: full snapshot plus stamped commands.
+    if (existing && this.match) this.match.resync(id);
     return null;
   }
 
@@ -200,6 +211,8 @@ export class Room {
   }
 
   closeAll(): void {
+    this.match?.stop();
+    this.match = null;
     for (const m of this.members.values()) {
       this.onRemove(m.id);
       if (m.peer) {
@@ -220,6 +233,16 @@ export class Room {
     const isHost = this.hostId === id;
 
     switch (msg.t) {
+      case "input": {
+        if (this.phase !== "match" || !this.match) return "not_allowed";
+        return this.match.onInput(id, msg.turn, msg.cmds);
+      }
+
+      case "desync":
+        if (this.phase !== "match" || !this.match) return "not_allowed";
+        this.match.onDesync(id, msg.tick, msg.h);
+        return null;
+
       case "room.sync":
         me.peer?.send({ t: "room.update", room: this.state() });
         return null;
@@ -297,14 +320,46 @@ export class Room {
         const controlled = this.teams.filter((t) => t.controllerId !== null);
         const everyoneSet = members.every((m) => m.connected && m.teamId !== null && m.ready);
         if (controlled.length < MIN_TEAMS || !everyoneSet) return "not_allowed";
-        // O3 takes it from here: build the match, send match.start.
-        this.phase = "loading";
-        break;
+        this.startMatch();
+        return null; // startMatch broadcast the new phase
       }
     }
     this.bump();
     this.broadcast({ t: "room.update", room: this.state() });
     return null;
+  }
+
+  // ------------------------------------------------------------ match
+
+  private startMatch(): void {
+    const teams = this.teams.filter((t) => t.controllerId !== null);
+    const config = MatchRunner.configFor(this.settings, teams.length);
+    this.phase = "match";
+    for (const m of this.members.values()) m.ready = false;
+    this.bump();
+    this.broadcast({ t: "room.update", room: this.state() });
+    this.match = new MatchRunner(
+      config,
+      teams.map((t) => t.id),
+      teams.map((t) => t.controllerId!),
+      {
+        broadcast: (msg) => this.broadcast(msg),
+        sendTo: (memberId, msg) => this.members.get(memberId)?.peer?.send(msg),
+        isConnected: (memberId) => this.members.get(memberId)?.connected ?? false,
+        onEnd: () => this.endMatch(),
+      },
+      { ticker: this.opts.ticker },
+    );
+    this.match.start();
+  }
+
+  private endMatch(): void {
+    this.match = null;
+    this.phase = "lobby";
+    this.unreadyAll();
+    // Members who left during the match free their teams now.
+    this.bump();
+    this.broadcast({ t: "room.update", room: this.state() });
   }
 
   // ------------------------------------------------------------ helpers

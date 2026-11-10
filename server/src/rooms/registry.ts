@@ -19,6 +19,8 @@ export interface RegistryOptions {
   emptyRoomTtlMs: number;
   /** For tests: deterministic room codes. */
   codeGen?: () => string;
+  /** Match tick source (tests use "manual"). */
+  ticker?: "realtime" | "manual";
 }
 
 export function randomRoomCode(): string {
@@ -59,9 +61,15 @@ export class Registry {
       if (tries > 50) throw new Error("could not allocate a room code");
       code = gen();
     }
-    const room = new Room(code, sub, this.opts.now, (id) => {
-      if (this.roomOf.get(id) === code) this.roomOf.delete(id);
-    });
+    const room = new Room(
+      code,
+      sub,
+      this.opts.now,
+      (id) => {
+        if (this.roomOf.get(id) === code) this.roomOf.delete(id);
+      },
+      { ticker: this.opts.ticker ?? "realtime" },
+    );
     this.rooms.set(code, room);
     this.roomOf.set(sub, code);
     room.attach(sub, nickname, peer, re);
