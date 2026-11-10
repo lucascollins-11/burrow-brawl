@@ -12,7 +12,7 @@ import { DebugHud } from "./hud";
 import { buildScene } from "./scene";
 import { TerrainRenderer } from "./terrain/renderer";
 import { mountUi } from "./ui";
-import { MockTransport } from "./ui/mockTransport";
+import { MockClient } from "./ui/mockClient";
 
 const app = document.getElementById("app")!;
 const hudEl = document.getElementById("hud")!;
@@ -187,16 +187,15 @@ function frame(): void {
 }
 requestAnimationFrame(frame);
 
-// Lobby overlay. Add ?nolobby to the URL to go straight to the debug scene, ?mock for a fake server.
+// Lobby overlay. Add ?nolobby to the URL to go straight to the debug scene, ?mock for a fake server
+// (?mock=slow also simulates a cold-starting server: it waits, fails once, then works).
 const params = new URLSearchParams(location.search);
 if (!params.has("nolobby")) {
   const mock = params.has("mock");
   mountUi(document.body, {
     onClick: () => audio.play("uiClick"),
-    transport: mock ? () => new MockTransport() : undefined,
-    guestToken: mock
-      ? async () => {
-          // ?mock=slow simulates a cold-starting server: wait, then fail once.
+    connect: mock
+      ? async (nick) => {
           if (params.get("mock") === "slow") {
             await new Promise((r) => setTimeout(r, 6000));
             if (!sessionStorage.getItem("mockRetried")) {
@@ -204,7 +203,7 @@ if (!params.has("nolobby")) {
               throw new Error("Could not reach the game server.");
             }
           }
-          return { token: "mock", nickname: "You" };
+          return new MockClient(nick);
         }
       : undefined,
   });
