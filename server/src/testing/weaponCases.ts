@@ -18,6 +18,10 @@ export interface WeaponCase {
   expect: SimEvent["type"][];
   /** Commands sent before the shot (walk, jump), one batch per entry. */
   before?: Cmd[][];
+  /** Click point in mask cells for click-targeted weapons. Not mirrored. */
+  target?: { x: number; y: number };
+  /** Send the fire command this many times, with runner.advance(1) between (default 1). */
+  repeat?: number;
   /** Test name suffix when one weapon has several cases. */
   label?: string;
 }
@@ -40,5 +44,22 @@ export const WEAPON_CASES: WeaponCase[] = [
     expect: ["fired", "explosion"],
     before: [[{ k: "jump" }]],
     label: "5 s fuse after a jump",
+  },
+  // S12 arsenal. The shotgun owes two blasts; only the second ends the turn.
+  {
+    weapon: "pepper-shotgun",
+    angleDeg: 5,
+    power: 50,
+    repeat: 2,
+    expect: ["shot", "fired"],
+  },
+  { weapon: "root-punch", angleDeg: 0, power: 0, expect: ["punched", "fired"] },
+  { weapon: "jelly-mine", angleDeg: 0, power: 0, expect: ["minePlaced", "fired"] },
+  {
+    weapon: "beehive-strike",
+    angleDeg: 0,
+    power: 0,
+    target: { x: 1024, y: 500 },
+    expect: ["strikeCalled", "fired", "explosion"],
   },
 ];
