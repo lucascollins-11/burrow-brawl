@@ -1,5 +1,5 @@
 import type { Fixed } from "../fixed";
-import { cosDeg, FIXED_ONE, fmul, isqrt, sinDeg, toFixed } from "../fixed";
+import { cosDeg, FIXED_ONE, fmul, idiv, isqrt, sinDeg, toFixed } from "../fixed";
 import { carveCircle, isSolid, surfaceNormal } from "../terrain";
 import type { Terrain } from "../terrain";
 import { loadWeapons } from "../weapons/load";
@@ -70,7 +70,7 @@ export function spawnProjectile(
   const cos = cosDeg(cmd.angleDeg);
   const sin = sinDeg(cmd.angleDeg);
   const maxSpeed = perTick(num(w.params, "maxSpeed", 600));
-  const speed = Math.trunc((maxSpeed * power) / 100) | 0;
+  const speed = idiv(maxSpeed * power, 100) | 0;
 
   let fuseTicks = -1;
   if (cmd.weaponId === "fizz-grenade") {
@@ -140,9 +140,9 @@ export function explode(
     const amount = Math.floor((w.damage * falloff) / radius);
 
     // Direction away from the blast (straight up when exactly at the centre).
-    const nx = dist === 0 ? 0 : Math.trunc((dx * FIXED_ONE) / dist);
-    const ny = dist === 0 ? -FIXED_ONE : Math.trunc((dy * FIXED_ONE) / dist);
-    const mag = Math.trunc((perTick(w.knockback) * falloff) / radius);
+    const nx = dist === 0 ? 0 : idiv(dx * FIXED_ONE, dist);
+    const ny = dist === 0 ? -FIXED_ONE : idiv(dy * FIXED_ONE, dist);
+    const mag = idiv(perTick(w.knockback) * falloff, radius);
     const kvx = fmul(nx, mag);
     const kvy = fmul(ny, mag);
 
@@ -200,10 +200,10 @@ export function stepProjectiles(
       if (w.windAffected) vx = (vx + wind * WIND_ACCEL_PER_UNIT) | 0;
       vy = Math.min(vy, TERMINAL_VELOCITY * 2) | 0;
 
-      const n = Math.max(1, Math.ceil(Math.max(Math.abs(vx), Math.abs(vy)) / FIXED_ONE));
+      const n = Math.max(1, (Math.max(Math.abs(vx), Math.abs(vy)) + FIXED_ONE - 1) >> 16);
       for (let i = 0; i < n && detonateAt === null; i++) {
-        const nx = (x + Math.trunc(vx / n)) | 0;
-        const ny = (y + Math.trunc(vy / n)) | 0;
+        const nx = (x + idiv(vx, n)) | 0;
+        const ny = (y + idiv(vy, n)) | 0;
         const hitX = cell(nx);
         const hitY = cell(ny);
 
@@ -221,8 +221,10 @@ export function stepProjectiles(
           y = ny;
         } else if (isSolid(terrain, hitX, hitY)) {
           // Grenade: reflect off the surface and lose energy.
-          let { nx: sx, ny: sy } = surfaceNormal(terrain, hitX, hitY);
-          if (sx === 0 && sy === 0) sy = -FIXED_ONE;
+          const normal = surfaceNormal(terrain, hitX, hitY);
+          const flat = normal.nx === 0 && normal.ny === 0;
+          const sx = normal.nx;
+          const sy = flat ? -FIXED_ONE : normal.ny;
           const dot = (fmul(vx, sx) + fmul(vy, sy)) | 0;
           if (dot < 0) {
             const bounce = toFixed(num(w.params, "bounciness", 0.45));

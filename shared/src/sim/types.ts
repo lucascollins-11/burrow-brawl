@@ -82,9 +82,31 @@ export type SimEvent =
       readonly type: "damage";
       readonly critterId: number;
       readonly amount: number;
-      readonly cause: "fall";
+      readonly cause: "fall" | "explosion";
     }
-  | { readonly type: "died"; readonly critterId: number; readonly cause: "fall" | "water" };
+  | {
+      readonly type: "died";
+      readonly critterId: number;
+      readonly cause: "fall" | "water" | "explosion";
+    }
+  | {
+      readonly type: "fired";
+      readonly critterId: number;
+      readonly projectileId: number;
+      readonly weaponId: ProjectileWeaponId;
+    }
+  | { readonly type: "bounced"; readonly projectileId: number }
+  /** Terrain was carved by a circle at (x, y). Replays and clients re-apply this to their mask. */
+  | {
+      readonly type: "explosion";
+      readonly projectileId: number;
+      readonly weaponId: ProjectileWeaponId;
+      readonly x: number;
+      readonly y: number;
+      readonly radius: number;
+      readonly cellsRemoved: number;
+    }
+  | { readonly type: "projectileLost"; readonly projectileId: number };
 
 /** Injected randomness. Opus's seeded PRNG (O2) will implement this; the sim never touches Math.random. */
 export interface Rng {
