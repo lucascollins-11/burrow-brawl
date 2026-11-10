@@ -1,51 +1,72 @@
 import type { ClientMessage } from "@burrow-brawl/shared/src/net";
-import { GAME_SERVER_URL } from "../config";
+import { GameClient, NetError, type NetMatch } from "../net";
+import type { LobbyClient, UiStatus } from "./client";
+import {
+  applyRoom,
+  applyRoomLeft,
+  backToLobby as backToLobbyState,
+  errorText,
+  initialState,
+  withError,
+  withResult,
+  type MatchResult,
+  type UiState,
+} from "./lobbyState";
 import { h } from "./dom";
-import { getGuest } from "./guest";
-import { initialState, reduce, withResult, type MatchResult, type UiState } from "./lobbyState";
 import { renderLobby } from "./lobbyView";
-import { roomCodeFromPath } from "./routes";
 import { renderResults } from "./resultsView";
+import { roomCodeFromPath } from "./routes";
 import { renderTitle } from "./titleView";
-import type { ConnStatus, LobbyTransport } from "./transport";
-import { WsTransport } from "./wsTransport";
 import "./styles.css";
 
 export interface UiOptions {
-  transport?: (() => LobbyTransport) | undefined;
+  /** Connect to the server (guest session + socket). Defaults to `GameClient.connect`. */
+  connect?: ((nickname: string) => Promise<LobbyClient>) | undefined;
   /** Called on every button press so the audio manager can play a click. */
   onClick?: () => void;
-  /** Skip the guest HTTP call (mock/dev mode). */
-  guestToken?: (() => Promise<{ token: string; nickname: string }>) | undefined;
-  /** Called when the host starts the match and the room leaves the lobby. */
-  onMatchStarting?: () => void;
+  /** The match started (or we rejoined one). Hand `client` and `match` to the game scene. */
+  onMatchStart?: (client: LobbyClient, match: NetMatch) => void;
+  /** The match ended (also shows the results overlay). */
+  onMatchEnd?: (winnerTeamId: string | null) => void;
 }
 
-/** How long the guest/connect step may take before we tell the player the server is waking up. */
+/** How long connecting may take before we tell the player the server is waking up. */
 const WAKING_AFTER_MS = 4000;
 
 export interface UiHandle {
-  /** Show the match-end overlay (call when the net layer reports the match is over). */
+  /** The connected client, once a room has been created or joined. */
+  readonly client: LobbyClient | null;
+  /** Show the match-end overlay manually (normally driven by the client's matchEnd event). */
   showResults(result: MatchResult): void;
   dispose(): void;
 }
 
+const defaultConnect = (nickname: string): Promise<LobbyClient> =>
+  GameClient.connect({ nickname }) as Promise<LobbyClient>;
+
 /** Mounts the title, lobby and results screens over the canvas. */
 export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
   const click = opts.onClick ?? (() => {});
+  const connect = opts.connect ?? defaultConnect;
   let state: UiState = initialState;
-  let transport: LobbyTransport | null = null;
+  let client: LobbyClient | null = null;
   let nickname = "";
   let pendingCode: string | null = roomCodeFromPath(location.pathname);
   let busy = false;
   let titleError: string | null = null;
-  let status: ConnStatus | null = null;
+  let status: UiStatus | null = null;
   let lastAttempt: { nick: string; code: string | null } | null = null;
   let wakingTimer: ReturnType<typeof setTimeout> | undefined;
+  let attemptId = 0;
   const unsubs: (() => void)[] = [];
 
   const shell = h("div", { class: "ui-shell" });
   root.append(shell);
+
+  const setState = (next: UiState): void => {
+    state = next;
+    render();
+  };
 
   function render(): void {
     shell.replaceChildren();
@@ -55,18 +76,21 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
     if (state.screen === "results" && state.room && state.result) {
       shell.append(
         renderResults(state.room, state.result, state.you?.id, {
+          // Hidden until GameClient has rematch() (o3b); the button then appears by itself.
+          ...(typeof client?.rematch === "function"
+            ? { backToLobby: () => void backToLobby() }
+            : {}),
           leave,
           click,
         }),
       );
     } else if (state.screen === "lobby" && state.room) {
-      shell.append(
-        renderLobby(state, {
-          send: (m: ClientMessage) => transport?.send(m),
-          leave,
-          click,
-        }),
-      );
+      const lobby = renderLobby(state, { send: dispatch, leave, click });
+      if (status === "reconnecting")
+        lobby.prepend(
+          h("div", { class: "error", text: "Reconnecting…", attrs: { role: "status" } }),
+        );
+      shell.append(lobby);
     } else {
       shell.append(
         renderTitle(
@@ -89,28 +113,87 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
     }
   }
 
-  function apply(msg: Parameters<typeof reduce>[1]): void {
-    const was = state.screen;
-    state = reduce(state, msg);
-    if (state.screen === "lobby") busy = false;
-    if (msg.t === "error" && state.screen === "title") busy = false;
-    if (msg.t === "room.left") teardownTransport();
-    if (was !== "starting" && state.screen === "starting") opts.onMatchStarting?.();
-    render();
+  /** Map the view's lobby messages onto GameClient calls; refusals show as a friendly error. */
+  function dispatch(msg: ClientMessage): void {
+    const c = client;
+    if (!c) return;
+    let p: Promise<void> | undefined;
+    switch (msg.t) {
+      case "lobby.setTeam":
+        p = c.setTeam(msg.teamId);
+        break;
+      case "lobby.editTeam":
+        p = c.editTeam(msg.teamId, msg.patch);
+        break;
+      case "lobby.addTeam":
+        p = c.addTeam();
+        break;
+      case "lobby.removeTeam":
+        p = c.removeTeam(msg.teamId);
+        break;
+      case "lobby.setSettings":
+        p = c.setSettings(msg.patch);
+        break;
+      case "lobby.ready":
+        p = c.setReady(msg.ready);
+        break;
+      case "lobby.kick":
+        p = c.kick(msg.memberId);
+        break;
+      case "lobby.start":
+        p = c.startMatch();
+        break;
+      default:
+        return;
+    }
+    p.catch((e: unknown) => setState(withError(state, describe(e))));
   }
 
-  function teardownTransport(): void {
+  function describe(e: unknown): string {
+    if (e instanceof NetError) return errorText(e.code, e.message);
+    return e instanceof Error ? e.message : "Something went wrong.";
+  }
+
+  function teardown(): void {
     unsubs.splice(0).forEach((u) => u());
-    transport?.close();
-    transport = null;
+    client?.close();
+    client = null;
+  }
+
+  function attach(c: LobbyClient): void {
+    unsubs.push(
+      c.on("room", (room) => setState(applyRoom(state, room))),
+      c.on("roomLeft", (reason) => {
+        teardown();
+        busy = false;
+        setState(applyRoomLeft(state, reason));
+      }),
+      c.on("error", (code, message) => setState(withError(state, errorText(code, message)))),
+      c.on("status", (s) => {
+        status = s as UiStatus; // the net layer may also emit "waking"
+        if (s === "closed" && client === c) {
+          teardown();
+          busy = false;
+          state = { ...initialState, error: "Disconnected from the server." };
+        }
+        render();
+      }),
+      c.on("matchStart", (match) => opts.onMatchStart?.(c, match)),
+      c.on("matchEnd", (winnerTeamId) => {
+        setState(withResult(state, { winnerTeamId }));
+        opts.onMatchEnd?.(winnerTeamId);
+      }),
+    );
   }
 
   async function start(nick: string, code: string | null): Promise<void> {
+    const mine = ++attemptId;
     nickname = nick;
     lastAttempt = { nick, code };
     busy = true;
     status = "connecting";
     titleError = null;
+    state = { ...state, error: null };
     clearTimeout(wakingTimer);
     wakingTimer = setTimeout(() => {
       if (busy && status === "connecting") {
@@ -118,68 +201,66 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
         render();
       }
     }, WAKING_AFTER_MS);
-    state = { ...state, error: null };
     render();
     try {
-      const guest = opts.guestToken
-        ? await opts.guestToken()
-        : await getGuest(GAME_SERVER_URL, nick);
-      teardownTransport();
-      const t = (opts.transport ?? defaultTransport)();
-      transport = t;
-      unsubs.push(t.onMessage(apply));
-      const offStatus = t.onStatus?.((st) => {
-        status = st;
-        render();
-      });
-      if (offStatus) unsubs.push(offStatus);
-      unsubs.push(
-        t.onClose(() => {
-          if (!transport) return;
-          teardownTransport();
-          state = { ...initialState, error: "Disconnected from the server." };
-          busy = false;
-          render();
-        }),
-      );
-      await t.connect(guest.token);
+      teardown();
+      const c = await connect(nick);
+      if (mine !== attemptId) return c.close();
+      client = c;
+      attach(c);
+      status = "open";
+      const room = code ? await c.joinRoom(code) : await c.createRoom();
       clearTimeout(wakingTimer);
-      status = "connected";
-      t.send(code ? { t: "room.join", code } : { t: "room.create" });
+      busy = false;
       pendingCode = null;
       if (location.pathname.startsWith("/r/")) history.replaceState(null, "", "/");
+      setState(applyRoom(state, room, c.me));
     } catch (e) {
+      if (mine !== attemptId) return;
       clearTimeout(wakingTimer);
-      status = "failed";
-      teardownTransport();
+      status = "closed";
+      teardown();
       busy = false;
-      titleError = e instanceof Error ? e.message : "Something went wrong.";
+      titleError = describe(e);
       render();
     }
   }
 
+  async function backToLobby(): Promise<void> {
+    const rematch = client?.rematch;
+    if (!client || typeof rematch !== "function") return;
+    try {
+      await rematch.call(client);
+    } catch (e) {
+      return setState(withError(state, describe(e)));
+    }
+    // The server's lobby room.update normally gets here first; this covers a slow reply.
+    setState(backToLobbyState(state));
+  }
+
   function leave(): void {
-    transport?.send({ t: "room.leave" });
-    teardownTransport();
-    state = initialState;
+    client?.leaveRoom();
+    attemptId++;
+    teardown();
     busy = false;
+    titleError = null;
+    state = initialState;
     render();
   }
 
   render();
   return {
+    get client() {
+      return client;
+    },
     showResults(result) {
-      state = withResult(state, result);
-      render();
+      setState(withResult(state, result));
     },
     dispose() {
       clearTimeout(wakingTimer);
-      teardownTransport();
+      attemptId++;
+      teardown();
       shell.remove();
     },
   };
-}
-
-function defaultTransport(): LobbyTransport {
-  return new WsTransport(GAME_SERVER_URL);
 }
