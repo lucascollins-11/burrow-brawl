@@ -53,4 +53,41 @@ describe("OnlineSource", () => {
     expect(theirs.sendCmds).not.toHaveBeenCalled();
     expect(theirs.input.enabled).toBe(false);
   });
+
+  it("a key held through the other player's turn walks as soon as control begins", () => {
+    // Capture this input's key listeners so the test can press and release keys.
+    const handlers: Array<[string, (e: unknown) => void]> = [];
+    vi.stubGlobal("window", {
+      addEventListener: (t: string, h: (e: unknown) => void) => handlers.push([t, h]),
+    });
+    const mirror = new MatchMirror(config, saveMatch(createMatch(config)));
+    const base = mirror.state;
+    const sendCmds = vi.fn<(c: Cmd[]) => void>();
+    const net = { mirror, teamIds: ["t0", "t1"], matchId: "m", sendCmds, update: () => [] };
+    const room = {
+      teams: [
+        { id: "t0", controllerId: "me" },
+        { id: "t1", controllerId: "other" },
+      ],
+    };
+    const input = new GameInput();
+    const source = new OnlineSource({ me: { id: "me" }, room } as never, net as never, input);
+    const key = (type: "keydown" | "keyup", k: string) =>
+      handlers
+        .filter(([t]) => t === type)
+        .forEach(([, h]) => h({ key: k, repeat: false, preventDefault() {} }));
+
+    // The opponent (team 1) is playing; we hold "d" the whole time.
+    mirror.state = { ...base, turns: { ...base.turns, turn: 1, activeTeam: 1, phase: "control" } };
+    source.advance(100);
+    key("keydown", "d");
+    source.advance(100);
+    expect(sendCmds).not.toHaveBeenCalled();
+
+    // Our turn starts with the key still down: no re-press needed.
+    mirror.state = { ...base, turns: { ...base.turns, turn: 2, activeTeam: 0, phase: "control" } };
+    source.advance(50);
+    expect(sendCmds).toHaveBeenCalledWith([{ k: "move", dir: 1 }]);
+    key("keyup", "d");
+  });
 });

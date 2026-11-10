@@ -52,7 +52,9 @@ interface Game {
   critterViews: CritterViews;
   projectileViews: ProjectileViews;
   gameHud: GameHud;
+  /** Terrain hash for the debug HUD; recomputed lazily, only while the HUD is open. */
   terrainHash: number;
+  hashStale: boolean;
   ended: boolean;
 }
 let game: Game | null = null;
@@ -86,7 +88,8 @@ function startGame(source: MatchSource, looks: TeamLook[], onRematch: (() => voi
     critterViews,
     projectileViews,
     gameHud,
-    terrainHash: hashTerrain(state.sim.terrain),
+    terrainHash: 0,
+    hashStale: true,
     ended: false,
   };
   return game;
@@ -109,7 +112,7 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
   const w = cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
   const t = game.source.state.sim.terrain;
   const res = carveCircle(t, Math.round(w.x), Math.round(-w.y), carveRadius);
-  if (res.cellsRemoved > 0) game.terrainHash = hashTerrain(t);
+  if (res.cellsRemoved > 0) game.hashStale = true;
 });
 window.addEventListener("keydown", (e) => {
   if (e.key === "F3") {
@@ -140,6 +143,9 @@ function playSounds(events: readonly SimEvent[]): void {
 }
 
 const clock = new THREE.Clock();
+let blastFocus: { x: number; y: number; until: number } | null = null;
+let camTurn = -1;
+let fastPanUntil = 0;
 function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1);
   cam.update(dt);
@@ -154,7 +160,7 @@ function drawGame(g: Game, dt: number): void {
   const { sim, turns } = source.state;
   fx.onSimEvents(tickEvents, sim);
   playSounds(tickEvents);
-  if (tickEvents.some((e) => e.type === "explosion")) g.terrainHash = hashTerrain(sim.terrain);
+  if (tickEvents.some((e) => e.type === "explosion")) g.hashStale = true;
   if (!g.ended && turns.phase === "over") {
     g.ended = true;
     window.dispatchEvent(
@@ -171,15 +177,26 @@ function drawGame(g: Game, dt: number): void {
     (turns.activeTeam !== null && source.localTeams.has(turns.activeTeam));
   if (active && myTurn) input.facing = active.facing;
 
-  // Follow the active critter, then any shot in flight.
-  const follow = sim.projectiles[0]
-    ? { x: fromFixed(sim.projectiles[0].x), y: -fromFixed(sim.projectiles[0].y) }
-    : active && controlling
-      ? { x: fromFixed(active.x), y: -fromFixed(active.y) }
-      : null;
+  // Camera: follow a shot in flight, linger on its blast, then follow whoever is playing.
+  for (const e of tickEvents) {
+    if (e.type === "explosion") blastFocus = { x: e.x, y: -e.y, until: clock.elapsedTime + 1.3 };
+  }
+  if (turns.turn !== camTurn) {
+    camTurn = turns.turn;
+    fastPanUntil = clock.elapsedTime + 1.2; // swing quickly to the new player
+  }
+  const proj = sim.projectiles[0];
+  const follow = proj
+    ? { x: fromFixed(proj.x), y: -fromFixed(proj.y) }
+    : blastFocus && blastFocus.until > clock.elapsedTime
+      ? blastFocus
+      : active && controlling
+        ? { x: fromFixed(active.x), y: -fromFixed(active.y) }
+        : null;
   if (follow) {
-    cam.camera.position.x += (follow.x - cam.camera.position.x) * Math.min(1, dt * 3);
-    cam.camera.position.y += (follow.y - cam.camera.position.y) * Math.min(1, dt * 3);
+    const k = Math.min(1, dt * (clock.elapsedTime < fastPanUntil ? 7 : 3));
+    cam.camera.position.x += (follow.x - cam.camera.position.x) * k;
+    cam.camera.position.y += (follow.y - cam.camera.position.y) * k;
   }
 
   terrainRenderer.setTerrain(sim.terrain);
@@ -203,6 +220,10 @@ function drawGame(g: Game, dt: number): void {
 
   gameHud.update(source.state);
   if (debugVisible) {
+    if (g.hashStale) {
+      g.terrainHash = hashTerrain(sim.terrain);
+      g.hashStale = false;
+    }
     hud.tick(dt);
     hud.render({
       camX: cam.camera.position.x,

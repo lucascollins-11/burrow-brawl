@@ -34,7 +34,14 @@ const STYLE = `
 .bb-banner { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px;
   background: rgba(59,42,26,.55); color: #fff8eb; font-size: 40px; font-weight: 800; text-shadow: 0 3px 0 #3b2a1a; pointer-events: auto; }
 .bb-banner button { font: inherit; font-size: 20px; padding: 8px 18px; border: 3px solid #3b2a1a; border-radius: 12px; background: #ffd23f; color: #3b2a1a; cursor: pointer; }
-.bb-help { position: absolute; bottom: 10px; left: 8px; font-size: 11px; background: rgba(255,248,235,.8); padding: 4px 8px; border-radius: 8px; }
+.bb-help { position: absolute; bottom: 82px; left: 50%; transform: translateX(-50%); display: none; gap: 14px; white-space: nowrap; font-size: 12px;
+  background: rgba(255,248,235,.88); border: 2px solid #3b2a1a; padding: 3px 12px; border-radius: 10px; }
+.bb-help b { background: #3b2a1a; color: #fff8eb; border-radius: 4px; padding: 0 5px; margin-right: 4px; font-weight: 600; }
+.bb-flash { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); opacity: 0; padding: 10px 28px; font-size: 38px; font-weight: 800;
+  color: #fff8eb; text-shadow: 0 3px 0 #3b2a1a; background: rgba(59,42,26,.72); border: 4px solid #fff8eb; border-radius: 18px; white-space: nowrap; }
+.bb-flash.show { animation: bb-flash 2.2s ease-out; }
+@keyframes bb-flash { 0% { opacity: 0; transform: translateX(-50%) scale(.7); } 12% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+  22% { transform: translateX(-50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
 `;
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -64,6 +71,9 @@ export class GameHud {
   private readonly skipButton: HTMLButtonElement;
   private readonly powerFill: HTMLElement;
   private readonly powerText: HTMLElement;
+  private readonly help: HTMLElement;
+  private readonly flash: HTMLElement;
+  private lastFlashTurn = -1;
   private readonly banner: HTMLElement;
   private readonly bannerText: HTMLElement;
 
@@ -122,9 +132,22 @@ export class GameHud {
     this.skipButton.textContent = "Skip turn";
     this.skipButton.addEventListener("click", () => input.skip());
 
-    const help = el("div", "bb-help", this.root);
-    help.textContent =
-      "A/D walk · Space jump · Enter backflip · W/S aim · hold F to charge, release to fire · 1/2 weapon · Z/X fuse · Backspace skip";
+    this.help = el("div", "bb-help", this.root);
+    for (const [key, what] of [
+      ["A/D", "walk"],
+      ["Space", "jump"],
+      ["Enter", "flip"],
+      ["W/S", "aim"],
+      ["hold F", "charge + fire"],
+      ["1/2", "weapon"],
+      ["Z/X", "fuse"],
+      ["Backspace", "skip"],
+    ] as const) {
+      const item = el("span", "", this.help);
+      el("b", "", item).textContent = key;
+      item.append(what);
+    }
+    this.flash = el("div", "bb-flash", this.root);
 
     this.banner = el("div", "bb-banner", this.root);
     this.bannerText = el("div", "", this.banner);
@@ -183,6 +206,21 @@ export class GameHud {
         ts.phase !== "control" || (this.localTeams !== null && !mine);
     });
     this.skipButton.disabled = !controlling || (this.localTeams !== null && !mine);
+
+    // Controls strip: only while this player can act.
+    const canAct = controlling && (this.localTeams === null || mine);
+    this.help.style.display = canAct ? "flex" : "none";
+    // "Your turn" banner at every turn start.
+    if (ts.phase === "control" && ts.turn !== this.lastFlashTurn) {
+      this.lastFlashTurn = ts.turn;
+      const look = ts.activeTeam === null ? undefined : this.looks[ts.activeTeam];
+      this.flash.textContent = mine
+        ? "Your turn!"
+        : `${look?.player ?? look?.name ?? "Next"}'s turn`;
+      this.flash.classList.remove("show");
+      void this.flash.offsetWidth; // restart the animation
+      this.flash.classList.add("show");
+    }
     this.powerFill.style.width = `${this.input.charge}%`;
     this.powerText.textContent =
       this.input.weapon === "fizz-grenade"

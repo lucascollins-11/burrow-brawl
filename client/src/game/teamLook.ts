@@ -5,6 +5,8 @@ import { TEAM_COLORS } from "../art/molekin";
 export interface TeamLook {
   name: string;
   hex: number;
+  /** Nickname of the player controlling this team (online). */
+  player?: string;
 }
 
 export function defaultLooks(teams: number): TeamLook[] {
@@ -21,6 +23,11 @@ export function looksFromRoom(room: RoomState | null, teamIds: readonly string[]
     const t = room?.teams.find((x) => x.id === id);
     if (!t) return fallback[i]!;
     const hex = Number.parseInt(t.hatColor.replace("#", ""), 16);
-    return { name: t.name, hex: Number.isNaN(hex) ? fallback[i]!.hex : hex };
+    const player = room?.members.find((m) => m.id === t.controllerId)?.nickname;
+    return {
+      name: t.name,
+      hex: Number.isNaN(hex) ? fallback[i]!.hex : hex,
+      ...(player ? { player } : {}),
+    };
   });
 }
