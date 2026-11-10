@@ -100,10 +100,72 @@ describe("match model", () => {
 
   it("fire starts retreat, then the turn ends on the retreat timer", () => {
     let s = run(createMatch(cfg), 30);
-    s = stepMatch(cfg, s, [{ k: "fire" }]).state;
+    s = stepMatch(cfg, s, [{ k: "fire", weapon: "acorn-mortar", angle: 45, power: 50 }]).state;
     expect(s.turns.phase).toBe("retreat");
     s = run(s, 61);
     expect(s.turns.phase).not.toBe("retreat");
+  });
+
+  it("fire launches a real projectile that explodes, and the turn waits for it before ending", () => {
+    let s = run(createMatch(cfg), 30);
+    // Lob toward the middle of the map so the shot lands on the terrain instead of leaving it.
+    const me = s.sim.critters.find((c) => c.id === s.turns.activeCritter)!;
+    const angle = me.x >> 16 < cfg.mapWidth / 2 ? 55 : 125;
+    s = stepMatch(cfg, s, [{ k: "fire", weapon: "acorn-mortar", angle, power: 35 }]).state;
+    expect(s.sim.projectiles).toHaveLength(1);
+    expect(s.turns.phase).toBe("retreat");
+    const turn = s.turns.turn;
+    let exploded = false;
+    let waitedForShot = false;
+    for (let i = 0; i < 1500 && s.turns.turn === turn; i++) {
+      const r = stepMatch(cfg, s, []);
+      s = r.state;
+      if (r.events.some((e) => e.type === "explosion")) exploded = true;
+      if (s.turns.phase === "settling" && s.sim.projectiles.length > 0) waitedForShot = true;
+    }
+    expect(exploded || s.sim.projectiles.length === 0).toBe(true);
+    expect(s.sim.projectiles).toHaveLength(0);
+    expect(waitedForShot || exploded).toBe(true);
+    expect(s.turns.turn).toBe(turn + 1);
+  });
+
+  it("copies the turn's wind into the sim and re-rolls it each turn", () => {
+    let s = createMatch(cfg);
+    expect(s.sim.wind).toBe(s.turns.wind);
+    const winds = new Set<number>([s.turns.wind]);
+    for (let i = 0; i < 6; i++) {
+      const turn = s.turns.turn;
+      while (s.turns.turn === turn) s = stepMatch(cfg, s, [{ k: "skip" }]).state;
+      expect(s.sim.wind).toBe(s.turns.wind);
+      expect(Math.abs(s.turns.wind)).toBeLessThanOrEqual(cfg.windMax);
+      winds.add(s.turns.wind);
+    }
+    expect(winds.size).toBeGreaterThan(1);
+  });
+
+  it("raises the soda every turn once sudden death starts", () => {
+    const sd: MatchConfig = { ...cfg, suddenDeathRound: 1, waterRisePerTurn: 10 };
+    let s = createMatch(sd);
+    const start = s.sim.waterY;
+    // Round 1 turns do not raise the soda; later rounds do.
+    while (s.turns.round === 1) s = stepMatch(sd, s, [{ k: "skip" }]).state;
+    expect(s.sim.waterY).toBeLessThan(start);
+    const before = s.sim.waterY;
+    const turn = s.turns.turn;
+    while (s.turns.turn === turn) s = stepMatch(sd, s, [{ k: "skip" }]).state;
+    expect(s.sim.waterY).toBe(before - 10);
+  });
+
+  it("snapshots round-trip with projectiles in flight", () => {
+    let s = run(createMatch(cfg), 30);
+    s = stepMatch(cfg, s, [
+      { k: "fire", weapon: "fizz-grenade", angle: 30, power: 60, fuse: 3 },
+    ]).state;
+    s = run(s, 20);
+    expect(s.sim.projectiles.length).toBe(1);
+    const back = loadMatch(JSON.parse(JSON.stringify(saveMatch(s))));
+    expect(hashMatch(back)).toBe(hashMatch(s));
+    expect(hashMatch(run(back, 100))).toBe(hashMatch(run(s, 100)));
   });
 
   it("times out turns and rotates teams and critters", () => {
@@ -139,6 +201,14 @@ describe("match model", () => {
     expect(isCmd({ k: "move", dir: 1 })).toBe(true);
     expect(isCmd({ k: "move", dir: 2 })).toBe(false);
     expect(isCmd({ k: "jump", extra: 1 })).toBe(false);
+    expect(isCmd({ k: "fire", weapon: "acorn-mortar", angle: 45, power: 50 })).toBe(true);
+    expect(isCmd({ k: "fire", weapon: "fizz-grenade", angle: 0, power: 100, fuse: 3 })).toBe(true);
+    expect(isCmd({ k: "fire", weapon: "acorn-mortar", angle: 45 })).toBe(false);
+    expect(isCmd({ k: "fire", weapon: "skip-turn", angle: 45, power: 50 })).toBe(false);
+    expect(isCmd({ k: "fire", weapon: "acorn-mortar", angle: 45.5, power: 50 })).toBe(false);
+    expect(isCmd({ k: "fire", weapon: "acorn-mortar", angle: 360, power: 50 })).toBe(false);
+    expect(isCmd({ k: "fire", weapon: "acorn-mortar", angle: 45, power: 101 })).toBe(false);
+    expect(isCmd({ k: "fire", weapon: "fizz-grenade", angle: 45, power: 5, fuse: 9 })).toBe(false);
     expect(isCmd({ k: "teleport" })).toBe(false);
     expect(isCmd(null)).toBe(false);
   });

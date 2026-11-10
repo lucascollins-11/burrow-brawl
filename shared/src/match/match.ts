@@ -4,8 +4,8 @@
 // commands at the same ticks => same state hash everywhere.
 
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
-import type { Critter, CritterInput, SimEvent, SimState } from "../sim";
+import { createCritter, createWorld, findSurfaceY, isProjectileWeapon, stepWorld } from "../sim";
+import type { Critter, CritterInput, FireCommand, Projectile, SimEvent, SimState } from "../sim";
 import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
 import {
   createDemoTerrain,
@@ -24,17 +24,28 @@ import { fromBase64, toBase64 } from "./base64";
  *
  * - move: held direction, stays in effect until changed or the turn ends
  * - jump / backflip: one-shot, applied on the tick they're stamped for
- * - fire: one-shot; until weapons (S4) exist it only ends control and starts retreat
+ * - fire: one-shot; launches a projectile weapon (angle in whole degrees, 0 = right, 90 = up;
+ *   power 0..100; fuse in whole seconds for timed weapons) and starts the retreat phase
  * - skip: end the turn now
  */
 export type Cmd =
   | { k: "move"; dir: -1 | 0 | 1 }
   | { k: "jump" }
   | { k: "backflip" }
-  | { k: "fire" }
+  | {
+      k: "fire";
+      weapon: "acorn-mortar" | "fizz-grenade";
+      angle: number;
+      power: number;
+      fuse?: number;
+    }
   | { k: "skip" };
 
 export const MAX_CMDS_PER_INPUT = 16;
+
+function isInt(v: unknown, min: number, max: number): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+}
 
 export function isCmd(v: unknown): v is Cmd {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
@@ -43,9 +54,16 @@ export function isCmd(v: unknown): v is Cmd {
   switch (o.k) {
     case "move":
       return keys.length === 2 && (o.dir === -1 || o.dir === 0 || o.dir === 1);
+    case "fire":
+      return (
+        isProjectileWeapon(String(o.weapon)) &&
+        isInt(o.angle, 0, 359) &&
+        isInt(o.power, 0, 100) &&
+        (o.fuse === undefined || isInt(o.fuse, 1, 5)) &&
+        keys.length === (o.fuse === undefined ? 4 : 5)
+      );
     case "jump":
     case "backflip":
-    case "fire":
     case "skip":
       return keys.length === 1;
     default:
@@ -67,6 +85,10 @@ export interface MatchConfig {
   windMax: number;
   mapWidth: number;
   mapHeight: number;
+  /** Sudden death: from this round on the soda rises every turn. 0 or absent = off. */
+  suddenDeathRound?: number;
+  /** Cells the soda line rises per turn once sudden death starts. Default 8. */
+  waterRisePerTurn?: number;
 }
 
 export interface MatchState {
@@ -124,9 +146,10 @@ export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns
     }
   }
   const sim = createWorld(terrain, critters, cfg.mapHeight - 40);
+  const first = turns.init(sim, rulesFor(cfg), 0, rng);
   return {
-    sim,
-    turns: turns.init(sim, rulesFor(cfg), 0, rng),
+    sim: { ...sim, wind: first.wind },
+    turns: first,
     rng: rng.getState(),
     move: 0,
   };
@@ -136,17 +159,26 @@ export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns
 function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): CritterInput {
   let jump = false;
   let backflip = false;
+  let fire: FireCommand | undefined;
   for (const c of cmds) {
     if (c.k === "jump") jump = true;
     if (c.k === "backflip") backflip = true;
+    if (c.k === "fire" && fire === undefined) {
+      fire = {
+        weaponId: c.weapon,
+        angleDeg: c.angle,
+        power: c.power,
+        ...(c.fuse === undefined ? {} : { fuseSeconds: c.fuse }),
+      };
+    }
   }
-  return { critterId, move, jump, backflip };
+  return { critterId, move, jump, backflip, ...(fire ? { fire } : {}) };
 }
 
 /**
  * Advance one tick with the commands stamped for it. Commands are ignored
  * unless someone has control, so stale or late commands can't desync.
- * Mutates only the terrain (shared, as in stepWorld).
+ * Pure: an explosion works on a copy of the terrain (see stepWorld), so `state` is never modified.
  */
 export function stepMatch(
   cfg: MatchConfig,
@@ -171,12 +203,23 @@ export function stepMatch(
   if (turns.activeTeam(ts) === null) move = 0;
 
   const rng = Prng.fromState(state.rng);
-  const r = stepWorld(state.sim, inputs, rng);
+  // Wind belongs to the turn controller; the sim just reads it each tick.
+  const r = stepWorld({ ...state.sim, wind: ts.wind }, inputs, rng);
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
   const turnChanged =
     next.turn !== state.turns.turn || (next.phase === "over") !== (state.turns.phase === "over");
+  let sim: SimState = { ...r.state, wind: next.wind };
+  // Sudden death (stub): once the round limit passes, the soda rises at the start of every turn.
+  if (
+    turnChanged &&
+    next.phase !== "over" &&
+    (cfg.suddenDeathRound ?? 0) > 0 &&
+    next.round > (cfg.suddenDeathRound ?? 0)
+  ) {
+    sim = { ...sim, waterY: Math.max(0, sim.waterY - (cfg.waterRisePerTurn ?? 8)) };
+  }
   return {
-    state: { sim: r.state, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
+    state: { sim, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
     events: r.events,
     turnChanged,
   };
@@ -188,10 +231,16 @@ export function stepMatch(
 export function hashMatch(state: MatchState): number {
   const h = new StateHasher();
   const s = state.sim;
-  h.int(s.tick).int(s.waterY).i32(hashTerrain(s.terrain)).i32(s.critters.length);
+  h.int(s.tick).int(s.waterY).i32(s.wind).i32(s.nextProjectileId);
+  h.i32(hashTerrain(s.terrain)).i32(s.critters.length);
   for (const c of s.critters) {
     h.i32(c.id).i32(c.team).i32(c.x).i32(c.y).i32(c.vx).i32(c.vy).i32(c.facing).i32(c.hp);
     h.str(c.status).bool(c.grounded).i32(c.peakY);
+  }
+  h.i32(s.projectiles.length);
+  for (const p of s.projectiles) {
+    h.i32(p.id).i32(p.ownerId).str(p.weaponId).i32(p.x).i32(p.y).i32(p.vx).i32(p.vy);
+    h.i32(p.age).i32(p.fuseTicks).i32(p.bounces).bool(p.resting);
   }
   h.value(state.turns);
   for (const w of state.rng) h.i32(w);
@@ -206,6 +255,9 @@ export interface MatchSnapshot {
   tick: number;
   waterY: number;
   critters: Critter[];
+  projectiles: Projectile[];
+  nextProjectileId: number;
+  wind: number;
   /** serializeTerrain() output, base64. */
   terrain: string;
   turns: TurnState;
@@ -218,6 +270,9 @@ export function saveMatch(state: MatchState): MatchSnapshot {
     tick: state.sim.tick,
     waterY: state.sim.waterY,
     critters: state.sim.critters.map((c) => ({ ...c })),
+    projectiles: state.sim.projectiles.map((p) => ({ ...p })),
+    nextProjectileId: state.sim.nextProjectileId,
+    wind: state.sim.wind,
     terrain: toBase64(serializeTerrain(state.sim.terrain)),
     turns: structuredClone(state.turns),
     rng: [...state.rng] as [number, number, number, number],
@@ -232,6 +287,9 @@ export function loadMatch(snap: MatchSnapshot): MatchState {
     waterY: snap.waterY,
     critters: snap.critters.map((c) => ({ ...c })),
     terrain,
+    projectiles: snap.projectiles.map((p) => ({ ...p })),
+    nextProjectileId: snap.nextProjectileId,
+    wind: snap.wind,
   };
   return {
     sim,
