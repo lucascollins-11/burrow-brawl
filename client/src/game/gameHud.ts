@@ -1,6 +1,6 @@
 import type { MatchConfig, MatchState } from "@burrow-brawl/shared";
 import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
-import { TEAM_COLORS } from "../art/molekin";
+import { defaultLooks, type TeamLook } from "./teamLook";
 import type { GameInput } from "./input";
 import { WEAPONS } from "./input";
 
