@@ -171,7 +171,9 @@ export function stepMatch(
   if (turns.activeTeam(ts) === null) move = 0;
 
   const rng = Prng.fromState(state.rng);
-  const r = stepWorld(state.sim, inputs, rng);
+  // The turn controller owns wind; the sim (projectiles, S4) reads SimState.wind.
+  const sim = { ...state.sim, wind: ts.wind } as SimState;
+  const r = stepWorld(sim, inputs, rng);
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
   const turnChanged =
     next.turn !== state.turns.turn || (next.phase === "over") !== (state.turns.phase === "over");
@@ -187,12 +189,10 @@ export function stepMatch(
 /** u32 hash of the full match state (protocol section 7). */
 export function hashMatch(state: MatchState): number {
   const h = new StateHasher();
-  const s = state.sim;
-  h.int(s.tick).int(s.waterY).i32(hashTerrain(s.terrain)).i32(s.critters.length);
-  for (const c of s.critters) {
-    h.i32(c.id).i32(c.team).i32(c.x).i32(c.y).i32(c.vx).i32(c.vy).i32(c.facing).i32(c.hp);
-    h.str(c.status).bool(c.grounded).i32(c.peakY);
-  }
+  // Every sim field except the terrain goes through the canonical hasher, so
+  // fields added later (projectiles, crates) are covered automatically.
+  const { terrain, ...rest } = state.sim;
+  h.i32(hashTerrain(terrain)).value(rest);
   h.value(state.turns);
   for (const w of state.rng) h.i32(w);
   h.i32(state.move);
@@ -203,9 +203,8 @@ export function hashMatch(state: MatchState): number {
 
 /** JSON-safe full state, as sent in `snapshot` and `match.start`. */
 export interface MatchSnapshot {
-  tick: number;
-  waterY: number;
-  critters: Critter[];
+  /** Every SimState field except terrain (tick, critters, waterY, and whatever S4+ adds). */
+  sim: Omit<SimState, "terrain">;
   /** serializeTerrain() output, base64. */
   terrain: string;
   turns: TurnState;
@@ -214,11 +213,10 @@ export interface MatchSnapshot {
 }
 
 export function saveMatch(state: MatchState): MatchSnapshot {
+  const { terrain, ...rest } = state.sim;
   return {
-    tick: state.sim.tick,
-    waterY: state.sim.waterY,
-    critters: state.sim.critters.map((c) => ({ ...c })),
-    terrain: toBase64(serializeTerrain(state.sim.terrain)),
+    sim: structuredClone(rest),
+    terrain: toBase64(serializeTerrain(terrain)),
     turns: structuredClone(state.turns),
     rng: [...state.rng] as [number, number, number, number],
     move: state.move,
@@ -227,12 +225,7 @@ export function saveMatch(state: MatchState): MatchSnapshot {
 
 export function loadMatch(snap: MatchSnapshot): MatchState {
   const terrain: Terrain = deserializeTerrain(fromBase64(snap.terrain));
-  const sim: SimState = {
-    tick: snap.tick,
-    waterY: snap.waterY,
-    critters: snap.critters.map((c) => ({ ...c })),
-    terrain,
-  };
+  const sim = { ...structuredClone(snap.sim), terrain } as SimState;
   return {
     sim,
     turns: structuredClone(snap.turns),

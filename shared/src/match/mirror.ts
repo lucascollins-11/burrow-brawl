@@ -38,7 +38,7 @@ export class MatchMirror {
     snapshot: MatchSnapshot,
   ) {
     this.state = loadMatch(snapshot);
-    this.confirmed = snapshot.tick;
+    this.confirmed = snapshot.sim.tick;
   }
 
   get tick(): number {
@@ -72,8 +72,8 @@ export class MatchMirror {
   /** Replace local state with the server's (join, reconnect, desync repair). */
   onSnapshot(snapshot: MatchSnapshot): void {
     this.state = loadMatch(snapshot);
-    this.confirmed = Math.max(this.confirmed, snapshot.tick);
-    for (const t of [...this.pending.keys()]) if (t <= snapshot.tick) this.pending.delete(t);
+    this.confirmed = Math.max(this.confirmed, snapshot.sim.tick);
+    for (const t of [...this.pending.keys()]) if (t <= snapshot.sim.tick) this.pending.delete(t);
     this.hashes.clear();
     this.expected.clear();
     this.desyncedAt = null;
