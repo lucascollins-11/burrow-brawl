@@ -48,6 +48,8 @@ export interface FireCommand {
   readonly power: number;
   /** Fuse for timed weapons, clamped to the weapon's range. */
   readonly fuseSeconds?: number;
+  /** Target cell for click-point weapons (teleport). Whole cells in mask space, +y down. */
+  readonly target?: { readonly x: number; readonly y: number };
 }
 
 export interface SimState {
@@ -106,7 +108,18 @@ export type SimEvent =
       readonly radius: number;
       readonly cellsRemoved: number;
     }
-  | { readonly type: "projectileLost"; readonly projectileId: number };
+  | { readonly type: "projectileLost"; readonly projectileId: number }
+  /** An instant weapon sent the critter somewhere new. Cells, whole numbers. */
+  | {
+      readonly type: "teleported";
+      readonly critterId: number;
+      readonly x: number;
+      readonly y: number;
+    }
+  /** Spring Boots launched the critter. */
+  | { readonly type: "springJumped"; readonly critterId: number }
+  /** The weapon's turn is over (endsTurn in its data). Clients and the turn manager act on this. */
+  | { readonly type: "turnEnded"; readonly critterId: number; readonly weaponId: WeaponId };
 
 /** Injected randomness. Opus's seeded PRNG (O2) will implement this; the sim never touches Math.random. */
 export interface Rng {
