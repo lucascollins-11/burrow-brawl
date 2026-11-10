@@ -5,7 +5,7 @@ export interface LocalSetup {
   size: number;
 }
 
-export const LOCAL_LIMITS = { teams: [2, 4], size: [1, 4] } as const;
+export const LOCAL_LIMITS = { teams: [2, 8], size: [1, 4] } as const;
 export const DEFAULT_LOCAL: LocalSetup = { teams: 2, size: 2 };
 
 export function clampLocal(s: LocalSetup): LocalSetup {

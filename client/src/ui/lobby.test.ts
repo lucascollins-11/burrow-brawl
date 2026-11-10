@@ -156,7 +156,7 @@ describe("local play setup", () => {
   it("clamps teams and critters per team", async () => {
     const { clampLocal } = await import("./localView");
     expect(clampLocal({ teams: 1, size: 0 })).toEqual({ teams: 2, size: 1 });
-    expect(clampLocal({ teams: 9, size: 9 })).toEqual({ teams: 4, size: 4 });
+    expect(clampLocal({ teams: 9, size: 9 })).toEqual({ teams: 8, size: 4 });
     expect(clampLocal({ teams: 3, size: 2 })).toEqual({ teams: 3, size: 2 });
   });
   it("builds a hot-seat config without a server", async () => {
@@ -165,5 +165,8 @@ describe("local play setup", () => {
     expect(c.teamSizes).toEqual([2, 2, 2]);
     expect(c.seed).toBe(7);
     expect(c.turnTicks).toBe(45 * 60);
+    // The biggest setup (8 teams of 4) must still fit on the map.
+    const { createMatch } = await import("@burrow-brawl/shared");
+    expect(createMatch(localMatchConfig(8, 4, 7)).sim.critters).toHaveLength(32);
   });
 });

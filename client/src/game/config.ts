@@ -3,7 +3,7 @@ import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
 
 /**
  * Hot-seat match settings, overridable from the URL for quick tests:
- * ?teams=2..4&size=1..4&seed=123&turn=45
+ * ?teams=2..8&size=1..4&seed=123&turn=45
  */
 export function matchConfigFromUrl(search = window.location.search): MatchConfig {
   const q = new URLSearchParams(search);
