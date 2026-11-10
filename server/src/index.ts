@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { configFromEnv } from "./config";
 import { createGameServer } from "./server";
 
@@ -22,7 +23,7 @@ async function main(): Promise<void> {
 }
 
 // Run only when executed directly (tsx src/index.ts), not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);

@@ -33,8 +33,11 @@ Lives in the repo at `docs/protocol.md`; message types live in
   calls `JSON.parse`/`JSON.stringify` on wire data, so we can swap to a binary
   codec (e.g. msgpack) later without touching handlers.
 - Every client to server message may carry `seq` (u32, per connection,
-  incrementing). Replies that answer a request echo it as `re`.
-- Every message is validated on the server with a zod schema from `/shared`.
+  incrementing). Replies that answer a request echo it as `re`: a request
+  with `seq` gets exactly one `ok { re }` or `error { re }` (or, for
+  `room.create`/`room.join`, `room.joined { re }`).
+- Every message is validated on the server by `parseClientMessage` in
+  `shared/src/net/protocol.ts` (dependency-free validators).
   Invalid message = `error { code: "bad_message" }`; 20 invalid messages in a
   minute = disconnect.
 - Max frame 64 KB client to server, 4 MB server to client.
@@ -119,9 +122,10 @@ Client to server:
 | t | fields | who | notes |
 |---|---|---|---|
 | `hello` | `token, protocolVersion, resumeToken?` | any | must be first frame |
-| `room.create` | `nickname?` | any | creator becomes host |
+| `room.create` | | any | creator becomes host; nickname comes from the session token |
 | `room.join` | `code` | any | `room_full` at 4 members, `match_in_progress` if not in lobby (unless resuming) |
 | `room.leave` | | member | |
+| `room.sync` | | member | server replies with `room.update` (full state) |
 | `lobby.setTeam` | `teamId \| null` | member | claim a free team, or release yours; `team_taken` if it has a controller |
 | `lobby.editTeam` | `teamId, patch` | team controller or host | name, hat, critter names |
 | `lobby.addTeam` / `lobby.removeTeam` | `teamId?` | host | |
@@ -136,15 +140,18 @@ Server to client:
 
 | t | fields | notes |
 |---|---|---|
-| `welcome` | `you: {id, nickname}, serverTime, resumeToken` | after a valid `hello` |
+| `welcome` | `you: {id, nickname}, serverTime, resumeToken, protocolVersion` | after a valid `hello` |
 | `room.joined` | `room: RoomState` | full state on create/join |
-| `room.update` | `version, patch` | JSON merge patch; client resyncs with `room.sync` if version skips |
+| `room.update` | `room: RoomState` | full state after every change (it's small with 4 members); `room.sync` asks for one |
+| `ok` | `re` | success reply to a request that carried `seq` |
 | `room.left` | `reason` | `left`, `kicked`, `closed` |
 | `chat` | `from, text, at` | |
 | `pong` | `clientTime, serverTime` | RTT and clock offset |
 | `error` | `code, message, re?` | see section 9 |
 
 The server rejects lobby edits outside the `lobby` phase.
+A new member is put on the first team with no controller, if any, so a
+fresh room is playable without extra clicks. The room starts with 2 teams.
 
 ## 5. Match lifecycle
 
@@ -312,17 +319,18 @@ everyone including the sender:
 
 `bad_message`, `version_mismatch`, `unauthorized`, `room_not_found`,
 `room_full`, `match_in_progress`, `team_taken`,
-`not_host`, `not_your_turn`, `input_rejected`, `rate_limited`,
+`not_host`, `not_in_room`, `not_allowed`, `not_your_turn`, `input_rejected`, `rate_limited`,
 `name_invalid`, `internal`.
 
 WebSocket close codes: 4001 no hello, 4002 replaced, 4003 kicked, 4004 room
-closed, 4005 too many invalid messages, 4006 version mismatch.
+closed, 4005 too many invalid messages, 4006 version mismatch, 4007
+unauthorized (bad or expired token in `hello`).
 
 ## 10. Security notes
 
 - Never trust the client for damage, turn ownership, crates or wind; the
   server computes all of it.
-- Validate every field with zod; clamp numbers; reject unknown `t`.
+- Validate every field; clamp numbers; reject unknown `t`.
 - Rate limit per connection (60 frames/s hard cap) and per IP for HTTP routes.
 - Tokens only over TLS; JWT secret from env (`JWT_SECRET`), never committed.
 - Nicknames and chat: length caps, strip control characters, render as text
@@ -340,7 +348,7 @@ server/src/
   match/snapshot.ts build snapshots/state hash (calls terrain module for mask bytes and hash)
   auth/jwt.ts       sign/verify, guest route (full accounts in O4)
 shared/src/net/
-  protocol.ts       message types + zod schemas + PROTOCOL_VERSION
+  protocol.ts       message types + validators + PROTOCOL_VERSION
   codec.ts          the only encode/decode of wire frames (JSON in v1)
 ```
 
