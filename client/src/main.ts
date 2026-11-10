@@ -1,4 +1,4 @@
-import { carveCircle, cloneTerrain, fromFixed, hashTerrain } from "@burrow-brawl/shared";
+import { carveCircle, fromFixed, hashTerrain } from "@burrow-brawl/shared";
 import * as THREE from "three";
 import { PanZoomCamera } from "./camera";
 import { CritterViews } from "./game/critters";
@@ -82,13 +82,9 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
   if (e.button !== 2 && !(e.button === 0 && e.ctrlKey)) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const w = cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-  // Copy on write, like explosions in the sim: never mutate the terrain a state already points at.
-  const next = cloneTerrain(runner.state.sim.terrain);
-  const res = carveCircle(next, Math.round(w.x), Math.round(-w.y), carveRadius);
-  if (res.cellsRemoved > 0) {
-    runner.state = { ...runner.state, sim: { ...runner.state.sim, terrain: next } };
-    terrainHash = hashTerrain(next);
-  }
+  const t = runner.state.sim.terrain;
+  const res = carveCircle(t, Math.round(w.x), Math.round(-w.y), carveRadius);
+  if (res.cellsRemoved > 0) terrainHash = hashTerrain(t);
 });
 window.addEventListener("keydown", (e) => {
   if (e.key === "F3") {
