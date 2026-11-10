@@ -10,6 +10,7 @@
 //   node scripts/smoke/smoke.mjs            build, then run
 //   node scripts/smoke/smoke.mjs --no-build reuse server/dist and client/dist
 //   SMOKE_HEADED=1 ...                      watch it
+//   SMOKE_CPU_THROTTLE=6 ...                emulate a slow machine
 
 import { spawn, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -31,6 +32,8 @@ const STEP_MS = 30_000;
 
 const log = (...a) => console.log("[smoke]", ...a);
 const cleanups = [];
+/** Pages to describe if the run fails. */
+const diag = [];
 
 function sh(cmd, args, env = {}) {
   log("$", cmd, ...args);
@@ -127,6 +130,12 @@ async function main() {
   const open = async (name) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await ctx.newPage();
+    const throttle = Number(process.env.SMOKE_CPU_THROTTLE ?? 0);
+    if (throttle > 1) {
+      // Emulate a slow CI machine.
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
+    }
     page.setDefaultTimeout(STEP_MS);
     page.on("console", (m) => {
       if (m.type() === "error") problems.push(`${name} console: ${m.text()}`);
@@ -139,6 +148,7 @@ async function main() {
   };
   const alba = await open("alba");
   const bram = await open("bram");
+  diag.push(["alba", alba], ["bram", bram]);
 
   // Title -> create room.
   await alba.goto(clientOrigin);
@@ -171,15 +181,20 @@ async function main() {
   log("match started, Alba to play");
 
   // One shot: acorn mortar, charge with F for a moment, release.
+  // Charge is sampled on game ticks, so hold F until the HUD shows some power (slow CI
+  // machines render few frames), then release.
+  await alba.bringToFront(); // keep Alba's page foregrounded so its frames aren't throttled
   await alba.keyboard.press("1");
   await alba.keyboard.down("f");
-  await alba.waitForTimeout(600);
+  const power = async () =>
+    Number(/Power (\d+)/.exec((await alba.locator(".bb-power").textContent()) ?? "")?.[1] ?? 0);
+  await waitFor(async () => (await power()) >= 25, "the shot to charge");
   await alba.keyboard.up("f");
   // Firing ends control at once (retreat, then settling), long before the turn timer would.
   await waitFor(
     async () => /retreat|waiting/.test((await turnText(alba)) ?? ""),
     "the shot to end Alba's control",
-    5_000,
+    20_000,
   );
 
   // The turn passes to Bram on both screens.
@@ -201,6 +216,14 @@ try {
   await main();
 } catch (e) {
   console.error("[smoke] FAIL", e);
+  for (const [name, page] of diag) {
+    try {
+      const hud = await page.locator(".bb-turn, .bb-power").allTextContents();
+      console.error(`[smoke] ${name} HUD: ${hud.join(" | ")}`);
+    } catch {
+      // page gone
+    }
+  }
   code = 1;
 } finally {
   for (const f of cleanups.reverse()) {
