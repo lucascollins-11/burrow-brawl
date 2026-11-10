@@ -15,6 +15,8 @@ export function describeResult(
   result: MatchResult,
   youId: string | undefined,
 ): { title: string; subtitle: string; color: string | null; youWon: boolean } {
+  if (result.unknown)
+    return { title: "Match over", subtitle: "Thanks for playing!", color: null, youWon: false };
   if (result.winnerTeamId === null)
     return {
       title: "It's a draw!",
@@ -55,6 +57,9 @@ export function renderResults(
     h(
       "div",
       { class: "row" },
+      !a.backToLobby
+        ? h("p", { class: "hint", text: "Waiting for the host to start a rematch…" })
+        : null,
       a.backToLobby
         ? h("button", {
             class: "btn primary big",

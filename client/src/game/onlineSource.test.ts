@@ -53,4 +53,20 @@ describe("OnlineSource", () => {
     expect(theirs.sendCmds).not.toHaveBeenCalled();
     expect(theirs.input.enabled).toBe(false);
   });
+
+  it("refuses to start without a match, and follows the mirror a reconnect swaps in", () => {
+    const input = new GameInput();
+    const net = { mirror: null, teamIds: [], matchId: null, sendCmds: () => {}, update: () => [] };
+    expect(() => new OnlineSource({ me: { id: "me" }, room: null }, net as never, input)).toThrow(
+      /no match yet/,
+    );
+    const first = new MatchMirror(config, saveMatch(createMatch(config)));
+    const live = { ...net, mirror: first as MatchMirror | null };
+    const source = new OnlineSource({ me: { id: "me" }, room: null }, live as never, input);
+    const second = new MatchMirror(config, saveMatch(createMatch({ ...config, seed: 4 })));
+    live.mirror = second;
+    expect(source.state).toBe(second.state);
+    live.mirror = null;
+    expect(() => source.state).toThrow(/no match yet/);
+  });
 });
