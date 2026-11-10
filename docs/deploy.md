@@ -3,7 +3,7 @@
 Two pieces are deployed separately:
 
 - **Server** (`server/`): a Docker image on Render, from `render.yaml` and `server/Dockerfile`. It serves WebSockets and `GET /healthz`.
-- **Client** (`client/`): a static Vite build on Vercel, from `client/vercel.json`. Routes under `/r/:code` (room links) serve `index.html`.
+- **Client** (`client/`): a static Vite build on Vercel, from `vercel.json` at the repo root. Routes under `/r/:code` (room links) serve `index.html`.
 
 ## Environment variables
 
@@ -28,10 +28,11 @@ Never commit real values. Put local values in `.env` files, which are git-ignore
 ## Steps: Vercel (client)
 
 1. In Vercel, choose **Add New** > **Project** and import `lucascollins-11/burrow-brawl`.
-2. Set **Root Directory** to the repository root. `client/vercel.json` sets the build and output paths.
-3. Under **Environment Variables**, add `VITE_GAME_SERVER_URL` with the `wss://` URL from Render.
-4. Deploy. Then open `https://<project>.vercel.app/r/TEST` and check that the app loads.
-5. Add the Vercel URL to `ALLOWED_ORIGINS` on Render, then redeploy the server.
+2. Leave **Root Directory** as the repository root. Vercel only reads `vercel.json` from the root directory, so `vercel.json` at the repo root sets the build and output paths.
+3. Set **Framework Preset** to **Other**. The build comes from `vercel.json`, not from framework detection.
+4. Under **Environment Variables**, add `VITE_GAME_SERVER_URL` with the `wss://` URL from Render.
+5. Deploy. Then open `https://<project>.vercel.app/r/TEST` and check that the app loads.
+6. Add the Vercel URL to `ALLOWED_ORIGINS` on Render, then redeploy the server.
 
 ## Checking a deploy
 
