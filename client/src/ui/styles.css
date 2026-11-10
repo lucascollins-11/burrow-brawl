@@ -363,3 +363,94 @@ h3 {
 .ui-shell.dim {
   background: rgba(74, 52, 38, 0.55);
 }
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow: auto;
+  background: rgba(74, 52, 38, 0.6);
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+}
+.ui-overlay[hidden] {
+  display: none;
+}
+.panel.overlay {
+  width: min(640px, 100%);
+  display: grid;
+  gap: 12px;
+  animation: pop 0.25s ease-out;
+}
+.panel.overlay h2 {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--berry);
+  text-shadow: 2px 2px 0 var(--ink);
+}
+.help-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px 20px;
+}
+.controls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.controls li {
+  display: grid;
+  grid-template-columns: 9.5em 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+kbd {
+  font: inherit;
+  font-weight: bold;
+  font-size: 0.85rem;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-bottom-width: 4px;
+  border-radius: 8px;
+  padding: 1px 8px;
+}
+.tips {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: bold;
+}
+.toggle input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--berry);
+}
+.ui-corner {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 25;
+  display: flex;
+  gap: 6px;
+}
+@media (max-width: 520px) {
+  .controls li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

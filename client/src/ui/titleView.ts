@@ -9,6 +9,8 @@ export interface TitleActions {
   join(nickname: string, code: string): void;
   /** Retry the last connection attempt. */
   retry(): void;
+  help(): void;
+  settings(): void;
   click(): void;
 }
 
@@ -115,6 +117,20 @@ export function renderTitle(
       { class: "row" },
       code,
       h("button", { class: "btn big", text: "Join", disabled: opts.busy, onclick: join }),
+    ),
+    h(
+      "div",
+      { class: "row" },
+      h("button", {
+        class: "btn small",
+        text: "How to play",
+        onclick: () => (a.click(), a.help()),
+      }),
+      h("button", {
+        class: "btn small",
+        text: "Settings",
+        onclick: () => (a.click(), a.settings()),
+      }),
     ),
   );
 }

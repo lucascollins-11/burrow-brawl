@@ -13,6 +13,7 @@ import { DebugHud } from "./hud";
 import { buildScene } from "./scene";
 import { TerrainRenderer } from "./terrain/renderer";
 import { mountUi } from "./ui";
+import { shakeFor } from "./ui/settings";
 import { MockClient } from "./ui/mockClient";
 
 const app = document.getElementById("app")!;
@@ -191,6 +192,8 @@ if (!params.has("nolobby")) {
   const mock = params.has("mock");
   mountUi(document.body, {
     onClick: () => audio.play("uiClick"),
+    audio,
+    onSettingsChange: (s) => (fx.shake.maxOffset = shakeFor(s)),
     connect: mock
       ? async (nick) => {
           if (params.get("mock") === "slow") {

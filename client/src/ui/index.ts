@@ -14,7 +14,9 @@ import {
 } from "./lobbyState";
 import { h } from "./dom";
 import { renderLobby } from "./lobbyView";
+import { renderHelp, renderSettings, type AudioControls } from "./overlayViews";
 import { renderResults } from "./resultsView";
+import { loadSettings, saveSettings, type Settings } from "./settings";
 import { roomCodeFromPath } from "./routes";
 import { renderTitle } from "./titleView";
 import "./styles.css";
@@ -26,6 +28,10 @@ export interface UiOptions {
   onClick?: () => void;
   /** The match started (or we rejoined one). Hand `client` and `match` to the game scene. */
   onMatchStart?: (client: LobbyClient, match: NetMatch) => void;
+  /** Audio manager for the settings panel (volume and mute). Settings that need audio are hidden without it. */
+  audio?: AudioControls;
+  /** Called with the saved settings at startup and after every change (e.g. to resize the screen shake). */
+  onSettingsChange?: (settings: Settings) => void;
   /** The match ended (also shows the results overlay). */
   onMatchEnd?: (winnerTeamId: string | null) => void;
 }
@@ -62,6 +68,73 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
 
   const shell = h("div", { class: "ui-shell" });
   root.append(shell);
+
+  // ---- help and settings overlays (available on every screen, including in-game)
+  let settings = loadSettings();
+  opts.onSettingsChange?.(settings);
+  let overlay: "help" | "settings" | null = null;
+  const overlayEl = h("div", { class: "ui-overlay", attrs: { role: "presentation" } });
+  overlayEl.hidden = true;
+  overlayEl.addEventListener("click", (e) => {
+    if (e.target === overlayEl) closeOverlay();
+  });
+  const corner = h(
+    "div",
+    { class: "ui-corner" },
+    h("button", {
+      class: "btn small",
+      text: "?",
+      attrs: { "aria-label": "How to play", title: "How to play (H)" },
+      onclick: () => (click(), showOverlay("help")),
+    }),
+    h("button", {
+      class: "btn small",
+      text: "⚙",
+      attrs: { "aria-label": "Settings", title: "Settings" },
+      onclick: () => (click(), showOverlay("settings")),
+    }),
+  );
+  root.append(overlayEl, corner);
+
+  function showOverlay(kind: "help" | "settings" | null): void {
+    overlay = kind;
+    overlayEl.replaceChildren();
+    overlayEl.hidden = kind === null;
+    if (kind === "help") overlayEl.append(renderHelp(() => (click(), closeOverlay())));
+    if (kind === "settings") {
+      const audio: AudioControls = opts.audio ?? {
+        volume: 1,
+        muted: false,
+        setVolume: () => {},
+        setMuted: () => {},
+      };
+      overlayEl.append(
+        renderSettings(settings, audio, {
+          onVolume: (v) => audio.setVolume(v),
+          onMute: (m) => (click(), audio.setMuted(m)),
+          onReduceShake: (r) => {
+            click();
+            settings = { ...settings, reduceShake: r };
+            saveSettings(settings);
+            opts.onSettingsChange?.(settings);
+          },
+          onClose: () => (click(), closeOverlay()),
+        }),
+      );
+    }
+  }
+  function closeOverlay(): void {
+    showOverlay(null);
+  }
+  const onKey = (e: KeyboardEvent): void => {
+    const tag = (e.target as HTMLElement | null)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "Escape" && overlay) closeOverlay();
+    else if (e.key.toLowerCase() === "h" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      showOverlay(overlay === "help" ? null : "help");
+    }
+  };
+  window.addEventListener("keydown", onKey);
 
   const setState = (next: UiState): void => {
     state = next;
@@ -106,6 +179,8 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
             create: (n) => void start(n, null),
             join: (n, c) => void start(n, c),
             retry: () => lastAttempt && void start(lastAttempt.nick, lastAttempt.code),
+            help: () => showOverlay("help"),
+            settings: () => showOverlay("settings"),
             click,
           },
         ),
@@ -257,6 +332,9 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
       setState(withResult(state, result));
     },
     dispose() {
+      window.removeEventListener("keydown", onKey);
+      overlayEl.remove();
+      corner.remove();
       clearTimeout(wakingTimer);
       attemptId++;
       teardown();
