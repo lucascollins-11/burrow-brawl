@@ -11,10 +11,10 @@ export function createDemoTerrain(width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT
   const t = createTerrain(width, height);
   const base = Math.floor(height * 0.55);
   for (let x = 0; x < width; x++) {
-    // Triangle-wave hills of two frequencies, no floats.
-    const w1 = Math.abs(((x * 3) % 640) - 320) - 160; // -160..160
-    const w2 = Math.abs(((x * 7) % 200) - 100) - 50; // -50..50
-    const surface = base - Math.floor(w1 / 2) - Math.floor(w2 / 3);
+    // Triangle-wave hills of two frequencies, no floats. Slopes stay under 1 so critters can walk them.
+    const w1 = Math.abs((x % 640) - 320) - 160; // -160..160, slope 1
+    const w2 = Math.abs(((x * 2) % 80) - 40) - 20; // -20..20, slope 2
+    const surface = base - Math.floor(w1 / 2) - Math.floor(w2 / 4);
     for (let y = Math.max(0, surface); y < height; y++) {
       let m = DIRT;
       if (y < surface + 6) m = CRUST;
