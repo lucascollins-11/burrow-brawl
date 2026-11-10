@@ -31,6 +31,12 @@ export class DebugHud {
     critter: Critter | undefined;
     tick: number;
     events: readonly SimEvent[];
+    wind: number;
+    weapon: string;
+    elevation: number;
+    charge: number;
+    fuse: number;
+    projectiles: number;
   }): void {
     this.el.textContent =
       `fps    ${this.fps.toFixed(0)}\n` +
@@ -40,6 +46,8 @@ export class DebugHud {
       `carve  r=${info.carveRadius}  hash ${info.terrainHash.toString(16)}  pending chunks ${info.pendingChunks}\n` +
       `tick ${info.tick}  critter ${info.critter ? `#${info.critter.id} ${info.critter.status} hp ${info.critter.hp} ${info.critter.grounded ? "ground" : "air"} @ ${fromFixed(info.critter.x).toFixed(1)}, ${fromFixed(info.critter.y).toFixed(1)}` : "none"}\n` +
       `events ${info.events.map((e) => e.type).join(" ")}\n` +
+      `weapon ${info.weapon}  aim ${info.elevation}°  power ${info.charge.toFixed(0)}  fuse ${info.fuse}s  wind ${info.wind}  shots ${info.projectiles}\n` +
+      `[1/2] weapon  [W/S] aim  [hold F] charge, release to fire  [Z/X] fuse  [, .] wind\n` +
       `[A/D or arrows] walk  [Space] jump  [Enter] backflip  [Tab] switch critter\n` +
       `[drag] pan  [wheel] zoom  [I/J/K/L] pan\n` +
       `[right-click / ctrl+click] carve  [ ] radius  [M] wireframe`;

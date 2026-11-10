@@ -28,3 +28,11 @@ export const MAX_HEALTH = 100;
 /** Falls up to this many cells are free; beyond it, damage = (distance - SAFE) / FALL_DAMAGE_DIVISOR. */
 export const FALL_SAFE_DISTANCE = 50;
 export const FALL_DAMAGE_DIVISOR = 2;
+
+/** Wind strength (-100..100) times this is the sideways acceleration of wind-affected projectiles, per tick^2. */
+export const WIND_ACCEL_PER_UNIT = toFixed(0.0005);
+
+/** A projectile that is still flying after this many ticks (30 s) is discarded. */
+export const MAX_PROJECTILE_AGE_TICKS = 30 * TICK_RATE;
+/** A projectile this many cells above the top of the map is discarded. */
+export const MAX_PROJECTILE_ALTITUDE = 4000;

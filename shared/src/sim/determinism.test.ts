@@ -13,7 +13,14 @@ import { createCritter, createWorld, findSurfaceY, stepWorld } from "./index";
 /** Hash of everything that matters: all sim state plus the terrain mask. */
 function simHash(s: SimState): number {
   return new StateHasher()
-    .value({ tick: s.tick, waterY: s.waterY, critters: s.critters })
+    .value({
+      tick: s.tick,
+      waterY: s.waterY,
+      wind: s.wind,
+      nextProjectileId: s.nextProjectileId,
+      critters: s.critters,
+      projectiles: s.projectiles,
+    })
     .i32(hashTerrain(s.terrain))
     .digest();
 }
@@ -23,6 +30,9 @@ function save(s: SimState): unknown {
     tick: s.tick,
     waterY: s.waterY,
     critters: s.critters,
+    projectiles: s.projectiles,
+    nextProjectileId: s.nextProjectileId,
+    wind: s.wind,
     terrain: Array.from(serializeTerrain(s.terrain)),
   };
 }
@@ -32,12 +42,18 @@ function load(saved: unknown): SimState {
     tick: number;
     waterY: number;
     critters: SimState["critters"];
+    projectiles: SimState["projectiles"];
+    nextProjectileId: number;
+    wind: number;
     terrain: number[];
   };
   return {
     tick: o.tick,
     waterY: o.waterY,
     critters: o.critters,
+    projectiles: o.projectiles,
+    nextProjectileId: o.nextProjectileId,
+    wind: o.wind,
     terrain: deserializeTerrain(Uint8Array.from(o.terrain)),
   };
 }
