@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS, type RoomState, type ServerMessage } from "@burrow-brawl/shared/src/net";
 import { describe, expect, it } from "vitest";
-import { initialState, isHost, reduce, startBlocker } from "./lobbyState";
+import { backToLobby, initialState, isHost, reduce, startBlocker, withResult } from "./lobbyState";
+import { describeResult } from "./resultsView";
 import { MockTransport } from "./mockTransport";
 import { inviteUrl, roomCodeFromPath } from "./routes";
 import { httpBase } from "./guest";
@@ -106,5 +107,37 @@ describe("MockTransport", () => {
     t.send({ t: "lobby.ready", ready: true });
     t.send({ t: "lobby.start" });
     expect(seen.at(-1)).toMatchObject({ t: "room.update", room: { phase: "loading" } });
+  });
+});
+
+describe("results", () => {
+  it("shows the results screen and keeps it through results-phase updates", () => {
+    let s = reduce(initialState, { t: "room.joined", room: room({ phase: "match" }) });
+    s = withResult(s, { winnerTeamId: "t2" });
+    expect(s.screen).toBe("results");
+    s = reduce(s, { t: "room.update", room: room({ version: 2, phase: "results" }) });
+    expect(s.screen).toBe("results");
+  });
+  it("returns to the lobby on a lobby update or when the player asks", () => {
+    let s = reduce(initialState, { t: "room.joined", room: room({ phase: "results" }) });
+    s = withResult(s, { winnerTeamId: null });
+    expect(backToLobby(s).screen).toBe("lobby");
+    expect(backToLobby(s).result).toBeNull();
+    s = reduce(s, { t: "room.update", room: room({ version: 3, phase: "lobby" }) });
+    expect(s.screen).toBe("lobby");
+    expect(s.result).toBeNull();
+  });
+  it("describes winner, own win and draw", () => {
+    const r = room();
+    expect(describeResult(r, { winnerTeamId: "t2" }, "a")).toMatchObject({
+      title: "T2 wins!",
+      subtitle: "Played by B",
+      youWon: false,
+    });
+    expect(describeResult(r, { winnerTeamId: "t1" }, "a")).toMatchObject({
+      title: "You win!",
+      youWon: true,
+    });
+    expect(describeResult(r, { winnerTeamId: null }, "a").title).toMatch(/draw/);
   });
 });

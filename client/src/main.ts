@@ -120,6 +120,18 @@ if (!params.has("nolobby")) {
   mountUi(document.body, {
     onClick: () => audio.play("uiClick"),
     transport: mock ? () => new MockTransport() : undefined,
-    guestToken: mock ? async () => ({ token: "mock", nickname: "You" }) : undefined,
+    guestToken: mock
+      ? async () => {
+          // ?mock=slow simulates a cold-starting server: wait, then fail once.
+          if (params.get("mock") === "slow") {
+            await new Promise((r) => setTimeout(r, 6000));
+            if (!sessionStorage.getItem("mockRetried")) {
+              sessionStorage.setItem("mockRetried", "1");
+              throw new Error("Could not reach the game server.");
+            }
+          }
+          return { token: "mock", nickname: "You" };
+        }
+      : undefined,
   });
 }
