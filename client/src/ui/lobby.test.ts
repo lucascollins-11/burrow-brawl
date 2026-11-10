@@ -105,6 +105,21 @@ describe("MockClient", () => {
   });
 });
 
+describe("results after a reconnect", () => {
+  it("shows a generic match-over when the room is in results and we never saw match.end", () => {
+    const s = applyRoom(initialState, room({ phase: "results" }));
+    expect(s.screen).toBe("results");
+    expect(s.result).toMatchObject({ unknown: true });
+    expect(describeResult(room(), s.result!, "a").title).toBe("Match over");
+  });
+  it("keeps the real winner when match.end came first", () => {
+    let s = applyRoom(initialState, room({ phase: "match" }));
+    s = withResult(s, { winnerTeamId: "t2" });
+    s = applyRoom(s, room({ version: 2, phase: "results" }));
+    expect(s.result).toEqual({ winnerTeamId: "t2" });
+  });
+});
+
 describe("results", () => {
   it("shows the results screen and keeps it through results-phase updates", () => {
     let s = applyRoom(initialState, room({ phase: "match" }));

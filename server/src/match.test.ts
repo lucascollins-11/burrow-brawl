@@ -1,84 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { MatchMirror, hashMatch } from "@burrow-brawl/shared";
-import { PROTOCOL_VERSION, type ServerMessage } from "@burrow-brawl/shared/src/net";
+import { hashMatch } from "@burrow-brawl/shared";
+import { PROTOCOL_VERSION } from "@burrow-brawl/shared/src/net";
 import type { MatchRunner } from "./match/runner";
-import { startHarness, type Harness, type TestClient } from "./testing/harness";
+import { startHarness, type Harness } from "./testing/harness";
+import { Player, startTwoPlayerMatch } from "./testing/players";
 
 let h: Harness;
 afterEach(async () => {
   await h?.close();
 });
 
-/** A client plus the mirror it keeps from server messages. */
-class Player {
-  mirror: MatchMirror | null = null;
-  desyncs = 0;
-  ended: Extract<ServerMessage, { t: "match.end" }> | null = null;
-  constructor(public c: TestClient) {}
-
-  apply(m: ServerMessage): void {
-    switch (m.t) {
-      case "match.start":
-        this.mirror = new MatchMirror(m.config, m.snapshot);
-        break;
-      case "tick":
-        if (this.mirror) {
-          this.mirror.onTick(m);
-          if (m.h === undefined) break;
-          this.mirror.advance(m.upTo); // reach the hashed tick to check it
-          if (this.mirror.desyncedAt !== null) {
-            this.desyncs++;
-            this.c.send({ t: "desync", tick: m.upTo, h: hashMatch(this.mirror.state) });
-          }
-        }
-        break;
-      case "snapshot":
-        this.mirror?.onSnapshot(m.snapshot);
-        break;
-      case "match.end":
-        this.ended = m;
-        break;
-    }
-  }
-
-  /** Process messages until one matches `pred`. */
-  async until(pred: (m: ServerMessage) => boolean): Promise<void> {
-    for (const m of await this.c.drainUntil(pred)) this.apply(m);
-  }
-
-  /**
-   * Process everything up to the confirmation of `tick`, then simulate to it.
-   * The server confirms every 3 ticks, so `tick` must be a multiple of 3.
-   */
-  async syncTo(tick: number): Promise<void> {
-    await this.until((m) => m.t === "tick" && m.upTo >= tick);
-    this.mirror!.advance(tick);
-  }
-}
-
 async function startMatch(): Promise<{ a: Player; b: Player; runner: MatchRunner; code: string }> {
-  const ca = await h.player("Alba");
-  ca.send({ t: "room.create" });
-  const { code } = await ca.room();
-  const cb = await h.player("Bram");
-  cb.send({ t: "room.join", code });
-  await cb.next("room.joined");
-  await ca.room((s) => s.members.length === 2);
-  // Short turns so tests can cycle them.
-  await ca.request({
-    t: "lobby.setSettings",
-    patch: { turnSeconds: 15, crittersPerTeam: 2, mapSeed: 99 },
-  });
-  ca.send({ t: "lobby.ready", ready: true });
-  cb.send({ t: "lobby.ready", ready: true });
-  await ca.room((s) => s.members.every((m) => m.ready));
-  ca.send({ t: "lobby.start" });
-  const a = new Player(ca);
-  const b = new Player(cb);
-  await a.until((m) => m.t === "match.start");
-  await b.until((m) => m.t === "match.start");
-  const runner = h.server.registry.get(code)!.match!;
-  return { a, b, runner, code };
+  return startTwoPlayerMatch(h);
 }
 
 describe("authoritative match", () => {
