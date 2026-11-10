@@ -84,6 +84,19 @@ describe("walking", () => {
     expect(c.x).toBeGreaterThan(toFixed(500 + 150));
   });
 
+  it("is blocked by a thin overhang the body would otherwise walk into", () => {
+    // A 2-cell-thick slab hanging at head height, at several heights above the feet.
+    for (const above of [9, 10, 13, 17, 18]) {
+      const t = flatWorld(200);
+      for (let y = 199 - above - 1; y <= 199 - above; y++) {
+        for (let x = 150; x < 170; x++) t.cells[y * 400 + x] = DIRT;
+      }
+      const w = createWorld(t, [createCritter(1, 0, 100, 199)], 390);
+      const c = run(w, 300, () => [right]).state.critters[0]!;
+      expect(c.x, `overhang ${above} cells above the feet`).toBeLessThan(toFixed(150));
+    }
+  });
+
   it("falls off a ledge when walking past the edge", () => {
     const t = flatWorld(200);
     carveCircle(t, 200, 200, 0); // no-op sanity

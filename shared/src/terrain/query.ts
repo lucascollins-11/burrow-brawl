@@ -5,6 +5,10 @@ import type { RayHit, Terrain } from "./types";
 
 /** Integer Bresenham line. Returns the first solid cell, starting cell included. */
 export function raycast(t: Terrain, x0: number, y0: number, x1: number, y1: number): RayHit {
+  if (![x0, y0, x1, y1].every(Number.isInteger)) {
+    // A fractional endpoint would never be reached by the stepping loop below.
+    throw new RangeError("raycast: integer arguments required");
+  }
   let x = x0;
   let y = y0;
   const dx = Math.abs(x1 - x0);

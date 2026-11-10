@@ -1,4 +1,5 @@
 import type { Fixed } from "../fixed";
+import { idiv } from "../fixed";
 import type { Terrain } from "../terrain";
 import { isSolid } from "../terrain";
 import {
@@ -38,10 +39,10 @@ const cell = (f: Fixed): number => f >> 16; // floor for negatives too
 export function bodyBlocked(t: Terrain, x: number, y: number): boolean {
   for (let dx = -CRITTER_HALF_WIDTH; dx <= CRITTER_HALF_WIDTH; dx++) {
     const from = Math.abs(dx) <= 1 ? 0 : SIDE_CLEARANCE;
-    for (let dy = from; dy < CRITTER_HEIGHT; dy += 4) {
+    // Every row is sampled, so thin overhangs and ledges cannot slip between probes.
+    for (let dy = from; dy < CRITTER_HEIGHT; dy++) {
       if (isSolid(t, x + dx, y - dy)) return true;
     }
-    if (isSolid(t, x + dx, y - (CRITTER_HEIGHT - 1))) return true;
   }
   return false;
 }
@@ -133,9 +134,9 @@ function stepCritter(
     vy = Math.min(vy + GRAVITY, TERMINAL_VELOCITY) | 0;
     // Substep so we never move more than one cell per axis per substep.
     const maxV = Math.max(Math.abs(vx), Math.abs(vy));
-    const n = Math.max(1, Math.ceil(maxV / 65536));
-    const sx = Math.trunc(vx / n) | 0;
-    const sy = Math.trunc(vy / n) | 0;
+    const n = Math.max(1, (maxV + 65535) >> 16);
+    const sx = idiv(vx, n) | 0;
+    const sy = idiv(vy, n) | 0;
     for (let i = 0; i < n; i++) {
       const nx = x + sx;
       if (sx !== 0 && bodyBlocked(t, cell(nx), cell(y))) {

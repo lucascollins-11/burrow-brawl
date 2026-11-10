@@ -25,10 +25,25 @@ export function fmul(a: Fixed, b: Fixed): Fixed {
   return ((a >> FIXED_SHIFT) * b + Math.floor(((a & 0xffff) * b) / FIXED_ONE)) | 0;
 }
 
+/**
+ * Exact integer division truncating toward zero, for safe integers. The float quotient is only a
+ * first guess; it is corrected with integer multiplication so rounding can never change the result.
+ */
+export function idiv(a: number, b: number): number {
+  if (b === 0) throw new RangeError("idiv: division by zero");
+  const sign = a < 0 !== b < 0 ? -1 : 1;
+  const absA = Math.abs(a);
+  const absB = Math.abs(b);
+  let q = Math.trunc(absA / absB);
+  while (q * absB > absA) q--;
+  while ((q + 1) * absB <= absA) q++;
+  return sign * q;
+}
+
 /** Q16.16 divide, truncating toward zero. Throws on division by zero. */
 export function fdiv(a: Fixed, b: Fixed): Fixed {
   if (b === 0) throw new RangeError("fdiv: division by zero");
-  return Math.trunc((a * FIXED_ONE) / b) | 0;
+  return idiv(a * FIXED_ONE, b) | 0;
 }
 
 /** Floor of the square root of a non-negative safe integer. */
