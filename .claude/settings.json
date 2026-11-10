@@ -1,9 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(git push)",
-      "Bash(git push:*)",
-      "Bash(git push -u origin:*)"
-    ]
+    "allow": ["Bash(git push)", "Bash(git push:*)", "Bash(git push -u origin:*)"]
   }
 }
