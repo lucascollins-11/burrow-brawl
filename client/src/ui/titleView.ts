@@ -1,6 +1,6 @@
 import { NICKNAME_MAX, normalizeRoomCode } from "@burrow-brawl/shared/src/net";
 import { h } from "./dom";
-import type { ConnStatus } from "./transport";
+import type { UiStatus } from "./client";
 
 export const WAKING_TEXT = "Waking up the game server… (can take up to a minute)";
 
@@ -18,7 +18,7 @@ export function renderTitle(
     code: string | null;
     busy: boolean;
     error: string | null;
-    status?: ConnStatus | null;
+    status?: UiStatus | null;
     /** True when the last attempt failed and can be retried. */
     canRetry?: boolean;
   },
