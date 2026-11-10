@@ -1,16 +1,28 @@
 import type { Member, RoomState, ServerMessage, TeamSetup } from "@burrow-brawl/shared/src/net";
 import { MAX_MEMBERS, MIN_TEAMS } from "@burrow-brawl/shared/src/net";
 
-export type Screen = "title" | "connecting" | "lobby" | "starting";
+export type Screen = "title" | "connecting" | "lobby" | "starting" | "results";
+
+/** End-of-match info. `winnerTeamId` null means a draw. Mirrors protocol `match.end` (stats later). */
+export interface MatchResult {
+  winnerTeamId: string | null;
+}
 
 export interface UiState {
   screen: Screen;
   you: { id: string; nickname: string } | null;
   room: RoomState | null;
   error: string | null;
+  result: MatchResult | null;
 }
 
-export const initialState: UiState = { screen: "title", you: null, room: null, error: null };
+export const initialState: UiState = {
+  screen: "title",
+  you: null,
+  room: null,
+  error: null,
+  result: null,
+};
 
 const ERROR_TEXT: Record<string, string> = {
   room_not_found: "No room with that code. Check the letters and try again.",
@@ -31,7 +43,10 @@ export function reduce(state: UiState, msg: ServerMessage): UiState {
       return { ...state, screen: "lobby", room: msg.room, error: null };
     case "room.update": {
       if (state.room && msg.room.version < state.room.version) return state;
-      const screen = msg.room.phase === "lobby" ? "lobby" : "starting";
+      const phase = msg.room.phase;
+      if (phase === "lobby") return { ...state, screen: "lobby", room: msg.room, result: null };
+      // Keep the results overlay up while the room sits in its results phase.
+      const screen = phase === "results" && state.result ? "results" : "starting";
       return { ...state, screen, room: msg.room };
     }
     case "room.left":
@@ -46,6 +61,16 @@ export function reduce(state: UiState, msg: ServerMessage): UiState {
     default:
       return state;
   }
+}
+
+/** The match ended: show the results overlay. */
+export function withResult(state: UiState, result: MatchResult): UiState {
+  return { ...state, screen: "results", result };
+}
+
+/** Back to lobby after a match (rematch): clear the result and show the lobby again. */
+export function backToLobby(state: UiState): UiState {
+  return { ...state, screen: state.room ? "lobby" : "title", result: null };
 }
 
 export const isHost = (s: UiState): boolean => !!s.room && s.room.hostId === s.you?.id;

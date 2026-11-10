@@ -297,3 +297,69 @@ h3 {
     padding: 16px;
   }
 }
+.waking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: var(--mint);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-weight: bold;
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 4px solid var(--ink);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.panel.results {
+  width: min(420px, 100%);
+  text-align: center;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  animation: pop 0.35s ease-out;
+}
+.panel.results h2 {
+  margin: 0;
+  font-size: 2.2rem;
+  color: var(--berry);
+  text-shadow: 2px 2px 0 var(--ink);
+}
+.trophy {
+  font-size: 3rem;
+}
+.big-hat {
+  width: 64px;
+  height: 44px;
+  border-radius: 34px 34px 6px 6px;
+}
+@keyframes pop {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .panel.results {
+    animation: none;
+  }
+}
+.ui-shell.dim {
+  background: rgba(74, 52, 38, 0.55);
+}

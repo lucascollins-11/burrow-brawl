@@ -5,7 +5,7 @@ import {
   type RoomState,
   type ServerMessage,
 } from "@burrow-brawl/shared/src/net";
-import type { LobbyTransport } from "./transport";
+import type { ConnStatus, LobbyTransport } from "./transport";
 
 /** In-memory fake server for tests and `?mock` dev: you are host of a room with one bot. */
 export class MockTransport implements LobbyTransport {
@@ -13,6 +13,7 @@ export class MockTransport implements LobbyTransport {
   sent: ClientMessage[] = [];
   private handlers = new Set<(m: ServerMessage) => void>();
   private closers = new Set<(c: number) => void>();
+  private statusHandlers = new Set<(s: ConnStatus) => void>();
 
   constructor(private readonly me = { id: "guest_me", nickname: "You" }) {
     this.room = {
@@ -100,6 +101,14 @@ export class MockTransport implements LobbyTransport {
     }
     r.version++;
     this.emit({ t: "room.update", room: structuredClone(r) });
+  }
+
+  onStatus(h: (s: ConnStatus) => void): () => void {
+    this.statusHandlers.add(h);
+    return () => this.statusHandlers.delete(h);
+  }
+  emitStatus(s: ConnStatus): void {
+    this.statusHandlers.forEach((h) => h(s));
   }
 
   /** Test helper: push a server message. */
