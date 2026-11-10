@@ -12,24 +12,24 @@ pnpm test                                  # from the repo root
 
 ## Endpoints
 
-| Path | What |
-|---|---|
-| `POST /api/guest` `{ nickname }` | Guest session token (HS256 JWT, 30 days) |
-| `GET /healthz` | `{ ok, rooms, connections }` |
-| `GET /ws` (upgrade) | Game WebSocket; first frame must be `hello` |
-| everything else | Static client from `CLIENT_DIR` with SPA fallback (`/r/CODE`), if set |
+| Path                             | What                                                                  |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `POST /api/guest` `{ nickname }` | Guest session token (HS256 JWT, 30 days)                              |
+| `GET /healthz`                   | `{ ok, rooms, connections }`                                          |
+| `GET /ws` (upgrade)              | Game WebSocket; first frame must be `hello`                           |
+| everything else                  | Static client from `CLIENT_DIR` with SPA fallback (`/r/CODE`), if set |
 
 ## Environment
 
-| Var | Default | Notes |
-|---|---|---|
-| `PORT` | `8080` | |
-| `HOST` | `0.0.0.0` | |
-| `JWT_SECRET` | random in dev | Required in production, at least 32 bytes |
-| `ALLOWED_ORIGINS` | empty | Comma list of browser origins allowed on `/ws` and `/api`, e.g. the Vercel URL. Same origin is always allowed. `*` allowed only outside production |
-| `CLIENT_DIR` | unset | Path to `client/dist` to serve the client from this server |
-| `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for client IPs (set on Fly/Render) |
-| `NODE_ENV` | | `production` turns on the strict checks above |
+| Var               | Default       | Notes                                                                                                                                              |
+| ----------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`            | `8080`        |                                                                                                                                                    |
+| `HOST`            | `0.0.0.0`     |                                                                                                                                                    |
+| `JWT_SECRET`      | random in dev | Required in production, at least 32 bytes                                                                                                          |
+| `ALLOWED_ORIGINS` | empty         | Comma list of browser origins allowed on `/ws` and `/api`, e.g. the Vercel URL. Same origin is always allowed. `*` allowed only outside production |
+| `CLIENT_DIR`      | unset         | Path to `client/dist` to serve the client from this server                                                                                         |
+| `TRUST_PROXY`     | `false`       | Use `X-Forwarded-For` for client IPs (set on Fly/Render)                                                                                           |
+| `NODE_ENV`        |               | `production` turns on the strict checks above                                                                                                      |
 
 The client points at this server with `VITE_GAME_SERVER_URL` (for example
 `wss://brawl-server.fly.dev`); the server must list the client's origin in
