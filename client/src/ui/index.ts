@@ -2,14 +2,7 @@ import type { ClientMessage } from "@burrow-brawl/shared/src/net";
 import { GAME_SERVER_URL } from "../config";
 import { h } from "./dom";
 import { getGuest } from "./guest";
-import {
-  backToLobby as backToLobbyState,
-  initialState,
-  reduce,
-  withResult,
-  type MatchResult,
-  type UiState,
-} from "./lobbyState";
+import { initialState, reduce, withResult, type MatchResult, type UiState } from "./lobbyState";
 import { renderLobby } from "./lobbyView";
 import { roomCodeFromPath } from "./routes";
 import { renderResults } from "./resultsView";
@@ -62,12 +55,6 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
     if (state.screen === "results" && state.room && state.result) {
       shell.append(
         renderResults(state.room, state.result, state.you?.id, {
-          backToLobby: () => {
-            // Protocol section 5: host sends match.rematch; the server answers with a lobby room.update.
-            transport?.send({ t: "match.rematch" } as unknown as ClientMessage);
-            state = backToLobbyState(state);
-            render();
-          },
           leave,
           click,
         }),
