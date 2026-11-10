@@ -193,6 +193,11 @@ export class GameClient {
 
   // ------------------------------------------------------------ match
 
+  /** Host only, on the results screen: take the room back to the lobby (phase "lobby"). */
+  rematch(): Promise<void> {
+    return this.ok({ t: "match.rematch" });
+  }
+
   /** Send commands for your turn; ignored by the server if it's not your turn. */
   sendCmds(cmds: Cmd[]): void {
     this.match.sendCmds(cmds);

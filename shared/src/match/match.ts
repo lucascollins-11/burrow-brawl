@@ -4,12 +4,17 @@
 // commands at the same ticks => same state hash everywhere.
 
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, stepWorld } from "../sim";
+import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
 import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
-import { generateMap } from "../maps";
-import { deserializeTerrain, hashTerrain, serializeTerrain, type Terrain } from "../terrain";
+import {
+  createDemoTerrain,
+  deserializeTerrain,
+  hashTerrain,
+  serializeTerrain,
+  type Terrain,
+} from "../terrain";
 import { fromBase64, toBase64 } from "./base64";
 
 // ------------------------------------------------------------ commands
@@ -129,38 +134,34 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
 export const MATCH_TURNS: TurnController = basicTurns;
 
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
-export function createMatch(cfg: MatchConfig): MatchState {
+export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns): MatchState {
   const rng = Prng.fromSeed(cfg.seed);
-  const total = cfg.teamSizes.reduce((a, b) => a + b, 0);
-  const map = generateMap(rng.fork("map"), {
-    width: cfg.mapWidth,
-    height: cfg.mapHeight,
-    spawnCount: total,
-    // Spread spawns across the map, tighter when there are many critters.
-    minSpawnSpacing: Math.min(160, Math.floor(cfg.mapWidth / (total + 1))),
-  });
-  if (map.spawns.length < total) {
-    throw new Error(
-      `map seed ${cfg.seed} has ${map.spawns.length} spawn points for ${total} critters`,
-    );
-  }
-  // Shuffle spawns, then interleave teams so nobody gets all the high ground.
-  const spawns = rng.fork("spawn").shuffle([...map.spawns]);
+  const terrain = createDemoTerrain(cfg.mapWidth, cfg.mapHeight);
+  const spawnRng = rng.fork("spawn");
+  const margin = 80;
+  const spacing = 40;
+  const taken: number[] = [];
   const critters: Critter[] = [];
   let id = 1;
+  // Interleave teams so nobody gets all the high ground.
   const maxSize = Math.max(...cfg.teamSizes);
   for (let i = 0; i < maxSize; i++) {
     for (let team = 0; team < cfg.teamSizes.length; team++) {
       if (i >= (cfg.teamSizes[team] ?? 0)) continue;
-      const at = spawns[id - 1]!;
-      const c = createCritter(id++, team, at.x, at.y);
+      let x = margin;
+      for (let tries = 0; tries < 64; tries++) {
+        x = spawnRng.nextRange(margin, cfg.mapWidth - margin);
+        if (taken.every((t) => Math.abs(t - x) >= spacing) && findSurfaceY(terrain, x) > 0) break;
+      }
+      taken.push(x);
+      const c = createCritter(id++, team, x, findSurfaceY(terrain, x));
       critters.push({ ...c, hp: cfg.startHealth });
     }
   }
-  const sim = createWorld(map.terrain, critters, map.waterY);
+  const sim = createWorld(terrain, critters, cfg.mapHeight - 40);
   return {
     sim,
-    turns: MATCH_TURNS.init(sim, rulesFor(cfg), 0, rng),
+    turns: turns.init(sim, rulesFor(cfg), 0, rng),
     rng: rng.getState(),
     move: 0,
   };

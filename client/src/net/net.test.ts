@@ -8,7 +8,7 @@ import {
 } from "@burrow-brawl/shared";
 import { CloseCodes, PROTOCOL_VERSION, type ServerMessage } from "@burrow-brawl/shared/src/net";
 import { GameConnection, type WebSocketLike } from "./connection";
-import { INTERP_DELAY_TICKS, NetMatch } from "./match";
+import { NetMatch } from "./match";
 import { createGuest, loadSession, saveSession, type KeyValueStore } from "./session";
 import { roomCodeFromPath, serverUrls } from "./urls";
 
@@ -219,11 +219,11 @@ describe("NetMatch", () => {
     settleCapTicks: 600,
     startHealth: 100,
     windMax: 50,
-    mapWidth: 1024,
-    mapHeight: 512,
+    mapWidth: 384,
+    mapHeight: 160,
   };
 
-  it("mirrors the server, renders behind the confirmed tick, and sends commands for the current turn", () => {
+  it("mirrors the server, fast-forwards to the watermark, and sends commands for the current turn", () => {
     const sent: Record<string, unknown>[] = [];
     const nm = new NetMatch({ send: (m) => void sent.push(m as Record<string, unknown>) });
     let server = createMatch(cfg);
@@ -233,23 +233,27 @@ describe("NetMatch", () => {
       config: cfg,
       teamIds: ["t1", "t2"],
       snapshot: saveMatch(server),
-      pending: [],
-      serverTick: 0,
     });
     nm.sendCmds([{ k: "move", dir: 1 }]);
     expect(sent.at(-1)).toEqual({ t: "input", turn: 1, cmds: [{ k: "move", dir: 1 }] });
 
-    nm.handle({ t: "inputs", applyTick: 5, cmds: [{ k: "move", dir: 1 }] });
     for (let t = 1; t <= 60; t++) {
       server = stepMatch(cfg, server, t === 5 ? [{ k: "move", dir: 1 }] : []).state;
-      if (t % 30 === 0) nm.handle({ t: "hash", tick: t, h: hashMatch(server) });
-      else if (t % 3 === 0) nm.handle({ t: "ticks", upTo: t });
+      if (t % 3 !== 0) continue;
+      nm.handle({
+        t: "tick",
+        upTo: t,
+        ...(t === 6 ? { cmds: [{ applyTick: 5, cmds: [{ k: "move", dir: 1 }] }] } : {}),
+        ...(t % 30 === 0 ? { h: hashMatch(server) } : {}),
+      });
     }
-    expect(nm.mirror!.tick).toBe(60); // hash messages pull the mirror up to check
-    nm.handle({ t: "ticks", upTo: 63 });
+    // Nothing is simulated until update(), then every confirmed tick at once (no per-frame cap).
+    expect(nm.mirror!.tick).toBe(0);
     nm.update();
-    // Stays INTERP_DELAY_TICKS behind confirmed (63 - 6 = 57), and never goes backwards.
-    expect(INTERP_DELAY_TICKS).toBe(6);
+    expect(nm.mirror!.tick).toBe(60);
+    expect(hashMatch(nm.mirror!.state)).toBe(hashMatch(server));
+    // Never past the watermark.
+    nm.update();
     expect(nm.mirror!.tick).toBe(60);
     expect(sent.filter((m) => m.t === "desync")).toHaveLength(0);
   });
@@ -264,10 +268,9 @@ describe("NetMatch", () => {
       config: cfg,
       teamIds: ["t1", "t2"],
       snapshot: saveMatch(server),
-      pending: [],
-      serverTick: 0,
     });
-    nm.handle({ t: "hash", tick: 30, h: 12345 });
+    nm.handle({ t: "tick", upTo: 30, h: 12345 });
+    nm.update();
     nm.update();
     expect(sent.filter((m) => m.t === "desync")).toEqual([
       { t: "desync", tick: 30, h: expect.any(Number) },

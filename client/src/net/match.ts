@@ -12,9 +12,6 @@ import {
 import type { ServerMessage } from "@burrow-brawl/shared/src/net";
 import type { GameConnection } from "./connection";
 
-/** Render this many ticks behind the newest confirmed tick to hide jitter (~100 ms). */
-export const INTERP_DELAY_TICKS = 6;
-
 export class NetMatch {
   mirror: MatchMirror | null = null;
   matchId: string | null = null;
@@ -38,22 +35,9 @@ export class NetMatch {
         this.teamIds = msg.teamIds;
         this.winnerTeamId = undefined;
         this.mirror = new MatchMirror(msg.config, msg.snapshot);
-        for (const p of msg.pending) this.mirror.onInputs(p.applyTick, p.cmds);
-        this.mirror.onConfirmed(msg.serverTick);
         return true;
-      case "inputs":
-        this.mirror?.onInputs(msg.applyTick, msg.cmds);
-        return true;
-      case "ticks":
-        this.mirror?.onConfirmed(msg.upTo);
-        return true;
-      case "hash":
-        if (this.mirror) {
-          this.mirror.onConfirmed(msg.tick);
-          this.mirror.advance(msg.tick); // hash checks need us to have reached that tick
-          this.mirror.onHash(msg.tick, msg.h);
-          this.reportDesync();
-        }
+      case "tick":
+        this.mirror?.onTick(msg);
         return true;
       case "snapshot":
         this.mirror?.onSnapshot(msg.snapshot);
@@ -67,11 +51,14 @@ export class NetMatch {
     }
   }
 
-  /** Advance toward the confirmed tick, staying INTERP_DELAY_TICKS behind it. */
+  /**
+   * Fast-forward to the server's watermark. Every confirmed tick is simulated
+   * (none dropped, however far behind we are), and never one past it.
+   */
   update(): MirrorStep[] {
     const m = this.mirror;
     if (!m) return [];
-    const steps = m.advance(Math.max(m.tick, m.confirmed - INTERP_DELAY_TICKS));
+    const steps = m.advance();
     this.reportDesync();
     return steps;
   }
