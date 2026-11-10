@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Burrow Brawl</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #f3e6d3; }
+      #app { position: fixed; inset: 0; }
+      canvas { display: block; touch-action: none; }
+      #hud {
+        position: fixed; top: 8px; left: 8px; padding: 6px 10px;
+        font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+        color: #3b2a1a; background: rgba(255, 248, 235, 0.85);
+        border: 2px solid #3b2a1a; border-radius: 8px; white-space: pre; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
