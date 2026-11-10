@@ -72,6 +72,18 @@ describe("match model", () => {
         if (roll === 1) return [{ k: "backflip" }];
         if (roll === 2) return [{ k: "move", dir: rng.pick([-1, 0, 1] as const) }];
         if (roll === 3 && rng.chance(1, 8)) return [{ k: "skip" }];
+        if (roll === 4) {
+          const weaponId = rng.pick(["acorn-mortar", "fizz-grenade"] as const);
+          return [
+            {
+              k: "fire",
+              weaponId,
+              angleDeg: rng.nextInt(180),
+              power: rng.nextRange(20, 100),
+              fuseSeconds: 2,
+            },
+          ];
+        }
         return [];
       }),
       step: (s, cmds) => stepMatch(small, s, cmds).state,
@@ -100,8 +112,15 @@ describe("match model", () => {
 
   it("fire starts retreat, then the turn ends on the retreat timer", () => {
     let s = run(createMatch(cfg), 30);
-    s = stepMatch(cfg, s, [{ k: "fire" }]).state;
+    // Unsupported weapons do nothing; a real shot starts retreat.
+    s = stepMatch(cfg, s, [{ k: "fire", weaponId: "root-punch", angleDeg: 45, power: 50 }]).state;
+    expect(s.turns.phase).toBe("control");
+    s = stepMatch(cfg, s, [{ k: "fire", weaponId: "acorn-mortar", angleDeg: 45, power: 50 }]).state;
     expect(s.turns.phase).toBe("retreat");
+    expect(s.sim.projectiles).toHaveLength(1);
+    // No second shot during retreat.
+    s = stepMatch(cfg, s, [{ k: "fire", weaponId: "acorn-mortar", angleDeg: 45, power: 50 }]).state;
+    expect(s.sim.projectiles.length).toBeLessThanOrEqual(1);
     s = run(s, 61);
     expect(s.turns.phase).not.toBe("retreat");
   });
@@ -140,6 +159,12 @@ describe("match model", () => {
     expect(isCmd({ k: "move", dir: 2 })).toBe(false);
     expect(isCmd({ k: "jump", extra: 1 })).toBe(false);
     expect(isCmd({ k: "teleport" })).toBe(false);
+    expect(
+      isCmd({ k: "fire", weaponId: "acorn-mortar", angleDeg: 90, power: 100, fuseSeconds: 3 }),
+    ).toBe(true);
+    expect(isCmd({ k: "fire", weaponId: "laser", angleDeg: 90, power: 100 })).toBe(false);
+    expect(isCmd({ k: "fire", weaponId: "acorn-mortar", angleDeg: 400, power: 100 })).toBe(false);
+    expect(isCmd({ k: "fire", weaponId: "acorn-mortar", angleDeg: 90, power: 1.5 })).toBe(false);
     expect(isCmd(null)).toBe(false);
   });
 });

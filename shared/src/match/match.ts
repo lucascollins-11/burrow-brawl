@@ -5,7 +5,8 @@
 
 import { Prng, StateHasher, type PrngState } from "../determinism";
 import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
-import type { Critter, CritterInput, SimEvent, SimState } from "../sim";
+import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
+import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
 import {
   createDemoTerrain,
@@ -24,15 +25,35 @@ import { fromBase64, toBase64 } from "./base64";
  *
  * - move: held direction, stays in effect until changed or the turn ends
  * - jump / backflip: one-shot, applied on the tick they're stamped for
- * - fire: one-shot; until weapons (S4) exist it only ends control and starts retreat
+ * - fire: one-shot; passed to the sim as CritterInput.fire. If the sim reports
+ *   a "fired" event for the active critter, control ends and retreat starts.
+ *   Unsupported weapons do nothing and the turn continues.
  * - skip: end the turn now
  */
 export type Cmd =
   | { k: "move"; dir: -1 | 0 | 1 }
   | { k: "jump" }
   | { k: "backflip" }
-  | { k: "fire" }
+  | ({ k: "fire" } & FireCommand)
   | { k: "skip" };
+
+const WEAPON_IDS = [
+  "acorn-mortar",
+  "fizz-grenade",
+  "pepper-shotgun",
+  "root-punch",
+  "spring-boots",
+  "rope-claw",
+  "drill-hat",
+  "beehive-strike",
+  "jelly-mine",
+  "boulder-of-doom",
+  "teleport-burrow",
+  "skip-turn",
+] as const satisfies readonly WeaponId[];
+
+const isIntIn = (v: unknown, min: number, max: number): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
 
 export const MAX_CMDS_PER_INPUT = 16;
 
@@ -45,9 +66,16 @@ export function isCmd(v: unknown): v is Cmd {
       return keys.length === 2 && (o.dir === -1 || o.dir === 0 || o.dir === 1);
     case "jump":
     case "backflip":
-    case "fire":
     case "skip":
       return keys.length === 1;
+    case "fire":
+      return (
+        keys.every((k) => ["k", "weaponId", "angleDeg", "power", "fuseSeconds"].includes(k)) &&
+        (WEAPON_IDS as readonly unknown[]).includes(o.weaponId) &&
+        isIntIn(o.angleDeg, 0, 359) &&
+        isIntIn(o.power, 0, 100) &&
+        (o.fuseSeconds === undefined || isIntIn(o.fuseSeconds, 1, 5))
+      );
     default:
       return false;
   }
@@ -136,11 +164,20 @@ export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns
 function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): CritterInput {
   let jump = false;
   let backflip = false;
+  let fire: FireCommand | undefined;
   for (const c of cmds) {
     if (c.k === "jump") jump = true;
     if (c.k === "backflip") backflip = true;
+    if (c.k === "fire" && !fire) {
+      fire = {
+        weaponId: c.weaponId,
+        angleDeg: c.angleDeg,
+        power: c.power,
+        ...(c.fuseSeconds === undefined ? {} : { fuseSeconds: c.fuseSeconds }),
+      };
+    }
   }
-  return { critterId, move, jump, backflip };
+  return fire ? { critterId, move, jump, backflip, fire } : { critterId, move, jump, backflip };
 }
 
 /**
@@ -165,7 +202,12 @@ export function stepMatch(
     for (const c of cmds) if (c.k === "move") move = c.dir;
     inputs.push(inputFor(ts.activeCritter!, move, cmds));
     if (cmds.some((c) => c.k === "skip")) ts = turns.endTurn(ts, rules, "skip", tick);
-    else if (cmds.some((c) => c.k === "fire")) ts = turns.endTurn(ts, rules, "fired", tick);
+  }
+  // Only one shot per turn: no firing during retreat.
+  if (ts.phase === "retreat" && inputs[0]?.fire) {
+    const { fire: _drop, ...rest } = inputs[0];
+    void _drop;
+    inputs[0] = rest;
   }
   if (turns.activeTeam(ts) === null) inputs.length = 0;
   if (turns.activeTeam(ts) === null) move = 0;
@@ -174,6 +216,9 @@ export function stepMatch(
   // The turn controller owns wind; the sim (projectiles, S4) reads SimState.wind.
   const sim = { ...state.sim, wind: ts.wind } as SimState;
   const r = stepWorld(sim, inputs, rng);
+  if (r.events.some((e) => e.type === "fired" && e.critterId === ts.activeCritter)) {
+    ts = turns.endTurn(ts, rules, "fired", tick);
+  }
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
   const turnChanged =
     next.turn !== state.turns.turn || (next.phase === "over") !== (state.turns.phase === "over");
