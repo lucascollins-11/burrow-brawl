@@ -25,7 +25,7 @@ const STYLE = `
 .bb-bar > div { height: 100%; }
 .bb-weapons { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: stretch;
   padding: 8px; background: rgba(255,248,235,.92); border: 3px solid #3b2a1a; border-radius: 14px; pointer-events: auto; }
-.bb-weapon { font: inherit; padding: 6px 12px; border: 2px solid #3b2a1a; border-radius: 10px; background: #fff; color: inherit; cursor: pointer; }
+.bb-weapon { font: inherit; white-space: nowrap; padding: 6px 9px; border: 2px solid #3b2a1a; border-radius: 10px; background: #fff; color: inherit; cursor: pointer; }
 .bb-weapon.sel { background: #ffd23f; font-weight: 700; }
 .bb-weapon:disabled { opacity: .5; cursor: default; }
 .bb-power { width: 140px; display: flex; flex-direction: column; justify-content: center; gap: 3px; font-size: 12px; }
