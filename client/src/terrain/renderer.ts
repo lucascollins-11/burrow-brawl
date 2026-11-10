@@ -37,12 +37,17 @@ export class TerrainRenderer {
   private readonly budget: number;
 
   constructor(
-    private readonly terrain: Terrain,
+    private terrain: Terrain,
     options: TerrainRendererOptions = {},
   ) {
     this.depth = options.depth ?? 24;
     this.budget = options.chunkBudget ?? 4;
     this.group.name = "terrain";
+  }
+
+  /** Follow a new terrain object (the sim copies the mask when an explosion carves it). */
+  setTerrain(terrain: Terrain): void {
+    this.terrain = terrain;
   }
 
   setWireframe(on: boolean): void {

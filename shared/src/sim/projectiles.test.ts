@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toFixed } from "../fixed";
-import { createTerrain, DIRT, isSolid } from "../terrain";
+import { createTerrain, DIRT, hashTerrain, isSolid } from "../terrain";
 import type { CritterInput, SimEvent, SimState } from "./index";
 import { createCritter, createWorld, stepWorld } from "./index";
 
@@ -88,7 +88,7 @@ describe("Acorn Mortar", () => {
     expect(boom.weaponId).toBe("acorn-mortar");
     expect(boom.cellsRemoved).toBeGreaterThan(0);
     expect(boom.x).toBeGreaterThan(150);
-    expect(isSolid(t, boom.x, boom.y + 2)).toBe(false); // crater is empty near the blast centre
+    expect(isSolid(r.state.terrain, boom.x, boom.y + 2)).toBe(false); // crater is empty near the blast centre
     expect(r.state.projectiles).toHaveLength(0);
   });
 
@@ -205,5 +205,74 @@ describe("projectiles leaving the map", () => {
     const r = run(w, 200, fire("acorn-mortar", 0, 100));
     expect(r.events.some((e) => e.type === "projectileLost")).toBe(true);
     expect(r.state.projectiles).toHaveLength(0);
+  });
+});
+
+describe("purity across explosions", () => {
+  it("never mutates the input terrain, so re-stepping the same state repeats exactly", () => {
+    const t = flatWorld();
+    let s = settle(createWorld(t, [createCritter(1, 0, 100, 299)], 490));
+    s = stepWorld(s, fire("acorn-mortar", 45, 60)(0)).state;
+    // Step until the very tick before the explosion.
+    for (let i = 0; i < 600; i++) {
+      const peek = stepWorld(s, []);
+      if (peek.events.some((e) => e.type === "explosion")) break;
+      s = peek.state;
+    }
+    const before = hashTerrain(s.terrain);
+    const a = stepWorld(s, []);
+    const b = stepWorld(s, []);
+    expect(a.events.some((e) => e.type === "explosion")).toBe(true);
+    expect(hashTerrain(s.terrain)).toBe(before); // input untouched
+    expect(a.state.terrain).not.toBe(s.terrain); // copy on write
+    expect(hashTerrain(a.state.terrain)).not.toBe(before); // the copy was carved
+    expect(hashTerrain(a.state.terrain)).toBe(hashTerrain(b.state.terrain));
+    expect(JSON.stringify(a.state.critters)).toBe(JSON.stringify(b.state.critters));
+    expect(JSON.stringify(a.events)).toBe(JSON.stringify(b.events));
+  });
+
+  it("reuses the same terrain object while nothing explodes", () => {
+    const s = settle(createWorld(flatWorld(), [createCritter(1, 0, 100, 299)], 490));
+    expect(stepWorld(s, []).state.terrain).toBe(s.terrain);
+  });
+});
+
+describe("limits and dead critters", () => {
+  it("discards projectiles that fly too high or live too long", () => {
+    const t = createTerrain(400, 300);
+    const w = createWorld(t, [createCritter(1, 0, 200, 150)], 290);
+    // Straight up at full power with no ground: it falls back, but a very old one is dropped.
+    const old = {
+      id: 1,
+      ownerId: 1,
+      weaponId: "fizz-grenade" as const,
+      x: toFixed(200),
+      y: toFixed(-5000),
+      vx: 0,
+      vy: 0,
+      age: 5,
+      fuseTicks: -1,
+      bounces: 0,
+      resting: false,
+    };
+    const high = stepWorld({ ...w, projectiles: [old] }, []);
+    expect(high.events.some((e) => e.type === "projectileLost")).toBe(true);
+    const aged = stepWorld({ ...w, projectiles: [{ ...old, y: toFixed(100), age: 100000 }] }, []);
+    expect(aged.events.some((e) => e.type === "projectileLost")).toBe(true);
+  });
+
+  it("does not damage or push critters that are already dead", () => {
+    const t = flatWorld();
+    const base = settle(
+      createWorld(t, [createCritter(1, 0, 100, 299), createCritter(2, 1, 120, 299)], 490),
+    );
+    const dead = { ...base.critters[1]!, status: "dead" as const, hp: 0, vx: 0, vy: 0 };
+    const w = { ...base, critters: [base.critters[0]!, dead] };
+    const r = run(w, 120, fire("acorn-mortar", 0, 20));
+    expect(r.events.some((e) => e.type === "explosion")).toBe(true);
+    expect(r.events.some((e) => e.type === "damage" && e.critterId === 2)).toBe(false);
+    const after = r.state.critters[1]!;
+    expect(after.x).toBe(dead.x);
+    expect(after.vx).toBe(0);
   });
 });

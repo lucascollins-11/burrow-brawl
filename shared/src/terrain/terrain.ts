@@ -81,3 +81,20 @@ export function hashTerrain(t: Terrain): number {
   }
   return h >>> 0;
 }
+
+/**
+ * Independent copy of a terrain, including render bookkeeping (chunk versions and dirty set), so a
+ * renderer that switches to the copy keeps rebuilding exactly the chunks that still need it.
+ */
+export function cloneTerrain(t: Terrain): Terrain {
+  return {
+    width: t.width,
+    height: t.height,
+    cells: t.cells.slice(),
+    chunkSize: t.chunkSize,
+    chunksX: t.chunksX,
+    chunksY: t.chunksY,
+    chunkVersion: t.chunkVersion.slice(),
+    dirtyChunks: new Set(t.dirtyChunks),
+  };
+}

@@ -244,6 +244,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
     blastEvents,
   );
   critters = flown.critters;
+  const terrain = flown.terrain;
 
   const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
   critters = critters.map((c) => resolve(c, state.waterY, events, moveEvents));
@@ -252,6 +253,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
       ...state,
       tick: state.tick + 1,
       critters,
+      terrain,
       projectiles: flown.projectiles,
       nextProjectileId: nextId,
     },

@@ -62,7 +62,7 @@ scene.add(soda);
 
 let carveRadius = 40;
 let wireframe = false;
-let terrainHash = hashTerrain(terrain);
+let terrainHash = hashTerrain(runner.state.terrain);
 const cam = new PanZoomCamera(renderer.domElement);
 const hud = new DebugHud(hudEl);
 const cursor = new THREE.Vector2();
@@ -76,8 +76,8 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
   if (e.button !== 2 && !(e.button === 0 && e.ctrlKey)) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const w = cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-  const res = carveCircle(terrain, Math.round(w.x), Math.round(-w.y), carveRadius);
-  if (res.cellsRemoved > 0) terrainHash = hashTerrain(terrain);
+  const res = carveCircle(runner.state.terrain, Math.round(w.x), Math.round(-w.y), carveRadius);
+  if (res.cellsRemoved > 0) terrainHash = hashTerrain(runner.state.terrain);
 });
 window.addEventListener("keydown", (e) => {
   if (e.key === "Tab") {
@@ -105,7 +105,8 @@ function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1);
   cam.update(dt);
   const tickEvents = runner.advance(dt * 1000);
-  if (tickEvents.some((e) => e.type === "explosion")) terrainHash = hashTerrain(terrain);
+  if (tickEvents.some((e) => e.type === "explosion"))
+    terrainHash = hashTerrain(runner.state.terrain);
   critterViews.sync(runner.state.critters, activeId);
   projectileViews.sync(runner.state.projectiles);
   const ac = activeCritter();
@@ -120,6 +121,7 @@ function frame(): void {
       new THREE.Vector3(ox + Math.cos(a) * len, oy + Math.sin(a) * len, 16),
     ]);
   }
+  terrainRenderer.setTerrain(runner.state.terrain);
   terrainRenderer.update();
   const cube = scene.getObjectByName("test-cube");
   if (cube) cube.rotation.y += dt;

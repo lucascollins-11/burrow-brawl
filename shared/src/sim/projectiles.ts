@@ -1,6 +1,6 @@
 import type { Fixed } from "../fixed";
 import { cosDeg, FIXED_ONE, fmul, idiv, isqrt, sinDeg, toFixed } from "../fixed";
-import { carveCircle, isSolid, surfaceNormal } from "../terrain";
+import { carveCircle, cloneTerrain, isSolid, surfaceNormal } from "../terrain";
 import type { Terrain } from "../terrain";
 import { loadWeapons } from "../weapons/load";
 import type { WeaponData } from "../weapons/types";
@@ -11,6 +11,8 @@ import {
   TICK_RATE,
   TERMINAL_VELOCITY,
   WIND_ACCEL_PER_UNIT,
+  MAX_PROJECTILE_AGE_TICKS,
+  MAX_PROJECTILE_ALTITUDE,
 } from "./constants";
 import type { Critter, FireCommand, Projectile, ProjectileWeaponId, SimEvent } from "./types";
 
@@ -128,7 +130,8 @@ export function explode(
   });
 
   return critters.map((c) => {
-    if (c.status === "drowned" || radius === 0) return c;
+    // Dead and drowned critters are neither hurt nor pushed around by later blasts.
+    if (c.status !== "alive" || radius === 0) return c;
     // Distance to the body centre.
     const cx = cell(c.x);
     const cy = cell(c.y) - (CRITTER_HEIGHT >> 1);
@@ -147,7 +150,7 @@ export function explode(
     const kvy = fmul(ny, mag);
 
     let hp = c.hp;
-    let status = c.status;
+    let status: Critter["status"] = c.status;
     if (status === "alive" && amount > 0) {
       const dealt = Math.min(hp, amount);
       hp -= dealt;
@@ -174,11 +177,13 @@ export function explode(
 export interface ProjectileStep {
   readonly projectiles: Projectile[];
   readonly critters: Critter[];
+  /** The input terrain, or a private copy if any explosion carved it (copy on write). */
+  readonly terrain: Terrain;
 }
 
 /** Advance every projectile one tick. Explosions are resolved in projectile order for determinism. */
 export function stepProjectiles(
-  terrain: Terrain,
+  inputTerrain: Terrain,
   projectiles: readonly Projectile[],
   critters: readonly Critter[],
   wind: number,
@@ -186,6 +191,9 @@ export function stepProjectiles(
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
+  // The caller's terrain is never modified: the first explosion works on a private copy, so
+  // re-stepping the same input state always gives the same result.
+  let terrain = inputTerrain;
 
   for (const p of projectiles) {
     const w = loadWeapons()[p.weaponId];
@@ -248,12 +256,13 @@ export function stepProjectiles(
         }
       }
 
-      if (
-        detonateAt === null &&
-        (cell(x) < -LOST_MARGIN ||
-          cell(x) > terrain.width + LOST_MARGIN ||
-          cell(y) > terrain.height + LOST_MARGIN)
-      ) {
+      const outOfRange =
+        p.age >= MAX_PROJECTILE_AGE_TICKS ||
+        cell(y) < -MAX_PROJECTILE_ALTITUDE ||
+        cell(y) > terrain.height + LOST_MARGIN ||
+        cell(x) < -LOST_MARGIN ||
+        cell(x) > terrain.width + LOST_MARGIN;
+      if (detonateAt === null && outOfRange) {
         events.push({ type: "projectileLost", projectileId: p.id });
         continue;
       }
@@ -261,10 +270,11 @@ export function stepProjectiles(
 
     if (detonateAt === null && fuse === 0) detonateAt = { x: cell(x), y: cell(y) };
     if (detonateAt !== null) {
+      if (terrain === inputTerrain) terrain = cloneTerrain(inputTerrain);
       cs = explode(terrain, cs, p, detonateAt.x, detonateAt.y, events);
       continue;
     }
     next.push({ ...p, x, y, vx, vy, age: p.age + 1, fuseTicks: fuse, bounces, resting });
   }
-  return { projectiles: next, critters: cs };
+  return { projectiles: next, critters: cs, terrain };
 }
