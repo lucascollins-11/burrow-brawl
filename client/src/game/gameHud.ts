@@ -177,17 +177,28 @@ export class GameHud {
       this.teams[i]!.classList.toggle("out", alive === 0);
     });
 
+    const inv = ts.activeTeam === null ? undefined : state.sim.inventory[ts.activeTeam];
     WEAPONS.forEach((w, i) => {
-      this.weaponButtons[i]!.classList.toggle("sel", this.input.weapon === w.id);
-      this.weaponButtons[i]!.disabled =
-        ts.phase !== "control" || (this.localTeams !== null && !mine);
+      const b = this.weaponButtons[i]!;
+      // Limited weapons show their uses left; crate-only ones appear once the team owns one.
+      const limited = w.id === "drill-hat" || w.id === "boulder-of-doom";
+      const left = inv?.[w.id] ?? 0;
+      b.textContent = `${w.key}  ${w.name}${limited ? ` ×${left}` : ""}`;
+      b.style.display = w.id === "boulder-of-doom" && left === 0 ? "none" : "";
+      b.classList.toggle("sel", this.input.weapon === w.id);
+      b.disabled =
+        ts.phase !== "control" || (this.localTeams !== null && !mine) || (limited && left === 0);
     });
     this.skipButton.disabled = !controlling || (this.localTeams !== null && !mine);
     this.powerFill.style.width = `${this.input.charge}%`;
     this.powerText.textContent =
-      this.input.weapon === "fizz-grenade"
-        ? `Power ${Math.round(this.input.charge)} · fuse ${this.input.fuseSeconds}s · aim ${this.input.elevation}°`
-        : `Power ${Math.round(this.input.charge)} · aim ${this.input.elevation}°`;
+      this.input.weapon === "drill-hat"
+        ? `Drill ${this.input.elevation > 45 ? "down" : "sideways"} · W/S to switch`
+        : this.input.weapon === "rope-claw"
+          ? "Rope: aim up, F to fire · Space lets go · A/D swing"
+          : this.input.weapon === "fizz-grenade"
+            ? `Power ${Math.round(this.input.charge)} · fuse ${this.input.fuseSeconds}s · aim ${this.input.elevation}°`
+            : `Power ${Math.round(this.input.charge)} · aim ${this.input.elevation}°`;
 
     if (ts.phase === "over") {
       this.bannerText.textContent =

@@ -8,6 +8,7 @@ import { matchConfigFromUrl } from "./game/config";
 import { OnlineSource } from "./game/onlineSource";
 import type { MatchSource } from "./game/source";
 import { defaultLooks, looksFromRoom, type TeamLook } from "./game/teamLook";
+import { GadgetViews } from "./game/gadgetViews";
 import { GameHud } from "./game/gameHud";
 import { GameInput } from "./game/input";
 import { MatchRunner } from "./game/matchRunner";
@@ -51,6 +52,7 @@ interface Game {
   terrainRenderer: TerrainRenderer;
   critterViews: CritterViews;
   projectileViews: ProjectileViews;
+  gadgetViews: GadgetViews;
   gameHud: GameHud;
   terrainHash: number;
   ended: boolean;
@@ -59,7 +61,13 @@ let game: Game | null = null;
 
 function stopGame(): void {
   if (!game) return;
-  scene.remove(game.terrainRenderer.group, game.critterViews.group, game.projectileViews.group);
+  scene.remove(
+    game.terrainRenderer.group,
+    game.critterViews.group,
+    game.projectileViews.group,
+    game.gadgetViews.group,
+  );
+  game.gadgetViews.dispose();
   game.terrainRenderer.dispose();
   game.gameHud.dispose();
   game = null;
@@ -75,7 +83,8 @@ function startGame(source: MatchSource, looks: TeamLook[], onRematch: (() => voi
   const critterViews = new CritterViews();
   critterViews.hats = looks.map((l) => l.hex);
   const projectileViews = new ProjectileViews();
-  scene.add(terrainRenderer.group, critterViews.group, projectileViews.group);
+  const gadgetViews = new GadgetViews();
+  scene.add(terrainRenderer.group, critterViews.group, projectileViews.group, gadgetViews.group);
   const gameHud = new GameHud(source.config, input, onRematch, looks, source.localTeams);
   const first = state.sim.critters.find((c) => c.id === state.turns.activeCritter);
   if (first)
@@ -85,6 +94,7 @@ function startGame(source: MatchSource, looks: TeamLook[], onRematch: (() => voi
     terrainRenderer,
     critterViews,
     projectileViews,
+    gadgetViews,
     gameHud,
     terrainHash: hashTerrain(state.sim.terrain),
     ended: false,
@@ -137,6 +147,8 @@ function playSounds(events: readonly SimEvent[]): void {
   if (kinds.has("jumped")) audio.play("jump");
   if (kinds.has("landed")) audio.play("land");
   if (kinds.has("damage")) audio.play("damage");
+  if (kinds.has("crateCollected")) audio.play("uiConfirm");
+  if (kinds.has("crateDropped")) audio.play("uiHover");
 }
 
 const clock = new THREE.Clock();
@@ -149,7 +161,7 @@ function frame(): void {
 }
 
 function drawGame(g: Game, dt: number): void {
-  const { source, terrainRenderer, critterViews, projectileViews, gameHud } = g;
+  const { source, terrainRenderer, critterViews, projectileViews, gadgetViews, gameHud } = g;
   const tickEvents = source.advance(dt * 1000);
   const { sim, turns } = source.state;
   fx.onSimEvents(tickEvents, sim);
@@ -186,6 +198,7 @@ function drawGame(g: Game, dt: number): void {
   terrainRenderer.update();
   critterViews.sync(sim.critters, controlling ? turns.activeCritter : null, clock.elapsedTime);
   projectileViews.sync(sim.projectiles);
+  gadgetViews.sync(sim, clock.elapsedTime);
   fx.setSodaLevel(-sim.waterY);
 
   // The aim line shows only for the player who is aiming.

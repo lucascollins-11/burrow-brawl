@@ -1,10 +1,14 @@
 import type { Cmd } from "@burrow-brawl/shared";
 
-export type SelectedWeapon = "acorn-mortar" | "fizz-grenade";
+export type SelectedWeapon =
+  "acorn-mortar" | "fizz-grenade" | "rope-claw" | "drill-hat" | "boulder-of-doom";
 
 export const WEAPONS: ReadonlyArray<{ id: SelectedWeapon; name: string; key: string }> = [
   { id: "acorn-mortar", name: "Acorn Mortar", key: "1" },
   { id: "fizz-grenade", name: "Fizz Grenade", key: "2" },
+  { id: "rope-claw", name: "Rope Claw", key: "3" },
+  { id: "drill-hat", name: "Drill Hat", key: "4" },
+  { id: "boulder-of-doom", name: "Boulder", key: "5" },
 ];
 
 const CHARGE_TICKS = 90; // 1.5 s from 0 to full power at 60 Hz
@@ -41,6 +45,9 @@ export class GameInput {
         if (k === "backspace") this.queued.push({ k: "skip" });
         if (k === "1") this.pick("acorn-mortar");
         if (k === "2") this.pick("fizz-grenade");
+        if (k === "3") this.pick("rope-claw");
+        if (k === "4") this.pick("drill-hat");
+        if (k === "5") this.pick("boulder-of-doom");
         if (k === "z") this.fuseSeconds = Math.max(1, this.fuseSeconds - 1);
         if (k === "x") this.fuseSeconds = Math.min(5, this.fuseSeconds + 1);
       }
@@ -68,6 +75,8 @@ export class GameInput {
 
   /** Absolute aim angle in whole degrees (0 = right, 90 = up, 180 = left). */
   angle(): number {
+    // The Drill Hat digs down when aimed steeply up (the "down" half of its aim range), else sideways.
+    if (this.weapon === "drill-hat") return this.elevation > 45 ? 270 : this.facing === 1 ? 0 : 180;
     return this.facing === 1 ? this.elevation : 180 - this.elevation;
   }
 
