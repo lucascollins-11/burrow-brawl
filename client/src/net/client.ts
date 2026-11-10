@@ -61,6 +61,11 @@ export interface ConnectOptions {
   nickname: string;
   /** Defaults to VITE_GAME_SERVER_URL. */
   serverUrl?: string;
+  /**
+   * Status while connecting, before `connect` resolves (later changes also
+   * go to the "status" event). "waking" means the server is cold-starting.
+   */
+  onStatus?: (status: ConnectionStatus, detail?: { code?: number; reason?: string }) => void;
   /** For tests. */
   fetchImpl?: typeof fetch;
   createSocket?: (url: string) => WebSocketLike;
@@ -88,8 +93,11 @@ export class GameClient {
 
   /** Get (or reuse) a guest session, open the socket and wait for the server's welcome. */
   static async connect(opts: ConnectOptions): Promise<GameClient> {
+    // wss://host -> https://host for /api/guest (see serverUrls).
     const urls = serverUrls(opts.serverUrl ?? GAME_SERVER_URL);
-    const session = await ensureSession(urls.http, opts.nickname, opts.fetchImpl);
+    const session = await ensureSession(urls.http, opts.nickname, opts.fetchImpl, {
+      onWaking: () => opts.onStatus?.("waking"),
+    });
     const ref: { client?: GameClient } = {};
     let ready!: () => void;
     let failed!: (e: Error) => void;
@@ -105,6 +113,7 @@ export class GameClient {
       onStatus: (s, d) => {
         if (s === "open") ready();
         if (s === "closed") failed(new Error(d?.reason || "connection closed"));
+        opts.onStatus?.(s, d);
         ref.client?.emit("status", s, d);
       },
     });
@@ -183,6 +192,11 @@ export class GameClient {
   }
 
   // ------------------------------------------------------------ match
+
+  /** Host only, on the results screen: take the room back to the lobby (phase "lobby"). */
+  rematch(): Promise<void> {
+    return this.ok({ t: "match.rematch" });
+  }
 
   /** Send commands for your turn; ignored by the server if it's not your turn. */
   sendCmds(cmds: Cmd[]): void {

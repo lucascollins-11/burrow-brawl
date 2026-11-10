@@ -7,9 +7,10 @@ import {
   type Cmd,
   type MatchConfig,
   type MatchSnapshot,
+  type TickBatch,
 } from "../match";
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 // ---------------------------------------------------------------- constants
 
@@ -146,6 +147,7 @@ export type ClientMessage =
   | { t: "lobby.ready"; seq?: number; ready: boolean }
   | { t: "lobby.kick"; seq?: number; memberId: string }
   | { t: "lobby.start"; seq?: number }
+  | { t: "match.rematch"; seq?: number }
   | { t: "chat"; seq?: number; text: string }
   | { t: "ping"; seq?: number; clientTime: number }
   | { t: "input"; seq?: number; turn: number; cmds: Cmd[] }
@@ -171,15 +173,10 @@ export type ServerMessage =
       config: MatchConfig;
       /** Room team id for each sim team index. */
       teamIds: string[];
+      /** State at the server's current tick. Later commands arrive in `tick` messages. */
       snapshot: MatchSnapshot;
-      /** Commands already stamped for ticks after the snapshot. */
-      pending: { applyTick: number; cmds: Cmd[] }[];
-      /** Highest tick the server has simulated. */
-      serverTick: number;
     }
-  | { t: "inputs"; applyTick: number; cmds: Cmd[] }
-  | { t: "ticks"; upTo: number }
-  | { t: "hash"; tick: number; h: number }
+  | ({ t: "tick" } & TickBatch)
   | { t: "snapshot"; snapshot: MatchSnapshot }
   | { t: "match.end"; winnerTeamId: string | null; tick: number }
   | { t: "error"; re?: number; code: ErrorCode; message: string };
@@ -214,6 +211,7 @@ const ALLOWED_KEYS: Record<ClientMessageType, readonly string[]> = {
   "lobby.ready": ["ready"],
   "lobby.kick": ["memberId"],
   "lobby.start": [],
+  "match.rematch": [],
   chat: ["text"],
   ping: ["clientTime"],
   input: ["turn", "cmds"],
@@ -393,6 +391,7 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
     case "room.sync":
     case "lobby.addTeam":
     case "lobby.start":
+    case "match.rematch":
       return ok();
   }
 }
