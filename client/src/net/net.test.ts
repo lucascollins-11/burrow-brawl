@@ -226,8 +226,8 @@ describe("NetMatch", () => {
     settleCapTicks: 600,
     startHealth: 100,
     windMax: 50,
-    mapWidth: 384,
-    mapHeight: 160,
+    mapWidth: 1024,
+    mapHeight: 512,
   };
 
   it("mirrors the server, fast-forwards to the watermark, and sends commands for the current turn", () => {

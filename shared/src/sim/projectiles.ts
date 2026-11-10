@@ -1,6 +1,6 @@
 import type { Fixed } from "../fixed";
 import { cosDeg, FIXED_ONE, fmul, idiv, isqrt, sinDeg, toFixed } from "../fixed";
-import { carveCircle, cloneTerrain, isSolid, surfaceNormal } from "../terrain";
+import { carveCircle, isSolid, surfaceNormal } from "../terrain";
 import type { Terrain } from "../terrain";
 import { loadWeapons } from "../weapons/load";
 import type { WeaponData } from "../weapons/types";
@@ -177,7 +177,7 @@ export function explode(
 export interface ProjectileStep {
   readonly projectiles: Projectile[];
   readonly critters: Critter[];
-  /** The input terrain, or a private copy if any explosion carved it (copy on write). */
+  /** The same terrain object that was passed in; explosions carve it in place. */
   readonly terrain: Terrain;
 }
 
@@ -191,9 +191,9 @@ export function stepProjectiles(
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
-  // The caller's terrain is never modified: the first explosion works on a private copy, so
-  // re-stepping the same input state always gives the same result.
-  let terrain = inputTerrain;
+  // Explosions carve the terrain in place (online play is watermark-based, with no rollback).
+  // Callers that need to re-step the same state clone the terrain first (cloneTerrain).
+  const terrain = inputTerrain;
 
   for (const p of projectiles) {
     const w = loadWeapons()[p.weaponId];
@@ -270,7 +270,6 @@ export function stepProjectiles(
 
     if (detonateAt === null && fuse === 0) detonateAt = { x: cell(x), y: cell(y) };
     if (detonateAt !== null) {
-      if (terrain === inputTerrain) terrain = cloneTerrain(inputTerrain);
       cs = explode(terrain, cs, p, detonateAt.x, detonateAt.y, events);
       continue;
     }

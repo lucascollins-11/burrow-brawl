@@ -1,4 +1,4 @@
-import type { Member, RoomState, ServerMessage, TeamSetup } from "@burrow-brawl/shared/src/net";
+import type { Member, RoomState, TeamSetup } from "@burrow-brawl/shared/src/net";
 import { MAX_MEMBERS, MIN_TEAMS } from "@burrow-brawl/shared/src/net";
 
 export type Screen = "title" | "connecting" | "lobby" | "starting" | "results";
@@ -35,32 +35,39 @@ const ERROR_TEXT: Record<string, string> = {
   rate_limited: "Too many tries. Wait a moment.",
 };
 
-export function reduce(state: UiState, msg: ServerMessage): UiState {
-  switch (msg.t) {
-    case "welcome":
-      return { ...state, you: msg.you };
-    case "room.joined":
-      return { ...state, screen: "lobby", room: msg.room, error: null };
-    case "room.update": {
-      if (state.room && msg.room.version < state.room.version) return state;
-      const phase = msg.room.phase;
-      if (phase === "lobby") return { ...state, screen: "lobby", room: msg.room, result: null };
-      // Keep the results overlay up while the room sits in its results phase.
-      const screen = phase === "results" && state.result ? "results" : "starting";
-      return { ...state, screen, room: msg.room };
-    }
-    case "room.left":
-      return {
-        ...state,
-        screen: "title",
-        room: null,
-        error: msg.reason === "kicked" ? "You were removed from the room." : null,
-      };
-    case "error":
-      return { ...state, error: ERROR_TEXT[msg.code] ?? msg.message };
-    default:
-      return state;
-  }
+/** Friendly text for a protocol error code (falls back to the server's message). */
+export function errorText(code: string, fallback: string): string {
+  return ERROR_TEXT[code] ?? fallback;
+}
+
+/** A room snapshot arrived (create/join reply or any later change). */
+export function applyRoom(
+  state: UiState,
+  room: RoomState,
+  me?: { id: string; nickname: string },
+): UiState {
+  const you = me ?? state.you;
+  if (state.room && state.room.code === room.code && room.version < state.room.version)
+    return state;
+  const base = { ...state, you, room };
+  if (room.phase === "lobby") return { ...base, screen: "lobby", error: null, result: null };
+  // Keep the results overlay up while the room sits in its results phase.
+  if (room.phase === "results" && state.result) return { ...base, screen: "results" };
+  return { ...base, screen: "starting" };
+}
+
+export function applyRoomLeft(state: UiState, reason: "left" | "kicked" | "closed"): UiState {
+  const error =
+    reason === "kicked"
+      ? "You were removed from the room."
+      : reason === "closed"
+        ? "The room was closed."
+        : null;
+  return { ...state, screen: "title", room: null, result: null, error };
+}
+
+export function withError(state: UiState, error: string | null): UiState {
+  return { ...state, error };
 }
 
 /** The match ended: show the results overlay. */
