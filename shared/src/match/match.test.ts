@@ -114,7 +114,9 @@ describe("match model", () => {
   it("fire starts retreat, then the turn ends on the retreat timer", () => {
     let s = run(createMatch(cfg), 30);
     // Unsupported weapons do nothing; a real shot starts retreat.
-    s = stepMatch(cfg, s, [{ k: "fire", weaponId: "root-punch", angleDeg: 45, power: 50 }]).state;
+    s = stepMatch(cfg, s, [
+      { k: "fire", weaponId: "boulder-of-doom", angleDeg: 45, power: 50 },
+    ]).state;
     expect(s.turns.phase).toBe("control");
     s = stepMatch(cfg, s, [{ k: "fire", weaponId: "acorn-mortar", angleDeg: 45, power: 50 }]).state;
     expect(s.turns.phase).toBe("retreat");
@@ -259,5 +261,37 @@ describe("MatchMirror", () => {
     mirror.onSnapshot(saveMatch(server));
     expect(mirror.desyncedAt).toBeNull();
     expect(hashMatch(mirror.state)).toBe(hashMatch(server));
+  });
+});
+
+describe("arsenal weapons through the match", () => {
+  const cfg2: MatchConfig = { ...cfg };
+  it("validates a strike target and carries it into the sim", () => {
+    const ok = {
+      k: "fire",
+      weaponId: "beehive-strike",
+      angleDeg: 0,
+      power: 0,
+      target: { x: 100, y: 200 },
+    };
+    expect(isCmd(ok)).toBe(true);
+    expect(isCmd({ ...ok, target: { x: 1.5, y: 2 } })).toBe(false);
+    expect(isCmd({ ...ok, target: { x: -1, y: 2 } })).toBe(false);
+    expect(isCmd({ ...ok, target: { x: 1, y: 2, z: 3 } })).toBe(false);
+    let s = run(createMatch(cfg2), 30);
+    s = stepMatch(cfg2, s, [ok as Cmd]).state;
+    expect(s.turns.phase).toBe("retreat");
+    expect(s.sim.strikes).toHaveLength(1);
+  });
+
+  it("the shotgun keeps control after one blast, and unspent shots do not carry over", () => {
+    let s = run(createMatch(cfg2), 30);
+    const shot = { k: "fire", weaponId: "pepper-shotgun", angleDeg: 90, power: 50 } as Cmd;
+    s = stepMatch(cfg2, s, [shot]).state;
+    expect(s.turns.phase).toBe("control");
+    expect(s.sim.burst).not.toBeNull();
+    s = stepMatch(cfg2, s, [{ k: "skip" }]).state;
+    s = run(s, 200);
+    expect(s.sim.burst).toBeNull();
   });
 });

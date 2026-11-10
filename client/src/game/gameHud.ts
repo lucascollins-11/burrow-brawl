@@ -2,7 +2,7 @@ import type { MatchConfig, MatchState } from "@burrow-brawl/shared";
 import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
 import { defaultLooks, type TeamLook } from "./teamLook";
 import type { GameInput } from "./input";
-import { WEAPONS } from "./input";
+import { WEAPONS, weaponUse } from "./input";
 
 const STYLE = `
 .bb-hud { position: fixed; inset: 0; pointer-events: none; font: 14px/1.3 system-ui, sans-serif; color: #3b2a1a; }
@@ -124,7 +124,7 @@ export class GameHud {
 
     const help = el("div", "bb-help", this.root);
     help.textContent =
-      "A/D walk · Space jump · Enter backflip · W/S aim · hold F to charge, release to fire · 1/2 weapon · Z/X fuse · Backspace skip";
+      "A/D walk · Space jump · Enter backflip · W/S aim · F fire (hold to charge) · 1-6 weapon · Z/X fuse · Backspace skip";
 
     this.banner = el("div", "bb-banner", this.root);
     this.bannerText = el("div", "", this.banner);
@@ -185,9 +185,11 @@ export class GameHud {
     this.skipButton.disabled = !controlling || (this.localTeams !== null && !mine);
     this.powerFill.style.width = `${this.input.charge}%`;
     this.powerText.textContent =
-      this.input.weapon === "fizz-grenade"
-        ? `Power ${Math.round(this.input.charge)} · fuse ${this.input.fuseSeconds}s · aim ${this.input.elevation}°`
-        : `Power ${Math.round(this.input.charge)} · aim ${this.input.elevation}°`;
+      weaponUse(this.input.weapon) !== "charge"
+        ? `${WEAPONS.find((w) => w.id === this.input.weapon)?.hint ?? ""} · aim ${this.input.elevation}°`
+        : this.input.weapon === "fizz-grenade"
+          ? `Power ${Math.round(this.input.charge)} · fuse ${this.input.fuseSeconds}s · aim ${this.input.elevation}°`
+          : `Power ${Math.round(this.input.charge)} · aim ${this.input.elevation}°`;
 
     if (ts.phase === "over") {
       this.bannerText.textContent =

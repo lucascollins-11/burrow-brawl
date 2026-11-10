@@ -50,6 +50,13 @@ const WEAPON_IDS = [
 const isIntIn = (v: unknown, min: number, max: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
 
+/** A clicked map cell, as sent with click-targeted weapons. Bounds are generous; the sim clamps to the map. */
+function isTarget(v: unknown): boolean {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  const t = v as Record<string, unknown>;
+  return Object.keys(t).length === 2 && isIntIn(t.x, 0, 16384) && isIntIn(t.y, 0, 16384);
+}
+
 export const MAX_CMDS_PER_INPUT = 16;
 
 export function isCmd(v: unknown): v is Cmd {
@@ -65,11 +72,14 @@ export function isCmd(v: unknown): v is Cmd {
       return keys.length === 1;
     case "fire":
       return (
-        keys.every((k) => ["k", "weaponId", "angleDeg", "power", "fuseSeconds"].includes(k)) &&
+        keys.every((k) =>
+          ["k", "weaponId", "angleDeg", "power", "fuseSeconds", "target"].includes(k),
+        ) &&
         (WEAPON_IDS as readonly unknown[]).includes(o.weaponId) &&
         isIntIn(o.angleDeg, 0, 359) &&
         isIntIn(o.power, 0, 100) &&
-        (o.fuseSeconds === undefined || isIntIn(o.fuseSeconds, 1, 5))
+        (o.fuseSeconds === undefined || isIntIn(o.fuseSeconds, 1, 5)) &&
+        (o.target === undefined || isTarget(o.target))
       );
     default:
       return false;
@@ -199,6 +209,7 @@ function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): Cr
         angleDeg: c.angleDeg,
         power: c.power,
         ...(c.fuseSeconds === undefined ? {} : { fuseSeconds: c.fuseSeconds }),
+        ...(c.target === undefined ? {} : { target: c.target }),
       };
     }
   }
@@ -249,6 +260,8 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
   if (turnChanged && next.phase !== "over" && sdRound > 0 && next.round > sdRound) {
     simOut = { ...simOut, waterY: Math.max(0, simOut.waterY - (cfg.waterRisePerTurn ?? 8)) };
   }
+  // Unspent shotgun shots do not carry over into the next turn.
+  if (turnChanged && simOut.burst) simOut = { ...simOut, burst: null };
   return {
     state: { sim: simOut, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
     events: r.events,

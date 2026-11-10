@@ -111,6 +111,19 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
   const res = carveCircle(t, Math.round(w.x), Math.round(-w.y), carveRadius);
   if (res.cellsRemoved > 0) game.terrainHash = hashTerrain(t);
 });
+// A click (not a drag, which pans the camera) calls a click-targeted weapon such as Beehive Strike.
+let downAt: { x: number; y: number } | null = null;
+renderer.domElement.addEventListener("pointerdown", (e) => {
+  downAt = e.button === 0 && !e.ctrlKey ? { x: e.clientX, y: e.clientY } : null;
+});
+renderer.domElement.addEventListener("pointerup", (e) => {
+  const d = downAt;
+  downAt = null;
+  if (!d || !game || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const w = cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  input.clickMap(w.x, -w.y);
+});
 window.addEventListener("keydown", (e) => {
   if (e.key === "F3") {
     e.preventDefault();
@@ -129,10 +142,17 @@ window.addEventListener("resize", () => {
   cam.resize();
 });
 
+const isThrown = (id: string): boolean => id === "acorn-mortar" || id === "fizz-grenade";
+
 /** One sound per kind of event, however many arrive in the same frame. */
 function playSounds(events: readonly SimEvent[]): void {
   const kinds = new Set(events.map((e) => e.type));
-  if (kinds.has("fired")) audio.play("fire");
+  // Thrown shots whoosh; the other weapons have their own sounds below.
+  if (events.some((e) => e.type === "fired" && isThrown(e.weaponId))) audio.play("fire");
+  if (kinds.has("strikeCalled")) audio.play("fire", { rate: 0.7 });
+  if (kinds.has("shot")) audio.play("shot");
+  if (kinds.has("punched")) audio.play("punch");
+  if (kinds.has("minePlaced") || kinds.has("mineArmed")) audio.play("beep");
   if (kinds.has("explosion")) audio.play("explosion");
   if (kinds.has("jumped")) audio.play("jump");
   if (kinds.has("landed")) audio.play("land");
@@ -185,7 +205,7 @@ function drawGame(g: Game, dt: number): void {
   terrainRenderer.setTerrain(sim.terrain);
   terrainRenderer.update();
   critterViews.sync(sim.critters, controlling ? turns.activeCritter : null, clock.elapsedTime);
-  projectileViews.sync(sim.projectiles);
+  projectileViews.sync(sim.projectiles, sim.mines, sim.strikes);
   fx.setSodaLevel(-sim.waterY);
 
   // The aim line shows only for the player who is aiming.

@@ -14,7 +14,14 @@ import {
   MAX_PROJECTILE_AGE_TICKS,
   MAX_PROJECTILE_ALTITUDE,
 } from "./constants";
-import type { Critter, FireCommand, Projectile, ProjectileWeaponId, SimEvent } from "./types";
+import type {
+  Critter,
+  ExplosiveWeaponId,
+  FireCommand,
+  Projectile,
+  SimEvent,
+  ThrownWeaponId,
+} from "./types";
 
 const cell = (f: Fixed): number => f >> 16;
 
@@ -28,11 +35,15 @@ const REST_SPEED = toFixed(0.4);
 /** Projectiles this far outside the map are discarded. */
 const LOST_MARGIN = 300;
 
-export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
+export function isProjectileWeapon(id: string): id is ThrownWeaponId {
   return id === "acorn-mortar" || id === "fizz-grenade";
 }
 
-function num(params: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
+export function num(
+  params: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: number,
+): number {
   const v = params[key];
   return typeof v === "number" ? v : fallback;
 }
@@ -52,11 +63,11 @@ function range(
 }
 
 /** Units per second -> Q16.16 cells per tick, rounded the same way on every platform. */
-function perTick(unitsPerSecond: number): Fixed {
+export function perTick(unitsPerSecond: number): Fixed {
   return Math.round((unitsPerSecond * FIXED_ONE) / TICK_RATE) | 0;
 }
 
-function gravityPerTick(w: WeaponData): Fixed {
+export function gravityPerTick(w: WeaponData): Fixed {
   return Math.round((num(w.params, "gravity", 600) * FIXED_ONE) / (TICK_RATE * TICK_RATE)) | 0;
 }
 
@@ -97,7 +108,7 @@ export function spawnProjectile(
   return { projectile, facing: cos < 0 ? -1 : 1 };
 }
 
-function critterHit(c: Critter, px: number, py: number): boolean {
+export function critterHit(c: Critter, px: number, py: number): boolean {
   if (c.status !== "alive") return false;
   const dy = cell(c.y) - py;
   return Math.abs(px - cell(c.x)) <= CRITTER_HALF_WIDTH && dy >= 0 && dy < CRITTER_HEIGHT;
@@ -111,7 +122,7 @@ function critterHit(c: Critter, px: number, py: number): boolean {
 export function explode(
   terrain: Terrain,
   critters: readonly Critter[],
-  p: Projectile,
+  p: { readonly id: number; readonly weaponId: ExplosiveWeaponId },
   x: number,
   y: number,
   events: SimEvent[],
@@ -197,6 +208,7 @@ export function stepProjectiles(
 
   for (const p of projectiles) {
     const w = loadWeapons()[p.weaponId];
+    // Acorns and strike bombs burst on impact; only grenades bounce.
     let { x, y, vx, vy, bounces, resting } = p;
     const fuse = p.fuseTicks < 0 ? -1 : p.fuseTicks - 1;
     let detonateAt: { x: number; y: number } | null = null;
@@ -215,7 +227,7 @@ export function stepProjectiles(
         const hitX = cell(nx);
         const hitY = cell(ny);
 
-        if (p.weaponId === "acorn-mortar") {
+        if (p.weaponId !== "fizz-grenade") {
           if (isSolid(terrain, hitX, hitY)) {
             detonateAt = { x: hitX, y: hitY };
           } else if (

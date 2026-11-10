@@ -26,7 +26,18 @@ export function createWorld(
   waterY: number,
   wind = 0,
 ): SimState {
-  return { tick: 0, critters, terrain, waterY, projectiles: [], nextProjectileId: 1, wind };
+  return {
+    tick: 0,
+    critters,
+    terrain,
+    waterY,
+    projectiles: [],
+    nextProjectileId: 1,
+    mines: [],
+    strikes: [],
+    burst: null,
+    wind,
+  };
 }
 
 /** Row of the first free cell above the topmost solid cell in column x (spawn helper). Returns -1 if none. */

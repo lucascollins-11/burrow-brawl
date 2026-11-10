@@ -21,7 +21,12 @@ export interface Critter {
   readonly peakY: number;
 }
 
-export type ProjectileWeaponId = Extract<WeaponId, "acorn-mortar" | "fizz-grenade">;
+/** Weapons a critter throws or shoots as a projectile (the ones `spawnProjectile` makes). */
+export type ThrownWeaponId = Extract<WeaponId, "acorn-mortar" | "fizz-grenade">;
+/** Anything that flies as a Projectile: thrown weapons and the bombs of a Beehive Strike. */
+export type ProjectileWeaponId = ThrownWeaponId | Extract<WeaponId, "beehive-strike">;
+/** Weapons that carve a crater and hurt with falloff (see `explode`). */
+export type ExplosiveWeaponId = ProjectileWeaponId | Extract<WeaponId, "jelly-mine">;
 
 export interface Projectile {
   readonly id: number;
@@ -48,6 +53,35 @@ export interface FireCommand {
   readonly power: number;
   /** Fuse for timed weapons, clamped to the weapon's range. */
   readonly fuseSeconds?: number;
+  /** Clicked point in mask cells, for click-targeted weapons (Beehive Strike). */
+  readonly target?: { readonly x: number; readonly y: number };
+}
+
+/** A placed Jelly Mine. Position is whole mask cells (feet of the placer). */
+export interface Mine {
+  readonly id: number;
+  readonly ownerId: number;
+  readonly x: number;
+  readonly y: number;
+  /** Ticks since placement; the mine is armed once this reaches the weapon's arm time. */
+  readonly age: number;
+}
+
+/** A Beehive Strike in progress: bombs are released one at a time above the target. */
+export interface Strike {
+  readonly id: number;
+  readonly ownerId: number;
+  readonly x: number;
+  readonly y: number;
+  readonly dropped: number;
+  /** Ticks until the next bomb is released. */
+  readonly nextIn: number;
+}
+
+/** Pepper Shotgun shots still owed to a critter this turn (cleared when the turn changes). */
+export interface Burst {
+  readonly critterId: number;
+  readonly left: number;
 }
 
 export interface SimState {
@@ -59,6 +93,9 @@ export interface SimState {
   readonly waterY: number;
   readonly projectiles: readonly Projectile[];
   readonly nextProjectileId: number;
+  readonly mines: readonly Mine[];
+  readonly strikes: readonly Strike[];
+  readonly burst: Burst | null;
   /** Wind strength from -100 (full left) to 100 (full right). */
   readonly wind: number;
 }
@@ -92,21 +129,53 @@ export type SimEvent =
   | {
       readonly type: "fired";
       readonly critterId: number;
+      /** 0 when the weapon makes no projectile (shotgun, punch, mine, strike). */
       readonly projectileId: number;
-      readonly weaponId: ProjectileWeaponId;
+      readonly weaponId: WeaponId;
     }
   | { readonly type: "bounced"; readonly projectileId: number }
   /** Terrain was carved by a circle at (x, y). Replays and clients re-apply this to their mask. */
   | {
       readonly type: "explosion";
       readonly projectileId: number;
-      readonly weaponId: ProjectileWeaponId;
+      readonly weaponId: ExplosiveWeaponId;
       readonly x: number;
       readonly y: number;
       readonly radius: number;
       readonly cellsRemoved: number;
     }
-  | { readonly type: "projectileLost"; readonly projectileId: number };
+  | { readonly type: "projectileLost"; readonly projectileId: number }
+  /** One Pepper Shotgun blast along (x0, y0) to (x1, y1), in mask cells. */
+  | {
+      readonly type: "shot";
+      readonly critterId: number;
+      readonly x0: number;
+      readonly y0: number;
+      readonly x1: number;
+      readonly y1: number;
+      readonly hitCritterId: number | null;
+      /** Radius of the tunnel carved where the shot hit terrain (0 if none). */
+      readonly carved: number;
+    }
+  | {
+      readonly type: "punched";
+      readonly critterId: number;
+      readonly targetId: number | null;
+    }
+  | {
+      readonly type: "minePlaced";
+      readonly critterId: number;
+      readonly mineId: number;
+      readonly x: number;
+      readonly y: number;
+    }
+  | { readonly type: "mineArmed"; readonly mineId: number }
+  | {
+      readonly type: "strikeCalled";
+      readonly critterId: number;
+      readonly x: number;
+      readonly y: number;
+    };
 
 /** Injected randomness. Opus's seeded PRNG (O2) will implement this; the sim never touches Math.random. */
 export interface Rng {

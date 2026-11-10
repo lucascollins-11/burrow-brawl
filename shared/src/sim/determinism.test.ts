@@ -20,6 +20,9 @@ function simHash(s: SimState): number {
       nextProjectileId: s.nextProjectileId,
       critters: s.critters,
       projectiles: s.projectiles,
+      mines: s.mines,
+      strikes: s.strikes,
+      burst: s.burst,
     })
     .i32(hashTerrain(s.terrain))
     .digest();
@@ -31,6 +34,9 @@ function save(s: SimState): unknown {
     waterY: s.waterY,
     critters: s.critters,
     projectiles: s.projectiles,
+    mines: s.mines,
+    strikes: s.strikes,
+    burst: s.burst,
     nextProjectileId: s.nextProjectileId,
     wind: s.wind,
     terrain: Array.from(serializeTerrain(s.terrain)),
@@ -44,6 +50,9 @@ function load(saved: unknown): SimState {
     critters: SimState["critters"];
     projectiles: SimState["projectiles"];
     nextProjectileId: number;
+    mines: SimState["mines"];
+    strikes: SimState["strikes"];
+    burst: SimState["burst"];
     wind: number;
     terrain: number[];
   };
@@ -53,6 +62,9 @@ function load(saved: unknown): SimState {
     critters: o.critters,
     projectiles: o.projectiles,
     nextProjectileId: o.nextProjectileId,
+    mines: o.mines,
+    strikes: o.strikes,
+    burst: o.burst,
     wind: o.wind,
     terrain: deserializeTerrain(Uint8Array.from(o.terrain)),
   };

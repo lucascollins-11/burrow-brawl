@@ -69,6 +69,16 @@ export class FxSystem {
     for (const e of events) {
       if (e.type === "explosion") {
         this.explode(e.x, -e.y, e.radius); // sim y is down, world y is up
+      } else if (e.type === "shot") {
+        // A puff where the blast ended; bigger if it dug into the ground.
+        this.explode(e.x1, -e.y1, e.carved > 0 || e.hitCritterId !== null ? 10 : 4);
+      } else if (e.type === "punched" && e.targetId !== null) {
+        const t = state.critters.find((k) => k.id === e.targetId);
+        if (t) this.explode(fromFixed(t.x), -fromFixed(t.y) + 10, 18);
+        this.addShake(0.25);
+      } else if (e.type === "mineArmed") {
+        const m = state.mines.find((k) => k.id === e.mineId);
+        if (m) this.damage(m.x, -m.y + 16, "armed", "text");
       } else if (e.type === "damage") {
         const c = state.critters.find((k) => k.id === e.critterId);
         if (c) this.damage(fromFixed(c.x), -fromFixed(c.y) + 40, e.amount);

@@ -2,6 +2,9 @@ import { mix, synth, type SfxParams } from "./synth";
 
 export const SFX_NAMES = [
   "fire",
+  "shot",
+  "punch",
+  "beep",
   "explosion",
   "jump",
   "land",
@@ -44,6 +47,76 @@ export const RECIPES: Record<SfxName, () => Float32Array> = {
         7,
       ),
     ]),
+  // Sharp pepper crack.
+  shot: () =>
+    mix([
+      synth(
+        p({
+          wave: "noise",
+          freq: 2600,
+          slide: -1.5,
+          attack: 0.001,
+          sustain: 0.01,
+          decay: 0.12,
+          volume: 0.8,
+          lowpass: 0.6,
+        }),
+        5,
+      ),
+      synth(
+        p({
+          wave: "square",
+          freq: 240,
+          slide: -2,
+          attack: 0.001,
+          sustain: 0.01,
+          decay: 0.08,
+          volume: 0.35,
+        }),
+      ),
+    ]),
+  // Meaty thump.
+  punch: () =>
+    mix([
+      synth(
+        p({
+          wave: "sine",
+          freq: 180,
+          slide: -2.5,
+          attack: 0.002,
+          sustain: 0.03,
+          decay: 0.22,
+          volume: 0.9,
+        }),
+      ),
+      synth(
+        p({
+          wave: "noise",
+          freq: 1400,
+          slide: -1.5,
+          attack: 0.001,
+          sustain: 0.01,
+          decay: 0.07,
+          volume: 0.4,
+          lowpass: 0.4,
+        }),
+        9,
+      ),
+    ]),
+  // Two-note mine beep.
+  beep: () =>
+    synth(
+      p({
+        wave: "square",
+        freq: 880,
+        slide: 0.3,
+        attack: 0.002,
+        sustain: 0.06,
+        decay: 0.12,
+        volume: 0.35,
+        lowpass: 0.6,
+      }),
+    ),
   // Low rumble + crackle.
   explosion: () =>
     mix([

@@ -18,6 +18,7 @@ import {
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
+import { isArsenalWeapon, stepMines, stepStrikes, useArsenalWeapon } from "./arsenal";
 import { spawnProjectile, stepProjectiles } from "./projectiles";
 import type {
   Critter,
@@ -208,21 +209,41 @@ function resolve(
  * Critters are stepped in array order, so results are order-stable.
  */
 export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?: Rng): StepResult {
-  void rng; // reserved for later systems (crate drops, scatter); S4 weapons are fully deterministic
   const moveEvents: SimEvent[] = [];
   let critters = state.critters.map((c) =>
     stepCritter(state.terrain, c, withInput(inputs, c.id), moveEvents),
   );
 
-  // Fire commands spawn projectiles after movement, in critter order.
+  // Fire commands spawn projectiles (or use arsenal weapons) after movement, in critter order.
   const spawned: Projectile[] = [];
   let nextId = state.nextProjectileId;
+  let mines = state.mines;
+  let strikes = state.strikes;
+  let burst = state.burst;
   const fireEvents: SimEvent[] = [];
-  critters = critters.map((c) => {
-    const cmd = withInput(inputs, c.id)?.fire;
-    if (!cmd || c.status !== "alive") return c;
+  for (const who of [...critters]) {
+    const cmd = withInput(inputs, who.id)?.fire;
+    // Re-read the critter: an earlier shot this tick may have hurt it.
+    const c = critters.find((x) => x.id === who.id);
+    if (!cmd || !c || c.status !== "alive") continue;
+    if (isArsenalWeapon(cmd.weaponId)) {
+      const used = useArsenalWeapon(
+        { terrain: state.terrain, critters, mines, strikes, burst, nextId },
+        c,
+        cmd,
+        rng,
+        fireEvents,
+      );
+      if (!used) continue;
+      critters = used.critters;
+      mines = used.mines;
+      strikes = used.strikes;
+      burst = used.burst;
+      nextId = used.nextId;
+      continue;
+    }
     const made = spawnProjectile(c, cmd, nextId);
-    if (!made) return c;
+    if (!made) continue;
     nextId++;
     spawned.push(made.projectile);
     fireEvents.push({
@@ -231,8 +252,18 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
       projectileId: made.projectile.id,
       weaponId: made.projectile.weaponId,
     });
-    return { ...c, facing: made.facing };
-  });
+    critters = critters.map((x) => (x.id === c.id ? { ...x, facing: made.facing } : x));
+  }
+
+  // Strikes release bombs; they fly this tick like any shot. Mines tick and may go off.
+  const dropped = stepStrikes(strikes, nextId);
+  strikes = dropped.strikes;
+  nextId = dropped.nextId;
+  spawned.push(...dropped.bombs);
+  const mineEvents: SimEvent[] = [];
+  const mined = stepMines(state, mines, critters, mineEvents);
+  mines = mined.mines;
+  critters = mined.critters;
 
   // Projectiles fly after being spawned (so they move on the tick they are fired) and may explode.
   const blastEvents: SimEvent[] = [];
@@ -246,7 +277,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
   critters = flown.critters;
   const terrain = flown.terrain;
 
-  const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
+  const events: SimEvent[] = [...moveEvents, ...fireEvents, ...mineEvents, ...blastEvents];
   critters = critters.map((c) => resolve(c, state.waterY, events, moveEvents));
   return {
     state: {
@@ -256,6 +287,9 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
       terrain,
       projectiles: flown.projectiles,
       nextProjectileId: nextId,
+      mines,
+      strikes,
+      burst,
     },
     events,
   };
