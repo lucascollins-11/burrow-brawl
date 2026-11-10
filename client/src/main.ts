@@ -1,7 +1,8 @@
-import { carveCircle, fromFixed, hashTerrain } from "@burrow-brawl/shared";
+import { carveCircle, fromFixed, hashTerrain, type SimEvent } from "@burrow-brawl/shared";
 import * as THREE from "three";
 import { audio } from "./audio";
 import { PanZoomCamera } from "./camera";
+import { FxSystem } from "./fx";
 import { CritterViews } from "./game/critters";
 import { matchConfigFromUrl } from "./game/config";
 import { OnlineSource } from "./game/onlineSource";
@@ -29,6 +30,8 @@ app.addEventListener("contextmenu", (e) => e.preventDefault());
 const scene = buildScene();
 const input = new GameInput();
 const cam = new PanZoomCamera(renderer.domElement, 500);
+// Visual FX: backdrop, animated soda, explosion particles, shake, damage popups (see fx/index.ts).
+const fx = new FxSystem(scene, cam.camera, { sodaLevel: -1024, container: app });
 const hud = new DebugHud(hudEl);
 hudEl.style.display = "none";
 const cursor = new THREE.Vector2();
@@ -41,12 +44,6 @@ const aimLine = new THREE.Line(
 );
 aimLine.visible = false;
 scene.add(aimLine);
-const soda = new THREE.Mesh(
-  new THREE.PlaneGeometry(6000, 1200),
-  new THREE.MeshBasicMaterial({ color: 0xff8fb8, transparent: true, opacity: 0.55 }),
-);
-soda.visible = false;
-scene.add(soda);
 
 /** Everything that exists only while a match is on screen. */
 interface Game {
@@ -67,7 +64,6 @@ function stopGame(): void {
   game.gameHud.dispose();
   game = null;
   aimLine.visible = false;
-  soda.visible = false;
 }
 
 /** Show a match. `looks` names and colours each sim team; `onRematch` null hides "Play again". */
@@ -84,7 +80,6 @@ function startGame(source: MatchSource, looks: TeamLook[], onRematch: (() => voi
   const first = state.sim.critters.find((c) => c.id === state.turns.activeCritter);
   if (first)
     cam.camera.position.set(fromFixed(first.x), -fromFixed(first.y), cam.camera.position.z);
-  soda.visible = true;
   game = {
     source,
     terrainRenderer,
@@ -134,12 +129,22 @@ window.addEventListener("resize", () => {
   cam.resize();
 });
 
+/** One sound per kind of event, however many arrive in the same frame. */
+function playSounds(events: readonly SimEvent[]): void {
+  const kinds = new Set(events.map((e) => e.type));
+  if (kinds.has("fired")) audio.play("fire");
+  if (kinds.has("explosion")) audio.play("explosion");
+  if (kinds.has("jumped")) audio.play("jump");
+  if (kinds.has("landed")) audio.play("land");
+  if (kinds.has("damage")) audio.play("damage");
+}
+
 const clock = new THREE.Clock();
 function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1);
   cam.update(dt);
   if (game) drawGame(game, dt);
-  renderer.render(scene, cam.camera);
+  fx.frame(dt, renderer, scene, cam.camera);
   requestAnimationFrame(frame);
 }
 
@@ -147,6 +152,8 @@ function drawGame(g: Game, dt: number): void {
   const { source, terrainRenderer, critterViews, projectileViews, gameHud } = g;
   const tickEvents = source.advance(dt * 1000);
   const { sim, turns } = source.state;
+  fx.onSimEvents(tickEvents, sim);
+  playSounds(tickEvents);
   if (tickEvents.some((e) => e.type === "explosion")) g.terrainHash = hashTerrain(sim.terrain);
   if (!g.ended && turns.phase === "over") {
     g.ended = true;
@@ -179,7 +186,7 @@ function drawGame(g: Game, dt: number): void {
   terrainRenderer.update();
   critterViews.sync(sim.critters, controlling ? turns.activeCritter : null, clock.elapsedTime);
   projectileViews.sync(sim.projectiles);
-  soda.position.set(1024, -sim.waterY - 600, 20);
+  fx.setSodaLevel(-sim.waterY);
 
   // The aim line shows only for the player who is aiming.
   aimLine.visible = !!active && active.status === "alive" && turns.phase === "control" && myTurn;
