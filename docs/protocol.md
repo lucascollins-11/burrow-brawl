@@ -253,6 +253,43 @@ everyone including the sender:
   followed by the next `turn.begin` (with crates and sudden death applied by
   the server and included as `events`).
 
+### 6.6 As implemented in protocol v2 (O3)
+
+Sections 5 and 6 describe the target design. This is what v2 actually ships.
+Where they differ, this subsection is what the code does.
+
+- **Start:** `lobby.start` takes the room straight to phase `match` and
+  everyone receives `match.start { matchId, config, teamIds, snapshot,
+  pending, serverTick }`. `snapshot` holds the full state, including the
+  base64 terrain mask (`saveMatch`). `match.loaded` and the `loading` wait are
+  not in v2. Reconnecting clients receive the same `match.start`, built from
+  the current state.
+- **Commands** (`shared/src/match/match.ts`, `Cmd`): `move {dir}` (held until
+  changed or the turn ends), `jump`, `backflip`, `fire` (starts retreat; S4
+  attaches the weapon), and `skip`. Client to server: `input { turn, cmds }`
+  (1 to 16 cmds). Only the controller of the team that has control may send,
+  and `turn` must match. Otherwise the reply is `not_your_turn` /
+  `input_rejected`.
+- **Relay:** the server stamps `applyTick = max(tick + 1, lastApplyTick)` and
+  broadcasts `inputs { applyTick, cmds }`. The commands apply in the step that
+  produces `applyTick`.
+- **Confirmation:** `ticks { upTo }` every 3 ticks, and `hash { tick, h }`
+  every 30 (which also confirms). Clients (`MatchMirror`) never simulate past
+  the confirmed tick and render `INTERP_DELAY_TICKS = 6` behind it. v2 has no
+  local prediction for the active player: input latency is roughly RTT/2 + 50
+  ms + 100 ms, which is fine for turn-based play and can be revisited.
+- **Turns** run inside the deterministic step (`TurnController` in
+  `shared/src/sim/turns.ts`, stand-in `basicTurns`). `turn.begin` /
+  `turn.settled` messages are not needed, because every client derives turns
+  itself. Wind is rolled per turn by the controller and copied into
+  `SimState.wind`.
+- **Absent player:** when a turn starts for a disconnected controller, the
+  server stamps a `skip` for it.
+- **End:** `match.end { winnerTeamId, tick }`. The room goes back to `lobby`
+  with everyone unready.
+- **Desync:** client sends `desync { tick, h }`. The server replies with
+  `snapshot { snapshot }` followed by the still-pending `inputs`.
+
 ## 7. Hashes, snapshots and desync repair
 
 ### 7.1 Ownership

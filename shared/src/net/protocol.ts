@@ -1,7 +1,15 @@
 // Wire protocol types, constants and validation. See docs/protocol.md.
 // Dependency-free on purpose so client, server and tests can all import it.
 
-export const PROTOCOL_VERSION = 1;
+import {
+  MAX_CMDS_PER_INPUT,
+  isCmd,
+  type Cmd,
+  type MatchConfig,
+  type MatchSnapshot,
+} from "../match";
+
+export const PROTOCOL_VERSION = 2;
 
 // ---------------------------------------------------------------- constants
 
@@ -139,7 +147,9 @@ export type ClientMessage =
   | { t: "lobby.kick"; seq?: number; memberId: string }
   | { t: "lobby.start"; seq?: number }
   | { t: "chat"; seq?: number; text: string }
-  | { t: "ping"; seq?: number; clientTime: number };
+  | { t: "ping"; seq?: number; clientTime: number }
+  | { t: "input"; seq?: number; turn: number; cmds: Cmd[] }
+  | { t: "desync"; seq?: number; tick: number; h: number };
 
 export type ServerMessage =
   | {
@@ -155,6 +165,23 @@ export type ServerMessage =
   | { t: "chat"; from: string; text: string; at: number }
   | { t: "pong"; re?: number; clientTime: number; serverTime: number }
   | { t: "ok"; re?: number }
+  | {
+      t: "match.start";
+      matchId: string;
+      config: MatchConfig;
+      /** Room team id for each sim team index. */
+      teamIds: string[];
+      snapshot: MatchSnapshot;
+      /** Commands already stamped for ticks after the snapshot. */
+      pending: { applyTick: number; cmds: Cmd[] }[];
+      /** Highest tick the server has simulated. */
+      serverTick: number;
+    }
+  | { t: "inputs"; applyTick: number; cmds: Cmd[] }
+  | { t: "ticks"; upTo: number }
+  | { t: "hash"; tick: number; h: number }
+  | { t: "snapshot"; snapshot: MatchSnapshot }
+  | { t: "match.end"; winnerTeamId: string | null; tick: number }
   | { t: "error"; re?: number; code: ErrorCode; message: string };
 
 export type ClientMessageType = ClientMessage["t"];
@@ -189,6 +216,8 @@ const ALLOWED_KEYS: Record<ClientMessageType, readonly string[]> = {
   "lobby.start": [],
   chat: ["text"],
   ping: ["clientTime"],
+  input: ["turn", "cmds"],
+  desync: ["tick", "h"],
 };
 
 function onlyKeys(o: Obj, allowed: readonly string[]): string | null {
@@ -348,6 +377,16 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
       return ok();
     case "ping":
       if (!isNum(raw.clientTime, 0, Number.MAX_SAFE_INTEGER)) return bad("bad clientTime");
+      return ok();
+    case "input":
+      if (!isInt(raw.turn, 0, 0xffffffff)) return bad("bad turn");
+      if (!Array.isArray(raw.cmds) || raw.cmds.length < 1 || raw.cmds.length > MAX_CMDS_PER_INPUT) {
+        return bad("bad cmds");
+      }
+      if (!raw.cmds.every(isCmd)) return bad("bad cmd");
+      return ok();
+    case "desync":
+      if (!isInt(raw.tick, 0, 0xffffffff) || !isInt(raw.h, 0, 0xffffffff)) return bad("bad desync");
       return ok();
     case "room.create":
     case "room.leave":
