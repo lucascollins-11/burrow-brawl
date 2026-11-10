@@ -89,6 +89,8 @@ function aliveTeams(sim: SimState, teams: number): number[] {
 }
 
 function isSettled(sim: SimState): boolean {
+  // A live projectile (e.g. a 5 s grenade) keeps the turn open until it resolves.
+  if (sim.projectiles.length > 0) return false;
   return sim.critters.every(
     (c) => c.status !== "alive" || (c.grounded && c.vx === 0 && c.vy === 0),
   );

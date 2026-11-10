@@ -4,17 +4,12 @@
 // commands at the same ticks => same state hash everywhere.
 
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
+import { createCritter, createWorld, stepWorld } from "../sim";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
 import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
-import {
-  createDemoTerrain,
-  deserializeTerrain,
-  hashTerrain,
-  serializeTerrain,
-  type Terrain,
-} from "../terrain";
+import { generateMap } from "../maps";
+import { deserializeTerrain, hashTerrain, serializeTerrain, type Terrain } from "../terrain";
 import { fromBase64, toBase64 } from "./base64";
 
 // ------------------------------------------------------------ commands
@@ -126,35 +121,46 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
   };
 }
 
+/**
+ * The one turn controller used by the server runner and every client mirror.
+ * There is deliberately no way to pass a different one: two controllers
+ * would silently desync. S5 edits it in place in shared/src/sim/turns.ts.
+ */
+export const MATCH_TURNS: TurnController = basicTurns;
+
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
-export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns): MatchState {
+export function createMatch(cfg: MatchConfig): MatchState {
   const rng = Prng.fromSeed(cfg.seed);
-  const terrain = createDemoTerrain(cfg.mapWidth, cfg.mapHeight);
-  const spawnRng = rng.fork("spawn");
-  const margin = 80;
-  const spacing = 40;
-  const taken: number[] = [];
+  const total = cfg.teamSizes.reduce((a, b) => a + b, 0);
+  const map = generateMap(rng.fork("map"), {
+    width: cfg.mapWidth,
+    height: cfg.mapHeight,
+    spawnCount: total,
+    // Spread spawns across the map, tighter when there are many critters.
+    minSpawnSpacing: Math.min(160, Math.floor(cfg.mapWidth / (total + 1))),
+  });
+  if (map.spawns.length < total) {
+    throw new Error(
+      `map seed ${cfg.seed} has ${map.spawns.length} spawn points for ${total} critters`,
+    );
+  }
+  // Shuffle spawns, then interleave teams so nobody gets all the high ground.
+  const spawns = rng.fork("spawn").shuffle([...map.spawns]);
   const critters: Critter[] = [];
   let id = 1;
-  // Interleave teams so nobody gets all the high ground.
   const maxSize = Math.max(...cfg.teamSizes);
   for (let i = 0; i < maxSize; i++) {
     for (let team = 0; team < cfg.teamSizes.length; team++) {
       if (i >= (cfg.teamSizes[team] ?? 0)) continue;
-      let x = margin;
-      for (let tries = 0; tries < 64; tries++) {
-        x = spawnRng.nextRange(margin, cfg.mapWidth - margin);
-        if (taken.every((t) => Math.abs(t - x) >= spacing) && findSurfaceY(terrain, x) > 0) break;
-      }
-      taken.push(x);
-      const c = createCritter(id++, team, x, findSurfaceY(terrain, x));
+      const at = spawns[id - 1]!;
+      const c = createCritter(id++, team, at.x, at.y);
       critters.push({ ...c, hp: cfg.startHealth });
     }
   }
-  const sim = createWorld(terrain, critters, cfg.mapHeight - 40);
+  const sim = createWorld(map.terrain, critters, map.waterY);
   return {
     sim,
-    turns: turns.init(sim, rulesFor(cfg), 0, rng),
+    turns: MATCH_TURNS.init(sim, rulesFor(cfg), 0, rng),
     rng: rng.getState(),
     move: 0,
   };
@@ -185,12 +191,8 @@ function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): Cr
  * unless someone has control, so stale or late commands can't desync.
  * Mutates only the terrain (shared, as in stepWorld).
  */
-export function stepMatch(
-  cfg: MatchConfig,
-  state: MatchState,
-  cmds: readonly Cmd[],
-  turns: TurnController = basicTurns,
-): StepOutput {
+export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cmd[]): StepOutput {
+  const turns = MATCH_TURNS;
   const rules = rulesFor(cfg);
   const tick = state.sim.tick + 1;
   let ts = state.turns;
@@ -231,13 +233,30 @@ export function stepMatch(
 
 // ------------------------------------------------------------ hashing
 
+const terrainHashes = new WeakMap<Terrain, { version: number; h: number }>();
+
+/**
+ * hashTerrain walks every cell (2M on a full map), so cache it per terrain
+ * and recompute only after a change. The key is the sum of chunkVersion,
+ * which every carve/fill bumps.
+ */
+function cachedTerrainHash(t: Terrain): number {
+  let version = 0;
+  for (let i = 0; i < t.chunkVersion.length; i++) version = (version + t.chunkVersion[i]!) >>> 0;
+  const hit = terrainHashes.get(t);
+  if (hit && hit.version === version) return hit.h;
+  const h = hashTerrain(t);
+  terrainHashes.set(t, { version, h });
+  return h;
+}
+
 /** u32 hash of the full match state (protocol section 7). */
 export function hashMatch(state: MatchState): number {
   const h = new StateHasher();
   // Every sim field except the terrain goes through the canonical hasher, so
   // fields added later (projectiles, crates) are covered automatically.
   const { terrain, ...rest } = state.sim;
-  h.i32(hashTerrain(terrain)).value(rest);
+  h.i32(cachedTerrainHash(terrain)).value(rest);
   h.value(state.turns);
   for (const w of state.rng) h.i32(w);
   h.i32(state.move);

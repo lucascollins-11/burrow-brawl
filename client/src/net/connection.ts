@@ -11,7 +11,16 @@ import {
   type ServerMessage,
 } from "@burrow-brawl/shared/src/net";
 
-export type ConnectionStatus = "connecting" | "open" | "reconnecting" | "closed";
+/**
+ * - connecting: first attempt in progress
+ * - waking: the first connection hasn't succeeded yet and we're retrying
+ *   (a sleeping free-tier server can take 30 to 60 s); show a "waking the
+ *   server" notice
+ * - open: hello accepted
+ * - reconnecting: we were connected and lost it; retrying with backoff
+ * - closed: gave up, or a close code that retrying can't fix
+ */
+export type ConnectionStatus = "connecting" | "waking" | "open" | "reconnecting" | "closed";
 
 /** Close codes after which reconnecting would not help. */
 const FATAL_CLOSES = new Set<number>([
@@ -48,6 +57,8 @@ export interface ConnectionOptions {
   createSocket?: (url: string) => WebSocketLike;
   /** Give up reconnecting after this long (ms). */
   reconnectWindowMs?: number;
+  /** Before the first successful connection: keep trying this long (ms) for a sleeping server. */
+  wakeWindowMs?: number;
   pingIntervalMs?: number;
   now?: () => number;
   random?: () => number;
@@ -72,6 +83,7 @@ export class GameConnection {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private closedByUs = false;
   private helloDone = false;
+  private everOpened = false;
 
   constructor(private readonly opts: ConnectionOptions) {}
 
@@ -152,6 +164,7 @@ export class GameConnection {
     if (msg.t === "welcome") {
       this.resumeToken = msg.resumeToken;
       this.helloDone = true;
+      this.everOpened = true;
       this.attempt = 0;
       this.clockOffsetMs = msg.serverTime - this.now;
       for (const f of this.queue.splice(0)) this.ws?.send(f);
@@ -183,7 +196,10 @@ export class GameConnection {
       return;
     }
     if (this.attempt === 0) this.droppedAt = this.now;
-    if (this.now - this.droppedAt > (this.opts.reconnectWindowMs ?? 5 * 60_000)) {
+    const windowMs = this.everOpened
+      ? (this.opts.reconnectWindowMs ?? 5 * 60_000)
+      : (this.opts.wakeWindowMs ?? 90_000);
+    if (this.now - this.droppedAt > windowMs) {
       this.setStatus("closed", { code, reason: "gave up reconnecting" });
       return;
     }
@@ -191,7 +207,7 @@ export class GameConnection {
     const base = Math.min(500 * 2 ** this.attempt, 5_000);
     const delay = base * (0.8 + 0.4 * (this.opts.random ?? Math.random)());
     this.attempt++;
-    this.setStatus("reconnecting", { code, reason });
+    this.setStatus(this.everOpened ? "reconnecting" : "waking", { code, reason });
     this.retryTimer = setTimeout(() => this.open(), delay);
   }
 
