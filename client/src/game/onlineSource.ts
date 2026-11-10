@@ -1,4 +1,4 @@
-import type { Cmd, MatchConfig, MatchState, SimEvent } from "@burrow-brawl/shared";
+import type { Cmd, MatchConfig, MatchMirror, MatchState, SimEvent } from "@burrow-brawl/shared";
 import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
 import type { RoomState } from "@burrow-brawl/shared/src/net";
 import type { NetMatch } from "../net";
@@ -31,6 +31,8 @@ export class OnlineSource implements MatchSource {
     private readonly net: NetMatch,
     private readonly input: GameInput,
   ) {
+    if (!net.mirror)
+      throw new Error("OnlineSource: no match yet (create it from the matchStart event)");
     this.lastMatchId = net.matchId;
     this.localTeams = new Set(
       net.teamIds.flatMap((teamId, i) =>
@@ -40,11 +42,18 @@ export class OnlineSource implements MatchSource {
   }
 
   get config(): MatchConfig {
-    return this.net.mirror!.config;
+    return this.mirror.config;
   }
 
   get state(): MatchState {
-    return this.net.mirror!.state;
+    return this.mirror.state;
+  }
+
+  /** The live mirror. A reconnect replaces it, so always read it through here. */
+  private get mirror(): MatchMirror {
+    const m = this.net.mirror;
+    if (!m) throw new Error("OnlineSource: no match yet (create it from the matchStart event)");
+    return m;
   }
 
   get matchId(): string | null {
