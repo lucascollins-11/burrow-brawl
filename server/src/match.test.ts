@@ -20,22 +20,15 @@ class Player {
     switch (m.t) {
       case "match.start":
         this.mirror = new MatchMirror(m.config, m.snapshot);
-        for (const p of m.pending) this.mirror.onInputs(p.applyTick, p.cmds);
-        this.mirror.onConfirmed(m.serverTick);
         break;
-      case "inputs":
-        this.mirror?.onInputs(m.applyTick, m.cmds);
-        break;
-      case "ticks":
-        this.mirror?.onConfirmed(m.upTo);
-        break;
-      case "hash":
+      case "tick":
         if (this.mirror) {
-          this.mirror.onConfirmed(m.tick);
-          this.mirror.advance(m.tick);
-          if (!this.mirror.onHash(m.tick, m.h)) {
+          this.mirror.onTick(m);
+          if (m.h === undefined) break;
+          this.mirror.advance(m.upTo); // reach the hashed tick to check it
+          if (this.mirror.desyncedAt !== null) {
             this.desyncs++;
-            this.c.send({ t: "desync", tick: m.tick, h: hashMatch(this.mirror.state) });
+            this.c.send({ t: "desync", tick: m.upTo, h: hashMatch(this.mirror.state) });
           }
         }
         break;
@@ -58,9 +51,7 @@ class Player {
    * The server confirms every 3 ticks, so `tick` must be a multiple of 3.
    */
   async syncTo(tick: number): Promise<void> {
-    await this.until(
-      (m) => (m.t === "ticks" && m.upTo >= tick) || (m.t === "hash" && m.tick >= tick),
-    );
+    await this.until((m) => m.t === "tick" && m.upTo >= tick);
     this.mirror!.advance(tick);
   }
 }
@@ -121,11 +112,9 @@ describe("authoritative match", () => {
       },
     );
     runner.advance(30);
-    a.c.send({ t: "input", turn: 1, cmds: [{ k: "jump" }] });
-    await b.until((m) => m.t === "inputs" && m.cmds.some((c) => c.k === "jump"));
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "jump" }] });
     runner.advance(48);
-    a.c.send({ t: "input", turn: 1, cmds: [{ k: "move", dir: 0 }] });
-    await a.until((m) => m.t === "inputs" && m.cmds.some((c) => c.k === "move" && c.dir === 0));
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "move", dir: 0 }] });
     runner.advance(60); // through tick 180, a hash tick
 
     await a.syncTo(180);
@@ -143,8 +132,7 @@ describe("authoritative match", () => {
     h = await startHarness();
     const { a, b, runner } = await startMatch();
     runner.advance(40);
-    a.c.send({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
-    await b.until((m) => m.t === "inputs");
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
     runner.advance(50);
     await a.syncTo(90);
     await b.syncTo(90);
@@ -166,7 +154,7 @@ describe("authoritative match", () => {
     // Corrupt the local mirror: a command the server never stamped.
     a.mirror!.onInputs(10, [{ k: "move", dir: -1 }]);
     runner.advance(20); // hash at 30
-    await a.until((m) => m.t === "hash" && m.tick === 30);
+    await a.until((m) => m.t === "tick" && m.upTo === 30);
     expect(a.desyncs).toBe(1);
     await a.until((m) => m.t === "snapshot");
     expect(hashMatch(a.mirror!.state)).toBe(hashMatch(runner.matchState));
@@ -205,8 +193,7 @@ describe("authoritative match", () => {
     runner.advance(40);
     b.c.ws.terminate();
     await a.c.room((s) => s.members.some((m) => !m.connected));
-    a.c.send({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
-    await a.until((m) => m.t === "inputs");
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
     // Bram's turn starts, the server skips it, and it comes back to Alba.
     runner.advance(80);
     expect(runner.matchState.turns).toMatchObject({ activeTeam: 0 });
@@ -215,9 +202,54 @@ describe("authoritative match", () => {
     expect(hashMatch(a.mirror!.state)).toBe(hashMatch(runner.matchState));
   });
 
-  it("ends the match, reports the winner and returns the room to the lobby", async () => {
+  it("lets the timer run when the active player drops mid-turn, and a reconnect resumes", async () => {
     h = await startHarness();
-    const { a, runner } = await startMatch();
+    const { a, runner, code } = await startMatch();
+    runner.advance(42);
+    a.c.ws.terminate();
+    await a.c.closed;
+    for (let i = 0; i < 50 && h.server.registry.get(code)!.connectedCount() !== 1; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    runner.advance(120);
+    expect(runner.matchState.turns).toMatchObject({ turn: 1, phase: "control", activeTeam: 0 });
+
+    const c2 = await h.client();
+    c2.send({
+      t: "hello",
+      token: a.c.token,
+      protocolVersion: PROTOCOL_VERSION,
+      resumeToken: a.c.resumeToken,
+    });
+    const a2 = new Player(c2);
+    await a2.until((m) => m.t === "match.start");
+    expect(await c2.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] })).toMatchObject({
+      t: "ok",
+    });
+    runner.advance(3);
+    expect(runner.matchState.turns).not.toMatchObject({ turn: 1, phase: "control" });
+  });
+
+  it("stops the match when everyone leaves", async () => {
+    h = await startHarness();
+    const { a, b, runner, code } = await startMatch();
+    let stopped = 0;
+    const stop = runner.stop.bind(runner);
+    runner.stop = () => {
+      stopped++;
+      stop();
+    };
+    a.c.send({ t: "room.leave" });
+    await a.c.next("room.left");
+    b.c.send({ t: "room.leave" });
+    await b.c.next("room.left");
+    expect(h.server.registry.get(code)).toBeUndefined();
+    expect(stopped).toBeGreaterThan(0);
+  });
+
+  it("ends the match, shows results, and the host's match.rematch returns to the lobby", async () => {
+    h = await startHarness();
+    const { a, b, runner } = await startMatch();
     runner.advance(40);
     // Knock out team 1 directly on the server (weapons arrive with S4).
     const st = runner.matchState;
@@ -230,12 +262,56 @@ describe("authoritative match", () => {
         ),
       },
     };
-    a.c.send({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
-    await a.until((m) => m.t === "inputs");
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
     runner.advance(5);
     await a.until((m) => m.t === "match.end");
     expect(a.ended).toMatchObject({ winnerTeamId: "t1" });
+    const results = await a.c.room((s) => s.phase === "results");
+    expect(results.members.every((m) => !m.ready)).toBe(true);
+    // Only the host takes the room back to the lobby.
+    expect(await b.c.request({ t: "match.rematch" })).toMatchObject({ code: "not_host" });
+    expect(await a.c.request({ t: "lobby.ready", ready: true })).toMatchObject({
+      code: "match_in_progress",
+    });
+    expect(await a.c.request({ t: "match.rematch" })).toMatchObject({ t: "ok" });
     const room = await a.c.room((s) => s.phase === "lobby");
-    expect(room.members.every((m) => !m.ready)).toBe(true);
+    expect(room.teams.filter((t) => t.controllerId !== null)).toHaveLength(2);
+    expect(await a.c.request({ t: "match.rematch" })).toMatchObject({ code: "not_allowed" });
+  });
+
+  it("a player reconnecting on the results screen lands in results, then follows the rematch", async () => {
+    h = await startHarness();
+    const { a, b, runner, code } = await startMatch();
+    runner.advance(40);
+    const st = runner.matchState;
+    (runner as unknown as { state: typeof st }).state = {
+      ...st,
+      sim: {
+        ...st.sim,
+        critters: st.sim.critters.map((c) =>
+          c.team === 1 ? { ...c, status: "drowned" as const } : c,
+        ),
+      },
+    };
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
+    runner.advance(5);
+    await a.c.room((s) => s.phase === "results");
+
+    b.c.ws.terminate();
+    await a.c.room((s) => s.members.some((m) => !m.connected));
+    const c2 = await h.client();
+    c2.send({
+      t: "hello",
+      token: b.c.token,
+      protocolVersion: PROTOCOL_VERSION,
+      resumeToken: b.c.resumeToken,
+    });
+    const joined = await c2.next("room.joined");
+    expect(joined.room).toMatchObject({ code, phase: "results" });
+    expect(joined.room.members.every((m) => m.connected)).toBe(true);
+    expect(c2.peek().some((m) => m.t === "match.start")).toBe(false);
+
+    expect(await a.c.request({ t: "match.rematch" })).toMatchObject({ t: "ok" });
+    expect((await c2.room((s) => s.phase === "lobby")).code).toBe(code);
   });
 });

@@ -35,7 +35,12 @@ interface MemberRec extends Member {
 
 export type LobbyMessage = Extract<
   ClientMessage,
-  { t: `lobby.${string}` } | { t: "chat" } | { t: "room.sync" } | { t: "input" } | { t: "desync" }
+  | { t: `lobby.${string}` }
+  | { t: "match.rematch" }
+  | { t: "chat" }
+  | { t: "room.sync" }
+  | { t: "input" }
+  | { t: "desync" }
 >;
 
 export interface RoomOptions {
@@ -314,6 +319,14 @@ export class Room {
         return null; // remove() already broadcast
       }
 
+      case "match.rematch":
+        // Results screen -> lobby, keeping teams and settings.
+        if (!isHost) return "not_host";
+        if (this.phase !== "results") return "not_allowed";
+        this.phase = "lobby";
+        this.unreadyAll();
+        break;
+
       case "lobby.start": {
         if (!isHost) return "not_host";
         const members = [...this.members.values()];
@@ -353,9 +366,10 @@ export class Room {
     this.match.start();
   }
 
+  /** The match finished: show results until the host sends match.rematch. */
   private endMatch(): void {
     this.match = null;
-    this.phase = "lobby";
+    this.phase = "results";
     this.unreadyAll();
     // Members who left during the match free their teams now.
     this.bump();

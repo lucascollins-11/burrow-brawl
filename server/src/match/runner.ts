@@ -1,13 +1,15 @@
 // Authoritative match: runs the shared match model at 60 Hz, stamps the
-// active player's commands with the tick they apply on, relays them to
-// everyone, confirms ticks, and sends periodic hashes plus full snapshots
-// for join, reconnect and desync repair. See docs/protocol.md sections 5 to 8.
+// active player's commands with the tick they apply on, and every
+// CONFIRM_EVERY ticks broadcasts one watermark batch (`tick`: upTo, the
+// commands stamped since the last batch, and the hash on HASH_EVERY ticks).
+// Full snapshots go out for join, reconnect and desync repair.
+// See docs/protocol.md sections 5 to 8.
 
 import { randomBytes, randomInt } from "node:crypto";
 import {
   HASH_EVERY,
   TICKS_PER_SECOND,
-  basicTurns,
+  MATCH_TURNS,
   createMatch,
   hashMatch,
   saveMatch,
@@ -18,7 +20,7 @@ import {
 } from "@burrow-brawl/shared";
 import type { ServerMessage } from "@burrow-brawl/shared/src/net";
 
-/** Send confirmations every N ticks (20/s); clients render ~100 ms behind. */
+/** Broadcast a watermark batch every N ticks (20/s). */
 export const CONFIRM_EVERY = 3;
 /** Keep stamped commands this many ticks back for late joiners. */
 const MAX_PENDING_AHEAD = 4;
@@ -43,6 +45,8 @@ export class MatchRunner {
   private state: MatchState;
   /** applyTick -> commands, for ticks not simulated yet. */
   private readonly pending = new Map<number, Cmd[]>();
+  /** Stamped commands not yet broadcast; flushed with the next watermark. */
+  private outbox: { applyTick: number; cmds: Cmd[] }[] = [];
   private lastApplyTick = 0;
   private timer: NodeJS.Timeout | null = null;
   private lastRealTime = 0;
@@ -113,7 +117,11 @@ export class MatchRunner {
     this.timer = null;
   }
 
-  /** Full state for (re)joining clients: snapshot plus commands already stamped. */
+  /**
+   * Full state for (re)joining clients, at the current tick. Commands stamped
+   * after it reach them in the next watermark batch (which may also repeat
+   * commands the snapshot already includes; mirrors drop those by tick).
+   */
   startMessage(): Extract<ServerMessage, { t: "match.start" }> {
     return {
       t: "match.start",
@@ -121,10 +129,6 @@ export class MatchRunner {
       config: this.config,
       teamIds: this.teamIds,
       snapshot: saveMatch(this.state),
-      pending: [...this.pending.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([applyTick, cmds]) => ({ applyTick, cmds })),
-      serverTick: this.tick,
     };
   }
 
@@ -139,9 +143,6 @@ export class MatchRunner {
       `[match ${this.id}] desync from ${memberId} at tick ${tick} (client hash ${h >>> 0})`,
     );
     this.host.sendTo(memberId, { t: "snapshot", snapshot: saveMatch(this.state) });
-    for (const [applyTick, cmds] of [...this.pending.entries()].sort((a, b) => a[0] - b[0])) {
-      this.host.sendTo(memberId, { t: "inputs", applyTick, cmds });
-    }
   }
 
   /**
@@ -150,7 +151,7 @@ export class MatchRunner {
    */
   onInput(memberId: string, turn: number, cmds: Cmd[]): "not_your_turn" | "input_rejected" | null {
     if (this.ended) return "input_rejected";
-    const team = basicTurns.activeTeam(this.state.turns);
+    const team = MATCH_TURNS.activeTeam(this.state.turns);
     if (team === null || this.controllers[team] !== memberId) return "not_your_turn";
     if (turn !== this.state.turns.turn) return "input_rejected";
     if (this.pending.size > MAX_PENDING_AHEAD) return "input_rejected";
@@ -171,7 +172,17 @@ export class MatchRunner {
     const list = this.pending.get(applyTick) ?? [];
     list.push(...cmds);
     this.pending.set(applyTick, list);
-    this.host.broadcast({ t: "inputs", applyTick, cmds });
+    this.outbox.push({ applyTick, cmds });
+  }
+
+  /** Broadcast the watermark: everything up to the current tick is final. */
+  private flush(withHash: boolean): void {
+    const t = this.tick;
+    const msg: Extract<ServerMessage, { t: "tick" }> = { t: "tick", upTo: t };
+    if (this.outbox.length) msg.cmds = this.outbox;
+    if (withHash) msg.h = hashMatch(this.state);
+    this.outbox = [];
+    this.host.broadcast(msg);
   }
 
   private pump(): void {
@@ -193,12 +204,11 @@ export class MatchRunner {
     this.state = r.state;
     const t = this.tick;
 
-    if (t % HASH_EVERY === 0) this.host.broadcast({ t: "hash", tick: t, h: hashMatch(this.state) });
-    else if (t % CONFIRM_EVERY === 0) this.host.broadcast({ t: "ticks", upTo: t });
+    const over = this.state.turns.phase === "over";
+    if (over || t % CONFIRM_EVERY === 0) this.flush(t % HASH_EVERY === 0);
 
-    if (this.state.turns.phase === "over") {
+    if (over) {
       this.ended = true;
-      this.host.broadcast({ t: "ticks", upTo: t });
       const w = this.state.turns.winnerTeam;
       const winner = w === null ? null : (this.teamIds[w] ?? null);
       this.host.broadcast({ t: "match.end", winnerTeamId: winner, tick: t });
@@ -209,10 +219,14 @@ export class MatchRunner {
     if (r.turnChanged) this.checkAbsent();
   }
 
-  /** A turn for a disconnected player is skipped right away (protocol section 8). */
+  /**
+   * A turn that starts with its controller absent is skipped right away
+   * (protocol section 8). Mid-turn drops just let the timer run; a reconnect
+   * gets control back for the rest of the turn.
+   */
   private checkAbsent(): void {
-    const team = basicTurns.activeTeam(this.state.turns);
-    if (team === null) return;
+    const team = MATCH_TURNS.activeTeam(this.state.turns);
+    if (team === null || this.state.turns.activeCritter === null) return;
     const who = this.controllers[team];
     if (who === undefined || !this.host.isConnected(who)) this.stamp([{ k: "skip" }]);
   }

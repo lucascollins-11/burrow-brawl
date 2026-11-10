@@ -8,8 +8,15 @@ import {
 } from "@burrow-brawl/shared";
 import { CloseCodes, PROTOCOL_VERSION, type ServerMessage } from "@burrow-brawl/shared/src/net";
 import { GameConnection, type WebSocketLike } from "./connection";
-import { INTERP_DELAY_TICKS, NetMatch } from "./match";
-import { createGuest, loadSession, saveSession, type KeyValueStore } from "./session";
+import { NetMatch } from "./match";
+import {
+  GuestRefused,
+  createGuest,
+  ensureSession,
+  loadSession,
+  saveSession,
+  type KeyValueStore,
+} from "./session";
 import { roomCodeFromPath, serverUrls } from "./urls";
 
 describe("serverUrls", () => {
@@ -223,7 +230,7 @@ describe("NetMatch", () => {
     mapHeight: 512,
   };
 
-  it("mirrors the server, renders behind the confirmed tick, and sends commands for the current turn", () => {
+  it("mirrors the server, fast-forwards to the watermark, and sends commands for the current turn", () => {
     const sent: Record<string, unknown>[] = [];
     const nm = new NetMatch({ send: (m) => void sent.push(m as Record<string, unknown>) });
     let server = createMatch(cfg);
@@ -233,23 +240,27 @@ describe("NetMatch", () => {
       config: cfg,
       teamIds: ["t1", "t2"],
       snapshot: saveMatch(server),
-      pending: [],
-      serverTick: 0,
     });
     nm.sendCmds([{ k: "move", dir: 1 }]);
     expect(sent.at(-1)).toEqual({ t: "input", turn: 1, cmds: [{ k: "move", dir: 1 }] });
 
-    nm.handle({ t: "inputs", applyTick: 5, cmds: [{ k: "move", dir: 1 }] });
     for (let t = 1; t <= 60; t++) {
       server = stepMatch(cfg, server, t === 5 ? [{ k: "move", dir: 1 }] : []).state;
-      if (t % 30 === 0) nm.handle({ t: "hash", tick: t, h: hashMatch(server) });
-      else if (t % 3 === 0) nm.handle({ t: "ticks", upTo: t });
+      if (t % 3 !== 0) continue;
+      nm.handle({
+        t: "tick",
+        upTo: t,
+        ...(t === 6 ? { cmds: [{ applyTick: 5, cmds: [{ k: "move", dir: 1 }] }] } : {}),
+        ...(t % 30 === 0 ? { h: hashMatch(server) } : {}),
+      });
     }
-    expect(nm.mirror!.tick).toBe(60); // hash messages pull the mirror up to check
-    nm.handle({ t: "ticks", upTo: 63 });
+    // Nothing is simulated until update(), then every confirmed tick at once (no per-frame cap).
+    expect(nm.mirror!.tick).toBe(0);
     nm.update();
-    // Stays INTERP_DELAY_TICKS behind confirmed (63 - 6 = 57), and never goes backwards.
-    expect(INTERP_DELAY_TICKS).toBe(6);
+    expect(nm.mirror!.tick).toBe(60);
+    expect(hashMatch(nm.mirror!.state)).toBe(hashMatch(server));
+    // Never past the watermark.
+    nm.update();
     expect(nm.mirror!.tick).toBe(60);
     expect(sent.filter((m) => m.t === "desync")).toHaveLength(0);
   });
@@ -264,13 +275,101 @@ describe("NetMatch", () => {
       config: cfg,
       teamIds: ["t1", "t2"],
       snapshot: saveMatch(server),
-      pending: [],
-      serverTick: 0,
     });
-    nm.handle({ t: "hash", tick: 30, h: 12345 });
+    nm.handle({ t: "tick", upTo: 30, h: 12345 });
+    nm.update();
     nm.update();
     expect(sent.filter((m) => m.t === "desync")).toEqual([
       { t: "desync", tick: 30, h: expect.any(Number) },
     ]);
+  });
+});
+
+describe("ensureSession wake-up", () => {
+  const ok = { token: "t", id: "g_1", nickname: "Pip", expiresAt: Date.now() + 7 * 86_400_000 };
+  const json = (status: number, body: object) =>
+    ({ ok: status < 400, status, json: async () => body }) as Response;
+
+  it("retries a sleeping server with backoff and reports waking once", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      if (calls <= 2) throw new TypeError("fetch failed");
+      if (calls === 3) return json(503, {});
+      return json(200, ok);
+    }) as unknown as typeof fetch;
+    const waits: number[] = [];
+    let waking = 0;
+    const sess = await ensureSession("http://x", "Pip", fetchImpl, {
+      onWaking: () => waking++,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    expect(sess.token).toBe("t");
+    expect(calls).toBe(4);
+    expect(waits).toEqual([1000, 2000, 4000]);
+    expect(waking).toBe(1);
+  });
+
+  it("does not retry a refusal and gives up after the wake window", async () => {
+    const refuse = (async () => json(400, { error: "bad_nickname" })) as unknown as typeof fetch;
+    await expect(ensureSession("http://x", "Pip", refuse)).rejects.toBeInstanceOf(GuestRefused);
+    let t = 0;
+    const down = (async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+    await expect(
+      ensureSession("http://x", "Pip", down, {
+        now: () => t,
+        sleep: async (ms) => void (t += ms),
+        totalMs: 10_000,
+      }),
+    ).rejects.toThrow(/did not wake up/);
+  });
+});
+
+describe("NetMatch playback pacing", () => {
+  const cfg: MatchConfig = {
+    seed: 3,
+    teamSizes: [1, 1],
+    turnTicks: 600,
+    retreatTicks: 60,
+    settleCapTicks: 600,
+    startHealth: 100,
+    windMax: 50,
+    mapWidth: 1024,
+    mapHeight: 512,
+  };
+  const start = () => {
+    const nm = new NetMatch({ send: () => undefined });
+    nm.handle({
+      t: "match.start",
+      matchId: "m",
+      config: cfg,
+      teamIds: ["a", "b"],
+      snapshot: saveMatch(createMatch(cfg)),
+    });
+    return nm;
+  };
+
+  it("plays one tick per 16.7 ms, doubles speed over 10 behind, and jumps over 60", () => {
+    const nm = start();
+    nm.handle({ t: "tick", upTo: 6 });
+    expect(nm.update(1000 / 60)).toHaveLength(1);
+    expect(nm.update(1000 / 30)).toHaveLength(2);
+    nm.update(1000); // drains the rest, never past the watermark
+    expect(nm.mirror!.tick).toBe(6);
+    expect(nm.update(1000)).toHaveLength(0);
+
+    nm.handle({ t: "tick", upTo: 30 }); // 24 behind: catch-up speed
+    const fast = nm.update(1000 / 60);
+    // 2 ticks for one frame (plus at most one carried over from the drained backlog).
+    expect(fast.length).toBeGreaterThanOrEqual(2);
+    expect(fast.length).toBeLessThanOrEqual(3);
+    expect(fast.every((s) => !s.fastForwarded)).toBe(true);
+
+    nm.handle({ t: "tick", upTo: 150 }); // way behind (hidden tab)
+    const jump = nm.update(1000 / 60);
+    expect(nm.mirror!.tick).toBe(150);
+    expect(jump.every((s) => s.fastForwarded)).toBe(true);
   });
 });

@@ -12,10 +12,19 @@ import {
 import type { ServerMessage } from "@burrow-brawl/shared/src/net";
 import type { GameConnection } from "./connection";
 
-/** Render this many ticks behind the newest confirmed tick to hide jitter (~100 ms). */
-export const INTERP_DELAY_TICKS = 6;
+const STEP_MS = 1000 / 60;
+/** Backlog (ticks) above which playback runs at double speed to catch up. */
+export const CATCHUP_BACKLOG = 10;
+/** Backlog above which we jump straight to the watermark (hidden tab, long stall). */
+export const FAST_FORWARD_BACKLOG = 60;
+
+export interface NetStep extends MirrorStep {
+  /** Simulated in a fast-forward jump: skip its sounds and effects. */
+  fastForwarded: boolean;
+}
 
 export class NetMatch {
+  private acc = 0;
   mirror: MatchMirror | null = null;
   matchId: string | null = null;
   /** Room team id for each sim team index. */
@@ -38,22 +47,9 @@ export class NetMatch {
         this.teamIds = msg.teamIds;
         this.winnerTeamId = undefined;
         this.mirror = new MatchMirror(msg.config, msg.snapshot);
-        for (const p of msg.pending) this.mirror.onInputs(p.applyTick, p.cmds);
-        this.mirror.onConfirmed(msg.serverTick);
         return true;
-      case "inputs":
-        this.mirror?.onInputs(msg.applyTick, msg.cmds);
-        return true;
-      case "ticks":
-        this.mirror?.onConfirmed(msg.upTo);
-        return true;
-      case "hash":
-        if (this.mirror) {
-          this.mirror.onConfirmed(msg.tick);
-          this.mirror.advance(msg.tick); // hash checks need us to have reached that tick
-          this.mirror.onHash(msg.tick, msg.h);
-          this.reportDesync();
-        }
+      case "tick":
+        this.mirror?.onTick(msg);
         return true;
       case "snapshot":
         this.mirror?.onSnapshot(msg.snapshot);
@@ -67,11 +63,31 @@ export class NetMatch {
     }
   }
 
-  /** Advance toward the confirmed tick, staying INTERP_DELAY_TICKS behind it. */
-  update(): MirrorStep[] {
+  /**
+   * Play the confirmed backlog at 60 Hz from frame time `dtMs`: one tick per
+   * 16.7 ms, double speed when more than CATCHUP_BACKLOG ticks behind, and a
+   * jump to the watermark (steps flagged fastForwarded) beyond
+   * FAST_FORWARD_BACKLOG. Never drops a tick and never passes the watermark.
+   * Without `dtMs` it drains the whole backlog at once (tests, tools).
+   */
+  update(dtMs?: number): NetStep[] {
     const m = this.mirror;
     if (!m) return [];
-    const steps = m.advance(Math.max(m.tick, m.confirmed - INTERP_DELAY_TICKS));
+    const backlog = m.confirmed - m.tick;
+    let steps: NetStep[];
+    if (dtMs === undefined) {
+      steps = m.advance().map((s) => ({ ...s, fastForwarded: false }));
+    } else if (backlog > FAST_FORWARD_BACKLOG) {
+      this.acc = 0;
+      steps = m.advance().map((s) => ({ ...s, fastForwarded: true }));
+    } else {
+      const speed = backlog > CATCHUP_BACKLOG ? 2 : 1;
+      this.acc += Math.max(0, Math.min(dtMs, 250)) * speed;
+      const n = Math.min(Math.floor(this.acc / STEP_MS), backlog);
+      // Don't bank time while waiting on the server, or we'd burst later.
+      this.acc = n === backlog ? Math.min(this.acc - n * STEP_MS, STEP_MS) : this.acc - n * STEP_MS;
+      steps = m.advance(m.tick + n).map((s) => ({ ...s, fastForwarded: false }));
+    }
     this.reportDesync();
     return steps;
   }

@@ -97,7 +97,8 @@ export class Registry {
     this.roomOf.delete(sub);
     if (!room) return;
     room.remove(sub, reason);
-    if (room.size === 0) this.rooms.delete(room.code);
+    // closeRoom stops the match too, so an abandoned match's timer can't leak.
+    if (room.size === 0) this.closeRoom(room);
   }
 
   // ------------------------------------------------------------ resume tokens

@@ -111,7 +111,11 @@ export interface StepOutput {
   turnChanged: boolean;
 }
 
-/** The one turn controller every match uses (server, clients, hot-seat). */
+/**
+ * The one turn controller every match uses (server, clients, hot-seat). There
+ * is deliberately no way to pass a different one: two controllers would
+ * silently desync. Edit it in place in shared/src/sim/turns.ts.
+ */
 export const MATCH_TURNS = basicTurns;
 
 export const TICKS_PER_SECOND = 60;
@@ -254,13 +258,30 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
 
 // ------------------------------------------------------------ hashing
 
+const terrainHashes = new WeakMap<Terrain, { version: number; h: number }>();
+
+/**
+ * hashTerrain walks every cell (2M on a full map), so cache it per terrain
+ * and recompute only after a change. The key is the sum of chunkVersion,
+ * which every carve/fill bumps.
+ */
+function cachedTerrainHash(t: Terrain): number {
+  let version = 0;
+  for (let i = 0; i < t.chunkVersion.length; i++) version = (version + t.chunkVersion[i]!) >>> 0;
+  const hit = terrainHashes.get(t);
+  if (hit && hit.version === version) return hit.h;
+  const h = hashTerrain(t);
+  terrainHashes.set(t, { version, h });
+  return h;
+}
+
 /** u32 hash of the full match state (protocol section 7). */
 export function hashMatch(state: MatchState): number {
   const h = new StateHasher();
   // Every sim field except the terrain goes through the canonical hasher, so
   // fields added later (projectiles, crates) are covered automatically.
   const { terrain, ...rest } = state.sim;
-  h.i32(hashTerrain(terrain)).value(rest);
+  h.i32(cachedTerrainHash(terrain)).value(rest);
   h.value(state.turns);
   for (const w of state.rng) h.i32(w);
   h.i32(state.move);

@@ -17,6 +17,18 @@ import type { SimEvent } from "../sim";
 
 const HASH_HISTORY = 8; // hashed ticks to remember
 
+/**
+ * The server's watermark (protocol section 6): every tick up to `upTo` is
+ * final, `cmds` are the commands stamped since the previous batch (all for
+ * ticks <= upTo), and `h` is the state hash at `upTo` when upTo % HASH_EVERY
+ * is 0. No client simulates past the newest upTo.
+ */
+export interface TickBatch {
+  upTo: number;
+  cmds?: { applyTick: number; cmds: Cmd[] }[];
+  h?: number;
+}
+
 export interface MirrorStep {
   tick: number;
   events: readonly SimEvent[];
@@ -43,6 +55,14 @@ export class MatchMirror {
 
   get tick(): number {
     return this.state.sim.tick;
+  }
+
+  /** One watermark batch from the server. Returns false once a mismatch is known. */
+  onTick(b: TickBatch): boolean {
+    for (const c of b.cmds ?? []) this.onInputs(c.applyTick, c.cmds);
+    if (b.h !== undefined) return this.onHash(b.upTo, b.h);
+    this.onConfirmed(b.upTo);
+    return this.desyncedAt === null;
   }
 
   /** Commands the server stamped for `applyTick`. */
