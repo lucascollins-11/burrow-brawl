@@ -1,5 +1,6 @@
 import {
   carveCircle,
+  cloneTerrain,
   createCritter,
   createDemoTerrain,
   createWorld,
@@ -76,8 +77,13 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
   if (e.button !== 2 && !(e.button === 0 && e.ctrlKey)) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const w = cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-  const res = carveCircle(runner.state.terrain, Math.round(w.x), Math.round(-w.y), carveRadius);
-  if (res.cellsRemoved > 0) terrainHash = hashTerrain(runner.state.terrain);
+  // Copy on write, like explosions in the sim: never mutate the terrain a state already points at.
+  const next = cloneTerrain(runner.state.terrain);
+  const res = carveCircle(next, Math.round(w.x), Math.round(-w.y), carveRadius);
+  if (res.cellsRemoved > 0) {
+    runner.state = { ...runner.state, terrain: next };
+    terrainHash = hashTerrain(next);
+  }
 });
 window.addEventListener("keydown", (e) => {
   if (e.key === "Tab") {
