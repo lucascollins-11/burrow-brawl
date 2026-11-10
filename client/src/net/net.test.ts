@@ -336,8 +336,8 @@ describe("NetMatch playback pacing", () => {
     settleCapTicks: 600,
     startHealth: 100,
     windMax: 50,
-    mapWidth: 384,
-    mapHeight: 160,
+    mapWidth: 1024,
+    mapHeight: 512,
   };
   const start = () => {
     const nm = new NetMatch({ send: () => undefined });

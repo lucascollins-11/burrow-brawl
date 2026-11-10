@@ -111,7 +111,11 @@ export interface StepOutput {
   turnChanged: boolean;
 }
 
-/** The one turn controller every match uses (server, clients, hot-seat). */
+/**
+ * The one turn controller every match uses (server, clients, hot-seat). There
+ * is deliberately no way to pass a different one: two controllers would
+ * silently desync. Edit it in place in shared/src/sim/turns.ts.
+ */
 export const MATCH_TURNS = basicTurns;
 
 export const TICKS_PER_SECOND = 60;
@@ -127,13 +131,6 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
     windMax: cfg.windMax,
   };
 }
-
-/**
- * The one turn controller used by the server runner and every client mirror.
- * There is deliberately no way to pass a different one: two controllers
- * would silently desync. S5 edits it in place in shared/src/sim/turns.ts.
- */
-export const MATCH_TURNS: TurnController = basicTurns;
 
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
 export function createMatch(cfg: MatchConfig): MatchState {
