@@ -1,5 +1,7 @@
 # Burrow Brawl 3D: modes, maps and characters (v1, 2026-11-10)
 
+> **Status: later, after step 2.** Modes, maps and characters start after online 3D Brawl is live. Kept here as the plan.
+
 This is the full content scope for the genre, all our own designs. Nothing here is modeled
 on a specific existing game's modes, maps or characters.
 

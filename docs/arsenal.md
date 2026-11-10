@@ -1,5 +1,7 @@
 # Burrow Brawl 3D: full arsenal (v1, 2026-11-10)
 
+> **Status: later, after step 2.** Nothing in this arsenal starts until online 3D Brawl is live. Kept here as the plan.
+
 This is a big arsenal that covers every gameplay role the genre expects. Every item is our
 own: an original name, a toy-box look and a twist of its own. None of them is a one-for-one
 copy of another game's signature weapon. No iconic animal bombs or holy items, and no named
