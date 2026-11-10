@@ -3,18 +3,13 @@
 // commands, run stepWorld, then the turn controller. Same config + same
 // commands at the same ticks => same state hash everywhere.
 
+import { generateMap } from "../maps/generate";
 import { Prng, StateHasher, type PrngState } from "../determinism";
 import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
 import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
-import {
-  createDemoTerrain,
-  deserializeTerrain,
-  hashTerrain,
-  serializeTerrain,
-  type Terrain,
-} from "../terrain";
+import { deserializeTerrain, hashTerrain, serializeTerrain, type Terrain } from "../terrain";
 import { fromBase64, toBase64 } from "./base64";
 
 // ------------------------------------------------------------ commands
@@ -133,29 +128,42 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
 export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns): MatchState {
   const rng = Prng.fromSeed(cfg.seed);
-  const terrain = createDemoTerrain(cfg.mapWidth, cfg.mapHeight);
-  const spawnRng = rng.fork("spawn");
-  const margin = 80;
-  const spacing = 40;
-  const taken: number[] = [];
+  const total = cfg.teamSizes.reduce((a, b) => a + b, 0);
+  // Fit every critter on the map: wide spacing for few critters, tighter for many. If the
+  // generator still finds too few spawn columns, retry with half the spacing (deterministic).
+  let spacing = Math.max(40, Math.min(160, Math.floor((cfg.mapWidth - 200) / Math.max(1, total))));
+  let map = generateMap(rng.fork("map"), {
+    width: cfg.mapWidth,
+    height: cfg.mapHeight,
+    spawnCount: total,
+    minSpawnSpacing: spacing,
+  });
+  for (let i = 0; i < 3 && map.spawns.length < total; i++) {
+    spacing = Math.max(12, spacing >> 1);
+    map = generateMap(rng.fork("map"), {
+      width: cfg.mapWidth,
+      height: cfg.mapHeight,
+      spawnCount: total,
+      minSpawnSpacing: spacing,
+    });
+  }
+  const terrain = map.terrain;
   const critters: Critter[] = [];
   let id = 1;
+  let spawnIndex = 0;
   // Interleave teams so nobody gets all the high ground.
   const maxSize = Math.max(...cfg.teamSizes);
   for (let i = 0; i < maxSize; i++) {
     for (let team = 0; team < cfg.teamSizes.length; team++) {
       if (i >= (cfg.teamSizes[team] ?? 0)) continue;
-      let x = margin;
-      for (let tries = 0; tries < 64; tries++) {
-        x = spawnRng.nextRange(margin, cfg.mapWidth - margin);
-        if (taken.every((t) => Math.abs(t - x) >= spacing) && findSurfaceY(terrain, x) > 0) break;
-      }
-      taken.push(x);
-      const c = createCritter(id++, team, x, findSurfaceY(terrain, x));
+      const sp = map.spawns[spawnIndex++];
+      const x = sp?.x ?? Math.floor(cfg.mapWidth / 2);
+      const y = sp?.y ?? findSurfaceY(terrain, x);
+      const c = createCritter(id++, team, x, y);
       critters.push({ ...c, hp: cfg.startHealth });
     }
   }
-  const sim = createWorld(terrain, critters, cfg.mapHeight - 40);
+  const sim = createWorld(terrain, critters, map.waterY);
   const first = turns.init(sim, rulesFor(cfg), 0, rng);
   return {
     sim: { ...sim, wind: first.wind },

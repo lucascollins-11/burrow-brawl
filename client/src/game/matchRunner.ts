@@ -1,6 +1,12 @@
 import type { Cmd, MatchConfig, MatchState, SimEvent } from "@burrow-brawl/shared";
 import { createMatch, stepMatch, TICKS_PER_SECOND } from "@burrow-brawl/shared";
 
+export interface MatchEndInfo {
+  /** Winning sim team index, or null for a draw. */
+  winnerTeam: number | null;
+  tick: number;
+}
+
 const STEP_MS = 1000 / TICKS_PER_SECOND;
 /** Never simulate more than this many ticks per frame (tab was hidden, slow device). */
 const MAX_TICKS_PER_FRAME = 5;
@@ -13,6 +19,12 @@ export class MatchRunner {
   state: MatchState;
   readonly recentEvents: SimEvent[] = [];
   private acc = 0;
+  private ended = false;
+  /**
+   * Called once when the match ends. `winnerTeam` is the winning sim team index, or null for a
+   * draw. The win screen (client/src/ui) subscribes here; the game HUD banner also uses it.
+   */
+  onMatchEnd: ((result: MatchEndInfo) => void) | null = null;
 
   constructor(
     readonly config: MatchConfig,
@@ -29,6 +41,10 @@ export class MatchRunner {
       const r = stepMatch(this.config, this.state, this.cmdsFor(this.state));
       this.state = r.state;
       out.push(...r.events);
+      if (!this.ended && r.state.turns.phase === "over") {
+        this.ended = true;
+        this.onMatchEnd?.({ winnerTeam: r.state.turns.winnerTeam, tick: r.state.sim.tick });
+      }
       this.acc -= STEP_MS;
     }
     this.recentEvents.push(...out);

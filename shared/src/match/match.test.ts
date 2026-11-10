@@ -155,6 +155,15 @@ describe("match model", () => {
     expect(s.sim.waterY).toBe(before - 10);
   });
 
+  it("places every critter on generated terrain, even for a full 4x4 match", () => {
+    const big: MatchConfig = { ...cfg, teamSizes: [4, 4, 4, 4] };
+    const s = createMatch(big);
+    expect(s.sim.critters).toHaveLength(16);
+    const xs = new Set(s.sim.critters.map((c) => c.x >> 16));
+    expect(xs.size).toBe(16);
+    for (const c of s.sim.critters) expect(c.y >> 16).toBeLessThan(s.sim.waterY);
+  });
+
   it("times out turns and rotates teams and critters", () => {
     let s = createMatch(cfg);
     const seen: Array<[number | null, number | null]> = [];

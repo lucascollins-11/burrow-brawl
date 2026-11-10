@@ -37,6 +37,10 @@ const runner = new MatchRunner(config, (state) => {
   return input.read();
 });
 
+// UI hook: the win screen can listen for `window` "burrow:matchend" (detail: MatchEndInfo).
+runner.onMatchEnd = (info) =>
+  window.dispatchEvent(new CustomEvent("burrow:matchend", { detail: info }));
+
 const terrainRenderer = new TerrainRenderer(runner.state.sim.terrain);
 scene.add(terrainRenderer.group);
 const critterViews = new CritterViews();
