@@ -54,8 +54,8 @@ export class OnlineSource implements MatchSource {
   advance(dtMs: number): SimEvent[] {
     const out: SimEvent[] = [];
     // Steps replayed in a burst (catching up after a stall or resync) skip effects and sounds.
-    for (const step of this.net.update()) {
-      if (!(step as { fastForwarded?: boolean }).fastForwarded) out.push(...step.events);
+    for (const step of this.net.update(dtMs)) {
+      if (!step.fastForwarded) out.push(...step.events);
     }
 
     // Sample input on 60 Hz ticks so charge and aim speeds match hot-seat, whatever the frame rate.
