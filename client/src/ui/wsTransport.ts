@@ -18,10 +18,11 @@ export class WsTransport implements LobbyTransport {
 
   connect(token: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      let welcomed = false;
       const ws = new WebSocket(`${this.serverUrl.replace(/\/$/, "")}/ws`);
       this.ws = ws;
       ws.onopen = () => this.send({ t: "hello", token, protocolVersion: PROTOCOL_VERSION });
-      ws.onerror = () => reject(new Error("Could not reach the game server."));
+      ws.onerror = () => !welcomed && reject(new Error("Could not reach the game server."));
       ws.onmessage = (ev) => {
         let msg: ServerMessage;
         try {
@@ -30,6 +31,7 @@ export class WsTransport implements LobbyTransport {
           return;
         }
         if (msg.t === "welcome") {
+          welcomed = true;
           this.pingTimer = setInterval(
             () => this.send({ t: "ping", clientTime: Date.now() }),
             2000,
@@ -40,7 +42,7 @@ export class WsTransport implements LobbyTransport {
       };
       ws.onclose = (ev) => {
         clearInterval(this.pingTimer);
-        reject(new Error("Connection closed."));
+        if (!welcomed) reject(new Error("Connection closed."));
         this.closeHandlers.forEach((h) => h(ev.code));
       };
     });
