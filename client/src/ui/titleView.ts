@@ -9,6 +9,8 @@ export interface TitleActions {
   join(nickname: string, code: string): void;
   /** Retry the last connection attempt. */
   retry(): void;
+  /** Open the offline hot-seat setup. */
+  local(): void;
   click(): void;
 }
 
@@ -116,5 +118,10 @@ export function renderTitle(
       code,
       h("button", { class: "btn big", text: "Join", disabled: opts.busy, onclick: join }),
     ),
+    h("button", {
+      class: "btn big local-btn",
+      text: "Local play (one computer)",
+      onclick: () => (a.click(), a.local()),
+    }),
   );
 }

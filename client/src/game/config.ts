@@ -17,10 +17,20 @@ export function matchConfigFromUrl(search = window.location.search): MatchConfig
     q.has("seed") && Number.isInteger(Number(q.get("seed")))
       ? Number(q.get("seed")) >>> 0
       : crypto.getRandomValues(new Uint32Array(1))[0]!;
+  return localMatchConfig(teams, size, seed, int("turn", 45, 5, 300));
+}
+
+/** Hot-seat settings for `teams` teams of `size` critters (the "Local play" setup and the URL modes). */
+export function localMatchConfig(
+  teams: number,
+  size: number,
+  seed: number = crypto.getRandomValues(new Uint32Array(1))[0]!,
+  turnSeconds = 45,
+): MatchConfig {
   return {
     seed,
     teamSizes: Array.from({ length: teams }, () => size),
-    turnTicks: int("turn", 45, 5, 300) * TICKS_PER_SECOND,
+    turnTicks: turnSeconds * TICKS_PER_SECOND,
     retreatTicks: 3 * TICKS_PER_SECOND,
     settleCapTicks: 10 * TICKS_PER_SECOND,
     startHealth: 100,

@@ -1,10 +1,16 @@
-import { carveCircle, fromFixed, hashTerrain, type SimEvent } from "@burrow-brawl/shared";
+import {
+  carveCircle,
+  fromFixed,
+  hashTerrain,
+  type MatchConfig,
+  type SimEvent,
+} from "@burrow-brawl/shared";
 import * as THREE from "three";
 import { audio } from "./audio";
 import { PanZoomCamera } from "./camera";
 import { FxSystem } from "./fx";
 import { CritterViews } from "./game/critters";
-import { matchConfigFromUrl } from "./game/config";
+import { localMatchConfig, matchConfigFromUrl } from "./game/config";
 import { OnlineSource } from "./game/onlineSource";
 import type { MatchSource } from "./game/source";
 import { defaultLooks, looksFromRoom, type TeamLook } from "./game/teamLook";
@@ -230,8 +236,9 @@ requestAnimationFrame(frame);
 // Modes: default is the lobby (online). ?nolobby or ?hotseat starts a local hot-seat match instead
 // (config from the URL, see game/config.ts); ?mock uses a fake server.
 const params = new URLSearchParams(location.search);
-if (params.has("nolobby") || params.has("hotseat")) {
-  const config = matchConfigFromUrl();
+
+/** Start a hot-seat match on this computer: no server, no lobby. "Play again" reshuffles the map. */
+function startLocal(config: MatchConfig): void {
   let lastTurn = -1;
   const runner = new MatchRunner(config, (state) => {
     const ts = state.turns;
@@ -242,15 +249,19 @@ if (params.has("nolobby") || params.has("hotseat")) {
     }
     return input.read();
   });
-  startGame(runner, defaultLooks(config.teamSizes.length), () => {
-    const q = new URLSearchParams(window.location.search);
-    q.set("seed", String(crypto.getRandomValues(new Uint32Array(1))[0]));
-    window.location.search = q.toString();
-  });
+  startGame(runner, defaultLooks(config.teamSizes.length), () =>
+    startLocal({ ...config, seed: crypto.getRandomValues(new Uint32Array(1))[0]! }),
+  );
+}
+
+if (params.has("nolobby") || params.has("hotseat")) {
+  startLocal(matchConfigFromUrl());
 } else {
   const mock = params.has("mock");
   mountUi(document.body, {
     onClick: () => audio.play("uiClick"),
+    // "Local play" on the title screen: hot-seat with no server.
+    onLocalStart: ({ teams, size }) => startLocal(localMatchConfig(teams, size)),
     // The lobby hands us the network match when it starts (or when we rejoin one).
     onMatchStart: (client, net) => {
       if (!net.mirror) return;

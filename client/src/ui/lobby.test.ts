@@ -136,3 +136,19 @@ describe("results", () => {
     expect(describeResult(r, { winnerTeamId: null }, "a").title).toMatch(/draw/);
   });
 });
+
+describe("local play setup", () => {
+  it("clamps teams and critters per team", async () => {
+    const { clampLocal } = await import("./localView");
+    expect(clampLocal({ teams: 1, size: 0 })).toEqual({ teams: 2, size: 1 });
+    expect(clampLocal({ teams: 9, size: 9 })).toEqual({ teams: 4, size: 4 });
+    expect(clampLocal({ teams: 3, size: 2 })).toEqual({ teams: 3, size: 2 });
+  });
+  it("builds a hot-seat config without a server", async () => {
+    const { localMatchConfig } = await import("../game/config");
+    const c = localMatchConfig(3, 2, 7);
+    expect(c.teamSizes).toEqual([2, 2, 2]);
+    expect(c.seed).toBe(7);
+    expect(c.turnTicks).toBe(45 * 60);
+  });
+});

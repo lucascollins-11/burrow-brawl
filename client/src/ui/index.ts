@@ -14,6 +14,7 @@ import {
 } from "./lobbyState";
 import { h } from "./dom";
 import { renderLobby } from "./lobbyView";
+import { DEFAULT_LOCAL, renderLocalSetup, type LocalSetup } from "./localView";
 import { renderResults } from "./resultsView";
 import { roomCodeFromPath } from "./routes";
 import { renderTitle } from "./titleView";
@@ -26,6 +27,8 @@ export interface UiOptions {
   onClick?: () => void;
   /** The match started (or we rejoined one). Hand `client` and `match` to the game scene. */
   onMatchStart?: (client: LobbyClient, match: NetMatch) => void;
+  /** Start a hot-seat match on this computer. The UI hides itself; no server is involved. */
+  onLocalStart?: (setup: LocalSetup) => void;
   /** The match ended (also shows the results overlay). */
   onMatchEnd?: (winnerTeamId: string | null) => void;
 }
@@ -54,6 +57,7 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
   let pendingCode: string | null = roomCodeFromPath(location.pathname);
   let busy = false;
   let titleError: string | null = null;
+  let localSetup: LocalSetup | null = null;
   let status: UiStatus | null = null;
   let lastAttempt: { nick: string; code: string | null } | null = null;
   let wakingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -91,6 +95,20 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
           h("div", { class: "error", text: "Reconnecting…", attrs: { role: "status" } }),
         );
       shell.append(lobby);
+    } else if (localSetup) {
+      shell.append(
+        renderLocalSetup(localSetup, {
+          change: (next) => ((localSetup = next), render()),
+          start: (setup) => {
+            localSetup = null;
+            state = { ...initialState, screen: "starting" };
+            render();
+            opts.onLocalStart?.(setup);
+          },
+          back: () => ((localSetup = null), render()),
+          click,
+        }),
+      );
     } else {
       shell.append(
         renderTitle(
@@ -106,6 +124,7 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
             create: (n) => void start(n, null),
             join: (n, c) => void start(n, c),
             retry: () => lastAttempt && void start(lastAttempt.nick, lastAttempt.code),
+            local: () => ((localSetup = { ...DEFAULT_LOCAL }), render()),
             click,
           },
         ),

@@ -363,3 +363,21 @@ h3 {
 .ui-shell.dim {
   background: rgba(74, 52, 38, 0.55);
 }
+.local-btn {
+  background: var(--mint);
+}
+.stepper {
+  align-items: center;
+}
+.stepper-label {
+  flex: 3;
+  text-align: left;
+  font-weight: bold;
+}
+.stepper-value {
+  flex: 0 0 2ch;
+  font-size: 1.3rem;
+}
+.stepper .btn {
+  flex: 0 0 44px;
+}
