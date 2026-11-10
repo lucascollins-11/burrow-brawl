@@ -282,7 +282,7 @@ describe("lobby", () => {
     await host.room((s) => s.members.length === 2);
     expect(await b.request({ t: "lobby.start" })).toMatchObject({ code: "not_host" });
     expect(await host.request({ t: "lobby.start" })).toMatchObject({ t: "ok" });
-    expect((await b.room((s) => s.phase === "loading")).phase).toBe("loading");
+    expect((await b.room((s) => s.phase === "match")).phase).toBe("match");
     expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ code: "match_in_progress" });
   });
 
