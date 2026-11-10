@@ -226,8 +226,8 @@ describe("NetMatch", () => {
     settleCapTicks: 600,
     startHealth: 100,
     windMax: 50,
-    mapWidth: 384,
-    mapHeight: 160,
+    mapWidth: 1024,
+    mapHeight: 512,
   };
 
   it("mirrors the server, fast-forwards to the watermark, and sends commands for the current turn", () => {
@@ -324,5 +324,52 @@ describe("ensureSession wake-up", () => {
         totalMs: 10_000,
       }),
     ).rejects.toThrow(/did not wake up/);
+  });
+});
+
+describe("NetMatch playback pacing", () => {
+  const cfg: MatchConfig = {
+    seed: 3,
+    teamSizes: [1, 1],
+    turnTicks: 600,
+    retreatTicks: 60,
+    settleCapTicks: 600,
+    startHealth: 100,
+    windMax: 50,
+    mapWidth: 1024,
+    mapHeight: 512,
+  };
+  const start = () => {
+    const nm = new NetMatch({ send: () => undefined });
+    nm.handle({
+      t: "match.start",
+      matchId: "m",
+      config: cfg,
+      teamIds: ["a", "b"],
+      snapshot: saveMatch(createMatch(cfg)),
+    });
+    return nm;
+  };
+
+  it("plays one tick per 16.7 ms, doubles speed over 10 behind, and jumps over 60", () => {
+    const nm = start();
+    nm.handle({ t: "tick", upTo: 6 });
+    expect(nm.update(1000 / 60)).toHaveLength(1);
+    expect(nm.update(1000 / 30)).toHaveLength(2);
+    nm.update(1000); // drains the rest, never past the watermark
+    expect(nm.mirror!.tick).toBe(6);
+    expect(nm.update(1000)).toHaveLength(0);
+
+    nm.handle({ t: "tick", upTo: 30 }); // 24 behind: catch-up speed
+    const fast = nm.update(1000 / 60);
+    // 2 ticks for one frame (plus at most one carried over from the drained backlog).
+    expect(fast.length).toBeGreaterThanOrEqual(2);
+    expect(fast.length).toBeLessThanOrEqual(3);
+    expect(fast.every((s) => !s.fastForwarded)).toBe(true);
+
+    nm.handle({ t: "tick", upTo: 150 }); // way behind (hidden tab)
+    const jump = nm.update(1000 / 60);
+    expect(nm.mirror!.tick).toBe(150);
+    expect(jump.every((s) => s.fastForwarded)).toBe(true);
   });
 });

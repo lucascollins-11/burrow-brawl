@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isSolid } from "../terrain";
 import { checkDeterminism, scriptedInputs } from "../determinism";
 import { basicTurns } from "../sim/turns";
 import { fromBase64, toBase64 } from "./base64";
@@ -123,6 +124,58 @@ describe("match model", () => {
     expect(s.sim.projectiles.length).toBeLessThanOrEqual(1);
     s = run(s, 61);
     expect(s.turns.phase).not.toBe("retreat");
+  });
+
+  it("holds the turn open for shots in flight and copies wind into the sim", () => {
+    let s = run(createMatch(cfg), 30);
+    expect(s.sim.wind).toBe(s.turns.wind);
+    const me = s.sim.critters.find((c) => c.id === s.turns.activeCritter)!;
+    const angleDeg = me.x >> 16 < cfg.mapWidth / 2 ? 55 : 125;
+    s = stepMatch(cfg, s, [{ k: "fire", weaponId: "acorn-mortar", angleDeg, power: 35 }]).state;
+    expect(s.sim.projectiles).toHaveLength(1);
+    const turn = s.turns.turn;
+    let sawSettlingWithShot = false;
+    for (let i = 0; i < 1500 && s.turns.turn === turn; i++) {
+      s = stepMatch(cfg, s, []).state;
+      if (s.turns.phase === "settling" && s.sim.projectiles.length > 0) sawSettlingWithShot = true;
+    }
+    expect(s.sim.projectiles).toHaveLength(0);
+    expect(sawSettlingWithShot || s.turns.turn === turn + 1).toBe(true);
+    expect(s.sim.wind).toBe(s.turns.wind);
+  });
+
+  it("raises the soda every turn once sudden death starts", () => {
+    const sd: MatchConfig = { ...cfg, suddenDeathRound: 1, waterRisePerTurn: 10 };
+    let s = createMatch(sd);
+    const start = s.sim.waterY;
+    while (s.turns.round === 1) s = stepMatch(sd, s, [{ k: "skip" }]).state;
+    expect(s.sim.waterY).toBeLessThan(start);
+    const before = s.sim.waterY;
+    const turn = s.turns.turn;
+    while (s.turns.turn === turn) s = stepMatch(sd, s, [{ k: "skip" }]).state;
+    expect(s.sim.waterY).toBe(before - 10);
+  });
+
+  it("places 4 teams of 4 on distinct spawns standing on ground, across seeds", () => {
+    const full: MatchConfig = { ...cfg, mapWidth: 2048, mapHeight: 1024, teamSizes: [4, 4, 4, 4] };
+    for (const seed of [1, 2, 3, 77, 4242, 99999]) {
+      const s = createMatch({ ...full, seed });
+      expect(s.sim.critters).toHaveLength(16);
+      const xs = new Set(s.sim.critters.map((c) => c.x >> 16));
+      expect(xs.size).toBe(16);
+      for (const c of s.sim.critters) {
+        const x = c.x >> 16;
+        const y = c.y >> 16;
+        expect(y).toBeLessThan(s.sim.waterY);
+        expect(isSolid(s.sim.terrain, x, y + 1)).toBe(true); // ground under the feet
+        expect(isSolid(s.sim.terrain, x, y - 10)).toBe(false); // clear above
+      }
+    }
+  });
+
+  it("throws instead of stacking critters when the map has no room for them", () => {
+    const tiny: MatchConfig = { ...cfg, mapWidth: 160, mapHeight: 128, teamSizes: [4, 4, 4, 4] };
+    expect(() => createMatch(tiny)).toThrow(RangeError);
   });
 
   it("times out turns and rotates teams and critters", () => {
