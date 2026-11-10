@@ -1,4 +1,4 @@
-# Burrow Brawl: network protocol (v0.1 draft)
+# Burrow Brawl: network protocol (protocol v3)
 
 Owner: systems engineer (O1). Status: draft for manager review.
 Lives in the repo at `docs/protocol.md`; message types live in
@@ -18,8 +18,10 @@ Lives in the repo at `docs/protocol.md`; message types live in
 - **Snapshots are for safety, not for rendering:** full state on join and
   reconnect, and a state hash every 30 ticks so drift is detected and repaired
   (section 7).
-- The active player predicts locally (applies its own input immediately) and
-  reconciles if the server stamps it on a different tick.
+- **No prediction or rollback.** Every client, the active one included,
+  simulates only up to the server's watermark (`tick { upTo }`, section 6.5).
+  Aim and charge are client-local cosmetics; only `move`, `jump`, `backflip`,
+  `fire` and `skip` enter the sim.
 - Turn-based pacing makes this forgiving: at most one critter is moving
   under player control at any time.
 
@@ -180,11 +182,9 @@ fresh room is playable without extra clicks. The room starts with 2 teams.
 
 ### 6.1 Ticks and clock
 
-- Sim tick = 1/60 s. Server keeps `serverTick` per match.
-- Clients estimate `serverTick` from `pong` (offset + RTT/2) and run their sim
-  up to the latest tick they have inputs for. Non-active clients render
-  `INTERP_DELAY = 6` ticks (100 ms) behind the newest confirmed tick so
-  jitter doesn't cause stutter.
+- Sim tick = 1/60 s. The server owns the tick count for each match.
+- Clients fast-forward to the newest watermark every frame (all ticks up to
+  `upTo`, never one past it). See 6.5.
 
 ### 6.2 Turn begin
 
@@ -232,16 +232,7 @@ everyone including the sender:
 
 `inputs { turn, applyTick, cmds: Cmd[] }`
 
-### 6.4 Prediction on the active client
-
-- The active client applies its own commands immediately at its local tick
-  and keeps them in a pending buffer.
-- When the echo arrives with `applyTick`, if it matches the predicted tick,
-  drop it from the buffer. If not, roll back to the last confirmed state
-  (clients keep a ring buffer of 120 tick states for the active turn) and
-  re-simulate. With one controlled critter this is cheap.
-
-### 6.5 Turn end
+### 6.4 Turn end
 
 - The server ends control when the critter fires (start retreat), the timer
   hits `endTick`, the critter takes damage, or `skip`.
@@ -253,42 +244,53 @@ everyone including the sender:
   followed by the next `turn.begin` (with crates and sudden death applied by
   the server and included as `events`).
 
-### 6.6 As implemented in protocol v2 (O3)
+### 6.5 As implemented in protocol v3
 
-Sections 5 and 6 describe the target design. This is what v2 actually ships.
-Where they differ, this subsection is what the code does.
+Sections 5 and 6 describe the original design. This is what v3 actually
+ships. Where they differ, this subsection is what the code does.
 
 - **Start:** `lobby.start` takes the room straight to phase `match` and
-  everyone receives `match.start { matchId, config, teamIds, snapshot,
-  pending, serverTick }`. `snapshot` holds the full state, including the
+  everyone receives `match.start { matchId, config, teamIds, snapshot }`.
+  `snapshot` is the full state at the server's current tick, including the
   base64 terrain mask (`saveMatch`). `match.loaded` and the `loading` wait are
-  not in v2. Reconnecting clients receive the same `match.start`, built from
+  not used. Reconnecting clients receive the same `match.start`, built from
   the current state.
 - **Commands** (`shared/src/match/match.ts`, `Cmd`): `move {dir}` (held until
-  changed or the turn ends), `jump`, `backflip`, `fire` (starts retreat; S4
-  attaches the weapon), and `skip`. Client to server: `input { turn, cmds }`
-  (1 to 16 cmds). Only the controller of the team that has control may send,
-  and `turn` must match. Otherwise the reply is `not_your_turn` /
-  `input_rejected`.
-- **Relay:** the server stamps `applyTick = max(tick + 1, lastApplyTick)` and
-  broadcasts `inputs { applyTick, cmds }`. The commands apply in the step that
-  produces `applyTick`.
-- **Confirmation:** `ticks { upTo }` every 3 ticks, and `hash { tick, h }`
-  every 30 (which also confirms). Clients (`MatchMirror`) never simulate past
-  the confirmed tick and render `INTERP_DELAY_TICKS = 6` behind it. v2 has no
-  local prediction for the active player: input latency is roughly RTT/2 + 50
-  ms + 100 ms, which is fine for turn-based play and can be revisited.
-- **Turns** run inside the deterministic step (`TurnController` in
-  `shared/src/sim/turns.ts`, stand-in `basicTurns`). `turn.begin` /
-  `turn.settled` messages are not needed, because every client derives turns
-  itself. Wind is rolled per turn by the controller and copied into
-  `SimState.wind`.
-- **Absent player:** when a turn starts for a disconnected controller, the
-  server stamps a `skip` for it.
-- **End:** `match.end { winnerTeamId, tick }`. The room goes back to `lobby`
-  with everyone unready.
+  changed or the turn ends), `jump`, `backflip`, `fire { weaponId, angleDeg
+  0..359, power 0..100, fuseSeconds? 1..5 }` (the sim's `FireCommand`, one
+  definition shared by sim, match and wire), and `skip`. Aiming and charging
+  happen only on the client and are never sent. Client to server: `input {
+  turn, cmds }` (1 to 16 cmds). Only the controller of the team that has
+  control may send, and `turn` must match. Otherwise the reply is
+  `not_your_turn` / `input_rejected`.
+- **Watermark:** the server stamps `applyTick = max(tick + 1, lastApplyTick)`
+  and, every 3 ticks, broadcasts one batch:
+  `tick { upTo, cmds?: { applyTick, cmds }[], h? }`. Every tick up to `upTo`
+  is final; `cmds` are the commands stamped since the previous batch (all for
+  ticks <= `upTo`); `h` is the state hash at `upTo` when `upTo % 30 == 0`.
+  Clients (`MatchMirror`, `NetMatch`) apply the batch and simulate every tick
+  up to `upTo` on the next frame, with no per-frame cap and never past it.
+  There is no prediction, rollback, ring buffer or pending buffer: input
+  latency is about RTT + up to 50 ms, which suits turn-based play.
+  A mirror drops commands for ticks it already has (a joiner's snapshot can
+  be newer than the batch).
+- **Turns** run inside the deterministic step (the single `MATCH_TURNS`
+  controller from `shared/src/sim/turns.ts`; nothing can inject another).
+  `turn.begin` / `turn.settled` messages are not needed, because every client
+  derives turns itself. Wind is rolled per turn by the controller and copied
+  into `SimState.wind`.
+- **Absent player:** when a turn starts for a disconnected controller, or the
+  active controller disconnects or leaves mid-turn, the server stamps a
+  `skip` for the next tick.
+- **End:** the final batch is flushed, then `match.end { winnerTeamId, tick }`
+  and the room moves to phase `results` with everyone unready. The host sends
+  `match.rematch` to go back to `lobby` with the same teams and settings
+  (`GameClient.rematch()`); anyone else gets `not_host`.
 - **Desync:** client sends `desync { tick, h }`. The server replies with
-  `snapshot { snapshot }` followed by the still-pending `inputs`.
+  `snapshot { snapshot }` at its current tick; later commands arrive in the
+  following `tick` batches.
+- **Empty room:** when the last member leaves, the room closes and its match
+  timer stops.
 
 ## 7. Hashes, snapshots and desync repair
 
@@ -315,7 +317,7 @@ Where they differ, this subsection is what the code does.
 
 ### 7.3 Hashes and snapshots
 
-- Every 30 ticks the server broadcasts `hash { tick, h }` where `h` is a
+- Every 30 ticks the server's `tick` batch carries `h`, a
   32-bit FNV-1a over the canonical serialized sim state (critter positions and
   velocities, health, projectiles, `terrain.hash()`, PRNG state).
 - A client whose own hash for that tick differs sends `desync { tick, h }`
@@ -337,13 +339,12 @@ Where they differ, this subsection is what the code does.
 - `welcome.resumeToken` is a short random token bound to `(sub, roomCode)`,
   valid 5 minutes after the disconnect. Reconnect = new socket, `hello { token,
   resumeToken }` → server sends `welcome`, `room.joined`, and if in a match a
-  `snapshot` plus all `inputs` since that snapshot's tick, then the client is
-  live again.
+  fresh `match.start` (snapshot at the current tick); the next `tick` batch
+  carries everything after it.
 - Client reconnect backoff: 0.5 s, 1 s, 2 s, 4 s, then every 5 s, with jitter,
   for 5 minutes. UI shows "Reconnecting…".
-- **Active player disconnects mid-turn:** no pause. The turn timer keeps
-  running and the turn auto-ends at `endTick` as usual. If they reconnect
-  before then, they get control back for the rest of the turn.
+- **Active player disconnects mid-turn:** the server skips the rest of the
+  turn on the next tick, so nobody waits out the timer.
 - **Disconnected player's later turns:** while their team's controller is
   disconnected, each of that team's turns is skipped immediately (`turn.begin`
   followed by an automatic `skip`). Their critters stay on the map and can

@@ -9,7 +9,14 @@ import {
 import { CloseCodes, PROTOCOL_VERSION, type ServerMessage } from "@burrow-brawl/shared/src/net";
 import { GameConnection, type WebSocketLike } from "./connection";
 import { NetMatch } from "./match";
-import { createGuest, loadSession, saveSession, type KeyValueStore } from "./session";
+import {
+  GuestRefused,
+  createGuest,
+  ensureSession,
+  loadSession,
+  saveSession,
+  type KeyValueStore,
+} from "./session";
 import { roomCodeFromPath, serverUrls } from "./urls";
 
 describe("serverUrls", () => {
@@ -275,5 +282,47 @@ describe("NetMatch", () => {
     expect(sent.filter((m) => m.t === "desync")).toEqual([
       { t: "desync", tick: 30, h: expect.any(Number) },
     ]);
+  });
+});
+
+describe("ensureSession wake-up", () => {
+  const ok = { token: "t", id: "g_1", nickname: "Pip", expiresAt: Date.now() + 7 * 86_400_000 };
+  const json = (status: number, body: object) =>
+    ({ ok: status < 400, status, json: async () => body }) as Response;
+
+  it("retries a sleeping server with backoff and reports waking once", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      if (calls <= 2) throw new TypeError("fetch failed");
+      if (calls === 3) return json(503, {});
+      return json(200, ok);
+    }) as unknown as typeof fetch;
+    const waits: number[] = [];
+    let waking = 0;
+    const sess = await ensureSession("http://x", "Pip", fetchImpl, {
+      onWaking: () => waking++,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    expect(sess.token).toBe("t");
+    expect(calls).toBe(4);
+    expect(waits).toEqual([1000, 2000, 4000]);
+    expect(waking).toBe(1);
+  });
+
+  it("does not retry a refusal and gives up after the wake window", async () => {
+    const refuse = (async () => json(400, { error: "bad_nickname" })) as unknown as typeof fetch;
+    await expect(ensureSession("http://x", "Pip", refuse)).rejects.toBeInstanceOf(GuestRefused);
+    let t = 0;
+    const down = (async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+    await expect(
+      ensureSession("http://x", "Pip", down, {
+        now: () => t,
+        sleep: async (ms) => void (t += ms),
+        totalMs: 10_000,
+      }),
+    ).rejects.toThrow(/did not wake up/);
   });
 });
