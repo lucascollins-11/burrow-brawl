@@ -81,8 +81,10 @@ describe("orbit rig", () => {
 
 describe("aim", () => {
   it("uses the sim's 1024-step yaw and whole-degree pitch", () => {
-    let a = newAim(90);
-    expect(a.yaw).toBe(256);
+    let a = newAim(90); // heading +x is yaw 0 on the wire
+    expect(a.yaw).toBe(0);
+    expect(newAim(0).yaw).toBe(256); // heading +z is yaw 256
+    expect(yawToDeg(256)).toBeCloseTo(0);
     a = nudgeAim(a, 4, -8); // right a little, up a little
     expect(Number.isInteger(a.yaw) && Number.isInteger(a.pitchDeg)).toBe(true);
     expect(a.yaw).toBeGreaterThanOrEqual(0);

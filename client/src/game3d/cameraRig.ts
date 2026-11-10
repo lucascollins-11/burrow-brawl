@@ -51,14 +51,17 @@ export function moveRelativeToCamera(yawDeg: number, forward: number, right: num
 /** Heading in degrees (0 = +z, 90 = +x) of a ground-plane direction. */
 export const headingOf = (dir: Vec3): number => wrapDeg(Math.atan2(dir.x, dir.z) / RAD);
 
-/** The sim's yaw circle: 1024 steps (0 = +z, 256 = +x). */
+/**
+ * The sim's yaw circle (shared/src/sim3d/api.ts): 1024 steps, 0 = +x, 256 = +z. The renderer
+ * thinks in headings (0 = +z, 90 = +x), so these convert: yaw = 90 deg - heading.
+ */
 export const YAW_STEPS = 1024;
-export const yawToDeg = (yaw: number): number => (yaw * 360) / YAW_STEPS;
+export const yawToDeg = (yaw: number): number => wrapDeg(90 - (yaw * 360) / YAW_STEPS);
 export const degToYaw = (deg: number): number =>
-  ((Math.round((wrapDeg(deg) * YAW_STEPS) / 360) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+  ((Math.round((wrapDeg(90 - deg) * YAW_STEPS) / 360) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
 
 export interface AimState {
-  /** Heading of the shot on the ground in sim units 0..1023 (0 = +z, 256 = +x), as sent in fire commands. */
+  /** Heading of the shot in sim yaw units 0..1023 (0 = +x, 256 = +z), exactly as sent in fire commands. */
   yaw: number;
   /** Elevation above the horizon, whole degrees. */
   /** Elevation above the horizon, whole degrees (-89..89 on the wire). */
