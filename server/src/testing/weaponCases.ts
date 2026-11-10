@@ -18,6 +18,8 @@ export interface WeaponCase {
   expect: SimEvent["type"][];
   /** Commands sent before the shot (walk, jump), one batch per entry. */
   before?: Cmd[][];
+  /** For weapons that don't end the turn: send a skip this many ticks after the shot. */
+  skipAfterTicks?: number;
   /** Test name suffix when one weapon has several cases. */
   label?: string;
 }
@@ -41,4 +43,7 @@ export const WEAPON_CASES: WeaponCase[] = [
     before: [[{ k: "jump" }]],
     label: "5 s fuse after a jump",
   },
+  // Utilities that don't end the turn: the test skips the turn once the gadget has had time to play out.
+  { weapon: "rope-claw", angleDeg: 50, power: 50, expect: ["gadget"], skipAfterTicks: 240 },
+  { weapon: "drill-hat", angleDeg: 270, power: 50, expect: ["gadget"], skipAfterTicks: 240 },
 ];

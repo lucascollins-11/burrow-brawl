@@ -46,6 +46,13 @@ describe("weapon determinism over the network", () => {
       };
       expect(await a.c.request({ t: "input", turn: 1, cmds: [fire] })).toMatchObject({ t: "ok" });
 
+      if (c.skipAfterTicks !== undefined) {
+        runner.advance(c.skipAfterTicks);
+        expect(await a.c.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] })).toMatchObject({
+          t: "ok",
+        });
+      }
+
       // Play the turn out: control ends, everything settles, turn 2 starts.
       for (let i = 0; i < MAX_TURN_TICKS / 3 && runner.turn === 1; i++) runner.advance(3);
       expect(runner.turn, "turn never passed after the shot").toBe(2);
