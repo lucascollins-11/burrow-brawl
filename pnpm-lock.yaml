@@ -32,6 +32,9 @@ importers:
 
   client:
     dependencies:
+      '@burrow-brawl/shared':
+        specifier: workspace:*
+        version: link:../shared
       three:
         specifier: 0.170.0
         version: 0.170.0
