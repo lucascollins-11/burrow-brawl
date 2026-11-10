@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@burrow-brawl/shared": "workspace:*",
     "three": "0.170.0"
   },
   "devDependencies": {

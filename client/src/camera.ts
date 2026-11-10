@@ -65,7 +65,8 @@ export class PanZoomCamera {
   }
 
   private onDown = (e: PointerEvent): void => {
-    if (e.button !== 1 && e.button !== 2 && e.button !== 0) return;
+    if (e.button !== 1 && e.button !== 0) return;
+    if (e.ctrlKey) return; // ctrl+click carves instead of panning
     this.dragging = true;
     this.lastX = e.clientX;
     this.lastY = e.clientY;

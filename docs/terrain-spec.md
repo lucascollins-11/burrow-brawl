@@ -31,7 +31,7 @@ interface Terrain {
 }
 ```
 
-`dirtyChunks` and `chunkVersion` are derived render state: excluded from state hashes and snapshots. The hash covers `cells` only.
+`dirtyChunks` and `chunkVersion` are derived render state: excluded from state hashes and snapshots. The hash covers `cells` plus the width and height, so two maps of different shape never collide.
 
 ## 2. API
 
@@ -45,10 +45,10 @@ addCircle(t, cx, cy, r, material): void   // for later: bridge/girder-style weap
 raycast(t, x0, y0, x1, y1): {hit: boolean, x: number, y: number} // integer DDA, for hitscan + grappling
 surfaceNormal(t, x, y): {nx: number, ny: number} // see 4
 serialize(t): Uint8Array / deserialize     // RLE compressed, for snapshots and map files
-hashTerrain(t): number                    // FNV-1a over cells
+hashTerrain(t): number                    // FNV-1a over width, height and cells
 ```
 
-`CarveResult` returns `{ cellsRemoved: number, bounds: {x0,y0,x1,y1} }` so the sim can skip knockback/fall logic when nothing changed.
+`CarveResult` returns `{ cellsRemoved: number, bounds: {x0,y0,x1,y1} | null }`; `bounds` is `null` (and `cellsRemoved` is 0) when nothing changed, so the sim can skip knockback/fall logic. `raycast` takes integer endpoints only and throws `RangeError` otherwise.
 
 ### 2.1 Out of bounds
 
