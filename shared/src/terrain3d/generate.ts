@@ -2,9 +2,10 @@ import { type GeneratedMap, type MapRecipe, type TerrainEdit, type VoxelTerrain 
 import { applyEdit } from "./edit.js";
 import { createTerrain } from "./grid.js";
 import { findSpawns } from "./spawns.js";
+import { generateV2 } from "./mapgen.js";
 
 /** Bumped whenever generator output changes for the same inputs. */
-export const GENERATOR_VERSION = 1;
+export const GENERATOR_VERSION = 2;
 export const BEDROCK_Y = 3;
 export const SEA_Y = 26;
 
@@ -13,7 +14,8 @@ export const SEA_Y = 26;
  * client rebuilds the same bytes. The seed only picks the spawn order for now.
  */
 export function generate(recipe: MapRecipe): GeneratedMap {
-  if (recipe.generator !== GENERATOR_VERSION)
+  if (recipe.generator === 2) return generateV2(recipe);
+  if (recipe.generator !== 1)
     throw new RangeError(`terrain3d: unknown generator version ${recipe.generator}`);
   const t = createTerrain(recipe.sizeX, recipe.sizeY, recipe.sizeZ, BEDROCK_Y, SEA_Y);
   const { sizeX: w, sizeY: h, sizeZ: d, density } = t;

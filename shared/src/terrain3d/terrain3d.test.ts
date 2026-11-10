@@ -249,3 +249,37 @@ describe("raycast", () => {
     });
   });
 });
+
+describe("mapgen v2", () => {
+  const sum = (t: VoxelTerrain): number => hash(t);
+  it("is deterministic, seed-sensitive, keeps the edit log empty, and has bedrock", () => {
+    const r2: MapRecipe = { ...recipe, generator: 2 };
+    const a = generate(r2).terrain;
+    expect(a.edits).toHaveLength(0);
+    expect(sum(generate(r2).terrain)).toBe(sum(a));
+    expect(sum(generate({ ...r2, seed: 8 }).terrain)).not.toBe(sum(a));
+    for (let x = 0; x < 256; x += 17) expect(densityAt(a, x, 0, x)).toBe(255);
+  });
+  it("finds 32+ distinct, grounded, roomy spawns across seeds and sizes", () => {
+    const cases: [number, number, number][] = [];
+    for (let s = 1; s <= 8; s++) cases.push([s, 256, 256]);
+    cases.push([5, 192, 192], [5, 384, 256], [5, 320, 384]);
+    for (const [seed, sizeX, sizeZ] of cases) {
+      const m = generate({ ...recipe, generator: 2, seed, sizeX, sizeZ });
+      expect(m.spawns.length, `seed ${seed} ${sizeX}x${sizeZ}`).toBeGreaterThanOrEqual(32);
+      expect(new Set(m.spawns.map((s) => `${s.x},${s.y},${s.z}`)).size).toBe(m.spawns.length);
+      for (const s of m.spawns) {
+        expect(isSolid(m.terrain, s.x, s.y - 1, s.z)).toBe(true);
+        for (let dy = 0; dy < 6; dy++) expect(isSolid(m.terrain, s.x, s.y + dy, s.z)).toBe(false);
+        expect(s.y).toBeGreaterThan(m.terrain.seaY);
+      }
+    }
+  });
+  it("restore replays edits on top of a v2 map", () => {
+    const r2: MapRecipe = { ...recipe, generator: 2 };
+    const e: TerrainEdit[] = [{ op: "carve", x: 128, y: 40, z: 128, r: 10 }];
+    const a = generate(r2).terrain;
+    applyEdit(a, e[0]!);
+    expect(hash(restore(r2, e))).toBe(hash(a));
+  });
+});
