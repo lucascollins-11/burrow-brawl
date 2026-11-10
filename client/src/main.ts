@@ -2,6 +2,7 @@ import { carveCircle, fromFixed, hashTerrain } from "@burrow-brawl/shared";
 import * as THREE from "three";
 import { audio } from "./audio";
 import { PanZoomCamera } from "./camera";
+import { FxSystem } from "./fx";
 import { CritterViews } from "./game/critters";
 import { matchConfigFromUrl } from "./game/config";
 import { GameHud } from "./game/gameHud";
@@ -58,13 +59,6 @@ const aimLine = new THREE.Line(
 );
 scene.add(aimLine);
 
-// Soda: anything whose feet drop below the line is knocked out. The line rises in sudden death.
-const soda = new THREE.Mesh(
-  new THREE.PlaneGeometry(6000, 1200),
-  new THREE.MeshBasicMaterial({ color: 0xff8fb8, transparent: true, opacity: 0.55 }),
-);
-scene.add(soda);
-
 const gameHud = new GameHud(config, input, () => {
   const q = new URLSearchParams(window.location.search);
   q.set("seed", String(crypto.getRandomValues(new Uint32Array(1))[0]));
@@ -76,6 +70,8 @@ let wireframe = false;
 let debugVisible = false;
 let terrainHash = hashTerrain(runner.state.sim.terrain);
 const cam = new PanZoomCamera(renderer.domElement, 500);
+// Visual FX: backdrop, animated soda, explosion particles, shake, damage popups (see fx/index.ts).
+const fx = new FxSystem(scene, cam.camera, { sodaLevel: -runner.state.sim.waterY, container: app });
 const hud = new DebugHud(hudEl);
 hudEl.style.display = "none";
 const cursor = new THREE.Vector2();
@@ -123,6 +119,7 @@ function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1);
   const tickEvents = runner.advance(dt * 1000);
   const { sim, turns } = runner.state;
+  fx.onSimEvents(tickEvents, sim);
   if (tickEvents.some((e) => e.type === "explosion")) terrainHash = hashTerrain(sim.terrain);
 
   const active = sim.critters.find((c) => c.id === turns.activeCritter);
@@ -145,7 +142,7 @@ function frame(): void {
   terrainRenderer.update();
   critterViews.sync(sim.critters, controlling ? turns.activeCritter : null, clock.elapsedTime);
   projectileViews.sync(sim.projectiles);
-  soda.position.set(1024, -sim.waterY - 600, 20);
+  fx.setSodaLevel(-sim.waterY);
 
   aimLine.visible = !!active && active.status === "alive" && turns.phase === "control";
   if (active) {
@@ -182,7 +179,7 @@ function frame(): void {
       projectiles: sim.projectiles.length,
     });
   }
-  renderer.render(scene, cam.camera);
+  fx.frame(dt, renderer, scene, cam.camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
