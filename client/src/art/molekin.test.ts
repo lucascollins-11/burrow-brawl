@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { TEAM_COLORS, createMolekin } from "./molekin";
+import { CRITTER_HEIGHT_CELLS, TEAM_COLORS, createMolekin } from "./molekin";
 
 describe("TEAM_COLORS", () => {
   it("has four teams with unique ids and colours", () => {
@@ -20,6 +20,15 @@ describe("createMolekin", () => {
     expect(group.getObjectByName("hat")).toBeInstanceOf(THREE.Mesh);
     expect(group.getObjectByName("goggle-lens-left")).toBeInstanceOf(THREE.Mesh);
     expect(group.getObjectByName("goggle-lens-right")).toBeInstanceOf(THREE.Mesh);
+  });
+
+  it("is CRITTER_HEIGHT_CELLS tall with its feet at the origin", () => {
+    const group = createMolekin(0);
+    group.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(group);
+
+    expect(box.min.y).toBeCloseTo(0, 5);
+    expect(box.max.y - box.min.y).toBeCloseTo(CRITTER_HEIGHT_CELLS, 5);
   });
 
   it.each([0, 1, 2, 3])("paints the hat in the colour of team slot %i", (slot) => {

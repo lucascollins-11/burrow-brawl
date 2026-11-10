@@ -19,13 +19,22 @@ export const TEAM_COLORS = [
   { id: "mint", name: "Mint", hex: 0x5cc49b },
 ] as const satisfies readonly TeamColor[];
 
+/**
+ * The Molekin is built at its own size (feet at y = -0.85, hat top at y = 1.32), then scaled so it
+ * is CRITTER_HEIGHT_CELLS tall with its feet at the origin. Keep this value in sync with
+ * CRITTER_HEIGHT in shared/src/sim/constants.ts.
+ */
+export const CRITTER_HEIGHT_CELLS = 20;
+const LOCAL_FEET_Y = -0.85;
+const LOCAL_TOP_Y = 1.32;
+
 const FUR_COLOR = 0x8b5e3c;
 const FRAME_COLOR = 0x2b2b2b;
 const LENS_COLOR = 0x9fd8e8;
 const NOSE_COLOR = 0xf4a7b9;
 
 /**
- * Builds one Molekin at the origin, feet near y = -0.85, facing +z.
+ * Builds one Molekin with its feet at the origin, CRITTER_HEIGHT_CELLS tall, facing +z.
  * Throws a RangeError if teamIndex is not a valid team slot.
  */
 export function createMolekin(teamIndex: number): THREE.Group {
@@ -38,6 +47,9 @@ export function createMolekin(teamIndex: number): THREE.Group {
 
   const group = new THREE.Group();
   group.name = `molekin-${team.id}`;
+  const scale = CRITTER_HEIGHT_CELLS / (LOCAL_TOP_Y - LOCAL_FEET_Y);
+  group.scale.setScalar(scale);
+  group.position.y = -LOCAL_FEET_Y * scale;
 
   const furMaterial = new THREE.MeshStandardMaterial({ color: FUR_COLOR, roughness: 0.9 });
   const hatMaterial = new THREE.MeshStandardMaterial({ color: team.hex, roughness: 0.6 });
