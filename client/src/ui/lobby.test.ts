@@ -1,9 +1,18 @@
-import { DEFAULT_SETTINGS, type RoomState, type ServerMessage } from "@burrow-brawl/shared/src/net";
+import { DEFAULT_SETTINGS, type RoomState } from "@burrow-brawl/shared/src/net";
 import { describe, expect, it } from "vitest";
-import { initialState, isHost, reduce, startBlocker } from "./lobbyState";
-import { MockTransport } from "./mockTransport";
+import {
+  applyRoom,
+  applyRoomLeft,
+  backToLobby,
+  errorText,
+  initialState,
+  isHost,
+  startBlocker,
+  withResult,
+} from "./lobbyState";
+import { describeResult } from "./resultsView";
+import { MockClient } from "./mockClient";
 import { inviteUrl, roomCodeFromPath } from "./routes";
-import { httpBase } from "./guest";
 
 const room = (over: Partial<RoomState> = {}): RoomState => ({
   code: "K7QX2",
@@ -44,36 +53,25 @@ describe("routes", () => {
     expect(roomCodeFromPath("/")).toBeNull();
     expect(inviteUrl("https://x.dev", "K7QX2")).toBe("https://x.dev/r/K7QX2");
   });
-  it("derives http base from ws url", () => {
-    expect(httpBase("wss://a.dev/")).toBe("https://a.dev");
-    expect(httpBase("ws://localhost:8080")).toBe("http://localhost:8080");
-  });
 });
 
-describe("lobby reducer", () => {
-  it("moves to lobby on room.joined and records identity", () => {
-    let s = reduce(initialState, {
-      t: "welcome",
-      you: { id: "a", nickname: "A" },
-      serverTime: 0,
-      resumeToken: "",
-      protocolVersion: 1,
-    });
-    s = reduce(s, { t: "room.joined", room: room() });
+describe("lobby state", () => {
+  it("moves to the lobby when a room arrives and records identity", () => {
+    const s = applyRoom(initialState, room(), { id: "a", nickname: "A" });
     expect(s.screen).toBe("lobby");
     expect(isHost(s)).toBe(true);
   });
-  it("ignores stale updates and switches to starting when phase leaves lobby", () => {
-    let s = reduce(initialState, { t: "room.joined", room: room({ version: 5 }) });
-    s = reduce(s, { t: "room.update", room: room({ version: 3 }) });
+  it("ignores stale updates and switches to starting when the phase leaves the lobby", () => {
+    let s = applyRoom(initialState, room({ version: 5 }));
+    s = applyRoom(s, room({ version: 3 }));
     expect(s.room?.version).toBe(5);
-    s = reduce(s, { t: "room.update", room: room({ version: 6, phase: "loading" }) });
+    s = applyRoom(s, room({ version: 6, phase: "loading" }));
     expect(s.screen).toBe("starting");
   });
   it("maps error codes to friendly text and handles being kicked", () => {
-    let s = reduce(initialState, { t: "error", code: "room_not_found", message: "x" });
-    expect(s.error).toMatch(/No room/);
-    s = reduce({ ...s, screen: "lobby" }, { t: "room.left", reason: "kicked" });
+    expect(errorText("room_not_found", "x")).toMatch(/No room/);
+    expect(errorText("something_new", "raw message")).toBe("raw message");
+    const s = applyRoomLeft({ ...initialState, screen: "lobby" }, "kicked");
     expect(s.screen).toBe("title");
     expect(s.error).toMatch(/removed/);
   });
@@ -94,17 +92,47 @@ describe("startBlocker", () => {
   });
 });
 
-describe("MockTransport", () => {
-  it("joins, readies up and starts like the real server would", async () => {
-    const t = new MockTransport();
-    const seen: ServerMessage[] = [];
-    t.onMessage((m) => seen.push(m));
-    await t.connect();
-    t.send({ t: "room.join", code: "zzzzz" });
-    expect(seen.at(-1)).toMatchObject({ t: "error", code: "room_not_found" });
-    t.send({ t: "room.join", code: "k7qx2" });
-    t.send({ t: "lobby.ready", ready: true });
-    t.send({ t: "lobby.start" });
-    expect(seen.at(-1)).toMatchObject({ t: "room.update", room: { phase: "loading" } });
+describe("MockClient", () => {
+  it("creates, joins and starts like the real client", async () => {
+    const c = new MockClient("Pip");
+    const seen: string[] = [];
+    c.on("room", (r) => seen.push(r.phase));
+    await expect(c.joinRoom("zzzzz")).rejects.toMatchObject({ code: "room_not_found" });
+    expect((await c.joinRoom("k7qx2")).code).toBe("K7QX2");
+    await c.setReady(true);
+    await c.startMatch();
+    expect(seen.at(-1)).toBe("loading");
+  });
+});
+
+describe("results", () => {
+  it("shows the results screen and keeps it through results-phase updates", () => {
+    let s = applyRoom(initialState, room({ phase: "match" }));
+    s = withResult(s, { winnerTeamId: "t2" });
+    expect(s.screen).toBe("results");
+    s = applyRoom(s, room({ version: 2, phase: "results" }));
+    expect(s.screen).toBe("results");
+  });
+  it("returns to the lobby on a lobby update or when the player asks", () => {
+    let s = applyRoom(initialState, room({ phase: "results" }));
+    s = withResult(s, { winnerTeamId: null });
+    expect(backToLobby(s).screen).toBe("lobby");
+    expect(backToLobby(s).result).toBeNull();
+    s = applyRoom(s, room({ version: 3, phase: "lobby" }));
+    expect(s.screen).toBe("lobby");
+    expect(s.result).toBeNull();
+  });
+  it("describes winner, own win and draw", () => {
+    const r = room();
+    expect(describeResult(r, { winnerTeamId: "t2" }, "a")).toMatchObject({
+      title: "T2 wins!",
+      subtitle: "Played by B",
+      youWon: false,
+    });
+    expect(describeResult(r, { winnerTeamId: "t1" }, "a")).toMatchObject({
+      title: "You win!",
+      youWon: true,
+    });
+    expect(describeResult(r, { winnerTeamId: null }, "a").title).toMatch(/draw/);
   });
 });

@@ -1,16 +1,28 @@
-import type { Member, RoomState, ServerMessage, TeamSetup } from "@burrow-brawl/shared/src/net";
+import type { Member, RoomState, TeamSetup } from "@burrow-brawl/shared/src/net";
 import { MAX_MEMBERS, MIN_TEAMS } from "@burrow-brawl/shared/src/net";
 
-export type Screen = "title" | "connecting" | "lobby" | "starting";
+export type Screen = "title" | "connecting" | "lobby" | "starting" | "results";
+
+/** End-of-match info. `winnerTeamId` null means a draw. Mirrors protocol `match.end` (stats later). */
+export interface MatchResult {
+  winnerTeamId: string | null;
+}
 
 export interface UiState {
   screen: Screen;
   you: { id: string; nickname: string } | null;
   room: RoomState | null;
   error: string | null;
+  result: MatchResult | null;
 }
 
-export const initialState: UiState = { screen: "title", you: null, room: null, error: null };
+export const initialState: UiState = {
+  screen: "title",
+  you: null,
+  room: null,
+  error: null,
+  result: null,
+};
 
 const ERROR_TEXT: Record<string, string> = {
   room_not_found: "No room with that code. Check the letters and try again.",
@@ -23,29 +35,49 @@ const ERROR_TEXT: Record<string, string> = {
   rate_limited: "Too many tries. Wait a moment.",
 };
 
-export function reduce(state: UiState, msg: ServerMessage): UiState {
-  switch (msg.t) {
-    case "welcome":
-      return { ...state, you: msg.you };
-    case "room.joined":
-      return { ...state, screen: "lobby", room: msg.room, error: null };
-    case "room.update": {
-      if (state.room && msg.room.version < state.room.version) return state;
-      const screen = msg.room.phase === "lobby" ? "lobby" : "starting";
-      return { ...state, screen, room: msg.room };
-    }
-    case "room.left":
-      return {
-        ...state,
-        screen: "title",
-        room: null,
-        error: msg.reason === "kicked" ? "You were removed from the room." : null,
-      };
-    case "error":
-      return { ...state, error: ERROR_TEXT[msg.code] ?? msg.message };
-    default:
-      return state;
-  }
+/** Friendly text for a protocol error code (falls back to the server's message). */
+export function errorText(code: string, fallback: string): string {
+  return ERROR_TEXT[code] ?? fallback;
+}
+
+/** A room snapshot arrived (create/join reply or any later change). */
+export function applyRoom(
+  state: UiState,
+  room: RoomState,
+  me?: { id: string; nickname: string },
+): UiState {
+  const you = me ?? state.you;
+  if (state.room && state.room.code === room.code && room.version < state.room.version)
+    return state;
+  const base = { ...state, you, room };
+  if (room.phase === "lobby") return { ...base, screen: "lobby", error: null, result: null };
+  // Keep the results overlay up while the room sits in its results phase.
+  if (room.phase === "results" && state.result) return { ...base, screen: "results" };
+  return { ...base, screen: "starting" };
+}
+
+export function applyRoomLeft(state: UiState, reason: "left" | "kicked" | "closed"): UiState {
+  const error =
+    reason === "kicked"
+      ? "You were removed from the room."
+      : reason === "closed"
+        ? "The room was closed."
+        : null;
+  return { ...state, screen: "title", room: null, result: null, error };
+}
+
+export function withError(state: UiState, error: string | null): UiState {
+  return { ...state, error };
+}
+
+/** The match ended: show the results overlay. */
+export function withResult(state: UiState, result: MatchResult): UiState {
+  return { ...state, screen: "results", result };
+}
+
+/** Back to lobby after a match (rematch): clear the result and show the lobby again. */
+export function backToLobby(state: UiState): UiState {
+  return { ...state, screen: state.room ? "lobby" : "title", result: null };
 }
 
 export const isHost = (s: UiState): boolean => !!s.room && s.room.hostId === s.you?.id;

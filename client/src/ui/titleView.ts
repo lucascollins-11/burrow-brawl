@@ -1,14 +1,27 @@
 import { NICKNAME_MAX, normalizeRoomCode } from "@burrow-brawl/shared/src/net";
 import { h } from "./dom";
+import type { UiStatus } from "./client";
+
+export const WAKING_TEXT = "Waking up the game server… (can take up to a minute)";
 
 export interface TitleActions {
   create(nickname: string): void;
   join(nickname: string, code: string): void;
+  /** Retry the last connection attempt. */
+  retry(): void;
   click(): void;
 }
 
 export function renderTitle(
-  opts: { nickname: string; code: string | null; busy: boolean; error: string | null },
+  opts: {
+    nickname: string;
+    code: string | null;
+    busy: boolean;
+    error: string | null;
+    status?: UiStatus | null;
+    /** True when the last attempt failed and can be retried. */
+    canRetry?: boolean;
+  },
   a: TitleActions,
 ): HTMLElement {
   const nick = h("input", {
@@ -72,12 +85,27 @@ export function renderTitle(
     opts.code ? h("p", { class: "invite", text: `You were invited to room ${opts.code}` }) : null,
     nick,
     err,
+    opts.canRetry
+      ? h("button", {
+          class: "btn",
+          text: "Try again",
+          onclick: () => (a.click(), a.retry()),
+        })
+      : null,
+    opts.busy && opts.status === "waking"
+      ? h(
+          "div",
+          { class: "waking", attrs: { role: "status" } },
+          h("span", { class: "spinner", attrs: { "aria-hidden": "true" } }),
+          h("div", { text: WAKING_TEXT }),
+        )
+      : null,
     h(
       "div",
       { class: "row" },
       h("button", {
         class: "btn primary big",
-        text: opts.busy ? "Connecting…" : "Create room",
+        text: opts.busy ? (opts.status === "waking" ? "Waking up…" : "Connecting…") : "Create room",
         disabled: opts.busy,
         onclick: create,
       }),
