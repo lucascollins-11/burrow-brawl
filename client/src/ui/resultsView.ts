@@ -3,8 +3,8 @@ import { h } from "./dom";
 import type { MatchResult } from "./lobbyState";
 
 export interface ResultsActions {
-  /** Host (or anyone, if the server allows) asks to go back to the lobby. */
-  backToLobby(): void;
+  /** Present only when the net layer supports a rematch; otherwise the button is hidden. */
+  backToLobby?: () => void;
   leave(): void;
   click(): void;
 }
@@ -55,11 +55,13 @@ export function renderResults(
     h(
       "div",
       { class: "row" },
-      h("button", {
-        class: "btn primary big",
-        text: "Back to lobby",
-        onclick: () => (a.click(), a.backToLobby()),
-      }),
+      a.backToLobby
+        ? h("button", {
+            class: "btn primary big",
+            text: "Back to lobby",
+            onclick: () => (a.click(), a.backToLobby?.()),
+          })
+        : null,
       h("button", { class: "btn big", text: "Leave room", onclick: () => (a.click(), a.leave()) }),
     ),
   );

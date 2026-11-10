@@ -76,7 +76,10 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
     if (state.screen === "results" && state.room && state.result) {
       shell.append(
         renderResults(state.room, state.result, state.you?.id, {
-          backToLobby: () => void backToLobby(),
+          // Hidden until GameClient has rematch() (o3b); the button then appears by itself.
+          ...(typeof client?.rematch === "function"
+            ? { backToLobby: () => void backToLobby() }
+            : {}),
           leave,
           click,
         }),
@@ -224,15 +227,14 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
   }
 
   async function backToLobby(): Promise<void> {
-    const c = client;
-    if (!c) return;
-    if (c.rematch) {
-      try {
-        await c.rematch();
-      } catch (e) {
-        return setState(withError(state, describe(e)));
-      }
+    const rematch = client?.rematch;
+    if (!client || typeof rematch !== "function") return;
+    try {
+      await rematch.call(client);
+    } catch (e) {
+      return setState(withError(state, describe(e)));
     }
+    // The server's lobby room.update normally gets here first; this covers a slow reply.
     setState(backToLobbyState(state));
   }
 
