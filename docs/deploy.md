@@ -11,7 +11,8 @@ Two pieces are deployed separately:
 |---|---|---|---|
 | `VITE_GAME_SERVER_URL` | Vercel, Production and Preview | Client, at build time | Full `wss://` URL of the Render service, for example `wss://burrow-brawl-server.onrender.com`. Changing it needs a redeploy. |
 | `ALLOWED_ORIGINS` | Render | Server | Comma-separated list of client origins allowed to connect, for example `https://burrow-brawl.vercel.app`. |
-| `JWT_SECRET` | Render | Server | Secret for signing session tokens. Generate a long random value and keep it private. Do not commit it. |
+| `JWT_SECRET` | Render | Server | Secret for signing session tokens. At least 32 bytes of random data, for example `openssl rand -base64 32`. Keep it private and do not commit it. |
+| `TRUST_PROXY` | `render.yaml` (set to `1`) | Server | Trust the `X-Forwarded-For` header from Render's proxy, so client IPs and rate limits work. Do not set it on a server that is reachable without a proxy. |
 | `PORT` | Render (set automatically) | Server | Render sets this. The server defaults to `3000` locally. |
 
 Never commit real values. Put local values in `.env` files, which are git-ignored.
@@ -20,7 +21,7 @@ Never commit real values. Put local values in `.env` files, which are git-ignore
 
 1. In Render, choose **New** > **Blueprint** and connect the `lucascollins-11/burrow-brawl` repository.
 2. Render reads `render.yaml` and creates `burrow-brawl-server`.
-3. When prompted, enter `JWT_SECRET` and `ALLOWED_ORIGINS`.
+3. When prompted, enter `JWT_SECRET` (32+ bytes, see above) and `ALLOWED_ORIGINS`.
 4. Wait for the first deploy. Open `https://<service>.onrender.com/healthz` and check that it responds.
 5. Copy the service URL and change it to `wss://` for `VITE_GAME_SERVER_URL`.
 
