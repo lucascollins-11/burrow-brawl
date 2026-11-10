@@ -175,8 +175,6 @@ export class Room {
     if (this.hostId === id) this.migrateHost();
     this.bump();
     this.broadcast({ t: "room.update", room: this.state() });
-    // The active player dropped mid-turn: skip it now instead of waiting out the timer.
-    this.match?.onPresenceChanged();
   }
 
   remove(id: string, reason: "left" | "kicked" | "closed"): void {
@@ -193,7 +191,6 @@ export class Room {
     if (this.connectedCount() === 0) this.lastActiveAt = this.now();
     this.bump();
     this.broadcast({ t: "room.update", room: this.state() });
-    this.match?.onPresenceChanged();
   }
 
   setPing(id: string, pingMs: number): void {

@@ -279,9 +279,9 @@ ships. Where they differ, this subsection is what the code does.
   `turn.begin` / `turn.settled` messages are not needed, because every client
   derives turns itself. Wind is rolled per turn by the controller and copied
   into `SimState.wind`.
-- **Absent player:** when a turn starts for a disconnected controller, or the
-  active controller disconnects or leaves mid-turn, the server stamps a
-  `skip` for the next tick.
+- **Absent player:** when a turn starts for a disconnected controller, the
+  server stamps a `skip` for it. A mid-turn drop doesn't skip: the timer runs
+  and a reconnect gets control back (section 8).
 - **End:** the final batch is flushed, then `match.end { winnerTeamId, tick }`
   and the room moves to phase `results` with everyone unready. The host sends
   `match.rematch` to go back to `lobby` with the same teams and settings
@@ -343,8 +343,9 @@ ships. Where they differ, this subsection is what the code does.
   carries everything after it.
 - Client reconnect backoff: 0.5 s, 1 s, 2 s, 4 s, then every 5 s, with jitter,
   for 5 minutes. UI shows "Reconnecting…".
-- **Active player disconnects mid-turn:** the server skips the rest of the
-  turn on the next tick, so nobody waits out the timer.
+- **Active player disconnects mid-turn:** no pause. The turn timer keeps
+  running and the turn auto-ends at its end tick as usual. If they reconnect
+  before then, they get control back for the rest of the turn.
 - **Disconnected player's later turns:** while their team's controller is
   disconnected, each of that team's turns is skipped immediately (`turn.begin`
   followed by an automatic `skip`). Their critters stay on the map and can

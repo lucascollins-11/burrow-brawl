@@ -145,11 +145,6 @@ export class MatchRunner {
     this.host.sendTo(memberId, { t: "snapshot", snapshot: saveMatch(this.state) });
   }
 
-  /** A member connected, disconnected or left: skip the turn if its controller is gone. */
-  onPresenceChanged(): void {
-    if (!this.ended) this.checkAbsent();
-  }
-
   /**
    * Commands from a member. Returns an error code when rejected.
    * Only the controller of the team with control right now may send.
@@ -224,7 +219,11 @@ export class MatchRunner {
     if (r.turnChanged) this.checkAbsent();
   }
 
-  /** A turn for a disconnected player is skipped right away (protocol section 8). */
+  /**
+   * A turn that starts with its controller absent is skipped right away
+   * (protocol section 8). Mid-turn drops just let the timer run; a reconnect
+   * gets control back for the rest of the turn.
+   */
   private checkAbsent(): void {
     const team = MATCH_TURNS.activeTeam(this.state.turns);
     if (team === null || this.state.turns.activeCritter === null) return;

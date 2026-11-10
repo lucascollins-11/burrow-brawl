@@ -202,22 +202,32 @@ describe("authoritative match", () => {
     expect(hashMatch(a.mirror!.state)).toBe(hashMatch(runner.matchState));
   });
 
-  it("skips right away when the active player drops mid-turn", async () => {
+  it("lets the timer run when the active player drops mid-turn, and a reconnect resumes", async () => {
     h = await startHarness();
-    const { a, runner } = await startMatch();
-    runner.advance(40);
-    expect(runner.matchState.turns).toMatchObject({ turn: 1, phase: "control" });
-    const before = runner.tick;
+    const { a, runner, code } = await startMatch();
+    runner.advance(42);
     a.c.ws.terminate();
     await a.c.closed;
-    // Wait for the server to see the close.
-    for (let i = 0; i < 50 && h.server.registry.roomFor(a.c.id)?.connectedCount() !== 1; i++) {
+    for (let i = 0; i < 50 && h.server.registry.get(code)!.connectedCount() !== 1; i++) {
       await new Promise((r) => setTimeout(r, 10));
     }
-    runner.advance(1);
-    // Control ended on the very next tick instead of waiting out the 15 s timer.
+    runner.advance(120);
+    expect(runner.matchState.turns).toMatchObject({ turn: 1, phase: "control", activeTeam: 0 });
+
+    const c2 = await h.client();
+    c2.send({
+      t: "hello",
+      token: a.c.token,
+      protocolVersion: PROTOCOL_VERSION,
+      resumeToken: a.c.resumeToken,
+    });
+    const a2 = new Player(c2);
+    await a2.until((m) => m.t === "match.start");
+    expect(await c2.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] })).toMatchObject({
+      t: "ok",
+    });
+    runner.advance(3);
     expect(runner.matchState.turns).not.toMatchObject({ turn: 1, phase: "control" });
-    expect(runner.tick).toBe(before + 1);
   });
 
   it("stops the match when everyone leaves", async () => {
