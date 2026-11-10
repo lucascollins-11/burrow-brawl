@@ -11,7 +11,7 @@ export function matchConfigFromUrl(search = window.location.search): MatchConfig
     const v = Number(q.get(key));
     return Number.isInteger(v) && v >= min && v <= max ? v : fallback;
   };
-  const teams = int("teams", 2, 2, 4);
+  const teams = int("teams", 2, 2, 8);
   const size = int("size", 2, 1, 4);
   const seed =
     q.has("seed") && Number.isInteger(Number(q.get("seed")))
