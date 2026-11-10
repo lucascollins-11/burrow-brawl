@@ -201,36 +201,30 @@ turn.begin {
 ### 6.3 Input frames
 
 Inputs are commands, not raw keys, so they're small and easy to validate.
+Aiming, weapon selection and charging happen on the client only; the shot is
+sent whole when it's fired.
 
 ```ts
 type Cmd =
-  | { k: "move"; dir: -1 | 0 | 1 }              // held state, sent on change
-  | { k: "jump"; kind: "forward" | "back" }
-  | { k: "aim"; angle: number }                 // fixed-point, 0..65535; sent at most every 3 ticks while changing
-  | { k: "select"; weaponId: string }
-  | { k: "fuse"; seconds: 1|2|3|4|5 }
-  | { k: "chargeStart" }
-  | { k: "fire"; power?: number }               // power 0..1000 if charged
-  | { k: "target"; x: number; y: number }       // airstrike/teleport, map cells
-  | { k: "rope"; action: "shoot" | "release" | "climb" | "swing"; v?: number }
+  | { k: "move"; dir: -1 | 0 | 1 } // held state, sent on change
+  | { k: "jump" }
+  | { k: "backflip" }
+  | { k: "fire"; weaponId: WeaponId; angleDeg: number; power: number; fuseSeconds?: number }
+  // angleDeg 0..359 and power 0..100 (whole numbers), fuseSeconds 1..5: the sim's FireCommand
   | { k: "skip" };
 ```
 
-Client (active controller only) → server:
+Client (active controller only) → server: `input { turn, cmds: Cmd[] }`
+(1 to 16 cmds), only when there's something to send.
 
-`input { turn, clientTick, cmds: Cmd[] }`, batched at most every 2 ticks,
-only when there's something to send.
+Server checks: sender is the controller of the team that has control, `turn`
+matches, and every command validates. Otherwise the reply is
+`error { code: "not_your_turn" | "input_rejected" }` and nothing is stamped.
+The sim ignores a second `fire` in the same turn.
 
-Server checks: sender is the controller of the active team, `turn` matches,
-phase allows the command (no `fire` after firing, no weapon the team lacks),
-values are in range. Rejected commands produce `error { code:
-"input_rejected" }` and are dropped.
-
-Server stamps accepted commands with `applyTick = max(serverTick + 1,
-lastApplyTick)` (never in the past, never reordered) and broadcasts to
-everyone including the sender:
-
-`inputs { turn, applyTick, cmds: Cmd[] }`
+The server stamps accepted commands with `applyTick = max(tick + 1,
+lastApplyTick)` (never in the past, never reordered) and delivers them to
+everyone, the sender included, in the next `tick` watermark batch (6.5).
 
 ### 6.4 Turn end
 
@@ -343,6 +337,12 @@ ships. Where they differ, this subsection is what the code does.
   carries everything after it.
 - Client reconnect backoff: 0.5 s, 1 s, 2 s, 4 s, then every 5 s, with jitter,
   for 5 minutes. UI shows "Reconnecting…".
+- **Waking a sleeping server** (free-tier hosts cold-start in 30 to 60 s):
+  before the first `welcome`, the client retries `POST /api/guest` (1 s, 2 s,
+  4 s, then 8 s backoff, 30 s per attempt, up to 90 s; a 4xx is not retried)
+  and the WebSocket connect, and reports status `"waking"` so the UI can say
+  "Waking up the server…". After the first `welcome`, drops report
+  `"reconnecting"` instead.
 - **Active player disconnects mid-turn:** no pause. The turn timer keeps
   running and the turn auto-ends at its end tick as usual. If they reconnect
   before then, they get control back for the rest of the turn.

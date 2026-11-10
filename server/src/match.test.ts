@@ -278,4 +278,40 @@ describe("authoritative match", () => {
     expect(room.teams.filter((t) => t.controllerId !== null)).toHaveLength(2);
     expect(await a.c.request({ t: "match.rematch" })).toMatchObject({ code: "not_allowed" });
   });
+
+  it("a player reconnecting on the results screen lands in results, then follows the rematch", async () => {
+    h = await startHarness();
+    const { a, b, runner, code } = await startMatch();
+    runner.advance(40);
+    const st = runner.matchState;
+    (runner as unknown as { state: typeof st }).state = {
+      ...st,
+      sim: {
+        ...st.sim,
+        critters: st.sim.critters.map((c) =>
+          c.team === 1 ? { ...c, status: "drowned" as const } : c,
+        ),
+      },
+    };
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] });
+    runner.advance(5);
+    await a.c.room((s) => s.phase === "results");
+
+    b.c.ws.terminate();
+    await a.c.room((s) => s.members.some((m) => !m.connected));
+    const c2 = await h.client();
+    c2.send({
+      t: "hello",
+      token: b.c.token,
+      protocolVersion: PROTOCOL_VERSION,
+      resumeToken: b.c.resumeToken,
+    });
+    const joined = await c2.next("room.joined");
+    expect(joined.room).toMatchObject({ code, phase: "results" });
+    expect(joined.room.members.every((m) => m.connected)).toBe(true);
+    expect(c2.peek().some((m) => m.t === "match.start")).toBe(false);
+
+    expect(await a.c.request({ t: "match.rematch" })).toMatchObject({ t: "ok" });
+    expect((await c2.room((s) => s.phase === "lobby")).code).toBe(code);
+  });
 });
