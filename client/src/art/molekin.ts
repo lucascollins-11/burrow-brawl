@@ -25,8 +25,11 @@ export const TEAM_COLORS = [
  * CRITTER_HEIGHT in shared/src/sim/constants.ts.
  */
 export const CRITTER_HEIGHT_CELLS = 20;
+/** Visual width in cells. Wider than the sim's 11-cell hitbox, but narrow enough that hits read right. */
+export const CRITTER_WIDTH_CELLS = 13;
 const LOCAL_FEET_Y = -0.85;
 const LOCAL_TOP_Y = 1.32;
+const LOCAL_BODY_WIDTH = 2;
 
 const FUR_COLOR = 0x8b5e3c;
 const FRAME_COLOR = 0x2b2b2b;
@@ -48,7 +51,8 @@ export function createMolekin(teamIndex: number): THREE.Group {
   const group = new THREE.Group();
   group.name = `molekin-${team.id}`;
   const scale = CRITTER_HEIGHT_CELLS / (LOCAL_TOP_Y - LOCAL_FEET_Y);
-  group.scale.setScalar(scale);
+  // The local body is 2 units wide, so x gets half the target width. Squashing x only makes the critter narrower.
+  group.scale.set(CRITTER_WIDTH_CELLS / LOCAL_BODY_WIDTH, scale, scale);
   group.position.y = -LOCAL_FEET_Y * scale;
 
   const furMaterial = new THREE.MeshStandardMaterial({ color: FUR_COLOR, roughness: 0.9 });
