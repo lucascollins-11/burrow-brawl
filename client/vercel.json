@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm --filter @burrow-brawl/client build",
+  "outputDirectory": "client/dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "rewrites": [{ "source": "/r/:code", "destination": "/index.html" }]
+}
