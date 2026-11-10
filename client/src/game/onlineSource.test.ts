@@ -40,12 +40,14 @@ describe("OnlineSource", () => {
   it("knows which teams are ours and sends commands only on our turn", () => {
     const mine = setup("me");
     expect([...mine.source.localTeams]).toEqual([0]);
+    mine.source.advance(1); // first frame starts the turn (clears stale input)
     mine.input.skip();
     mine.source.advance(50);
     expect(mine.sendCmds).toHaveBeenCalledWith([{ k: "skip" }]);
 
     const theirs = setup("someone-else");
     expect(theirs.source.localTeams.size).toBe(0);
+    theirs.source.advance(1);
     theirs.input.skip();
     theirs.source.advance(50);
     expect(theirs.sendCmds).not.toHaveBeenCalled();
