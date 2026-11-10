@@ -83,7 +83,12 @@ export class ExplosionParticles {
     this.layers = [
       new Layer(this.sims.chunks, chunk, 1.35, (p) => (p < 0.8 ? 1 : (1 - p) / 0.2)),
       // Puffs swell then shrink away (no per-instance alpha needed).
-      new Layer(this.sims.puffs, puff, 1.18, (p) => Math.sin(Math.min(1, p * 1.25) * Math.PI * 0.5 + p * 0.6) * (1 - p * p)),
+      new Layer(
+        this.sims.puffs,
+        puff,
+        1.18,
+        (p) => Math.sin(Math.min(1, p * 1.25) * Math.PI * 0.5 + p * 0.6) * (1 - p * p),
+      ),
       new Layer(this.sims.confetti, quad, null, (p) => (p < 0.75 ? 1 : (1 - p) / 0.25)),
     ];
     this.layers.forEach((l) => l.add(this.group));

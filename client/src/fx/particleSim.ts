@@ -36,18 +36,32 @@ export class ParticleSim {
 
   /** Spawn one particle. If the pool is full the oldest-slot (index 0) is overwritten. */
   spawn(p: {
-    x: number; y: number; vx: number; vy: number; size: number; life: number;
-    color: number; spin?: number; rot?: number;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    life: number;
+    color: number;
+    spin?: number;
+    rot?: number;
   }): void {
     const i = this.count < this.cfg.capacity ? this.count++ : 0;
-    this.x[i] = p.x; this.y[i] = p.y; this.vx[i] = p.vx; this.vy[i] = p.vy;
-    this.size[i] = p.size; this.life[i] = p.life; this.age[i] = 0;
-    this.color[i] = p.color; this.spin[i] = p.spin ?? 0; this.rot[i] = p.rot ?? 0;
+    this.x[i] = p.x;
+    this.y[i] = p.y;
+    this.vx[i] = p.vx;
+    this.vy[i] = p.vy;
+    this.size[i] = p.size;
+    this.life[i] = p.life;
+    this.age[i] = 0;
+    this.color[i] = p.color;
+    this.spin[i] = p.spin ?? 0;
+    this.rot[i] = p.rot ?? 0;
   }
 
   step(dt: number): void {
     const damp = Math.pow(1 - this.cfg.drag, dt);
-    for (let i = 0; i < this.count; ) {
+    for (let i = 0; i < this.count;) {
       this.age[i]! += dt;
       if (this.age[i]! >= this.life[i]!) {
         this.swapRemove(i);
@@ -71,7 +85,17 @@ export class ParticleSim {
   private swapRemove(i: number): void {
     const last = --this.count;
     if (i === last) return;
-    for (const a of [this.x, this.y, this.vx, this.vy, this.rot, this.spin, this.size, this.age, this.life] as Float32Array[])
+    for (const a of [
+      this.x,
+      this.y,
+      this.vx,
+      this.vy,
+      this.rot,
+      this.spin,
+      this.size,
+      this.age,
+      this.life,
+    ] as Float32Array[])
       a[i] = a[last]!;
     this.color[i] = this.color[last]!;
   }

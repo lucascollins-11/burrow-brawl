@@ -27,7 +27,8 @@ export class DamagePopups {
     if (this.popups.length >= MAX_POPUPS) this.remove(this.popups[0]!);
     const el = document.createElement("div");
     el.className = `fx-popup fx-${kind}`;
-    el.textContent = typeof amount === "number" ? (kind === "heal" ? `+${amount}` : `-${amount}`) : amount;
+    el.textContent =
+      typeof amount === "number" ? (kind === "heal" ? `+${amount}` : `-${amount}`) : amount;
     // Bigger hits look bigger.
     if (typeof amount === "number") el.style.fontSize = `${Math.min(44, 20 + amount * 0.35)}px`;
     this.layer.appendChild(el);
@@ -42,8 +43,12 @@ export class DamagePopups {
         this.remove(p);
         continue;
       }
-      const nx = (p.x - camera.position.x - (camera.left + camera.right) / 2) / ((camera.right - camera.left) / 2);
-      const ny = (p.y - camera.position.y - (camera.top + camera.bottom) / 2) / ((camera.top - camera.bottom) / 2);
+      const nx =
+        (p.x - camera.position.x - (camera.left + camera.right) / 2) /
+        ((camera.right - camera.left) / 2);
+      const ny =
+        (p.y - camera.position.y - (camera.top + camera.bottom) / 2) /
+        ((camera.top - camera.bottom) / 2);
       const t = p.age / p.life;
       const rise = 70 * (1 - Math.pow(1 - t, 2));
       const pop = t < 0.12 ? 0.5 + (t / 0.12) * 0.8 : 1.3 - 0.3 * Math.min(1, (t - 0.12) / 0.2);

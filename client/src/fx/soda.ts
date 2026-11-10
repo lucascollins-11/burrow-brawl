@@ -76,8 +76,16 @@ export class Soda {
     this.body = body;
 
     const circle = new THREE.CircleGeometry(1, 14);
-    this.ring = new THREE.InstancedMesh(circle, new THREE.MeshBasicMaterial({ color: PALETTE.ink }), BUBBLES);
-    this.fill = new THREE.InstancedMesh(circle, new THREE.MeshBasicMaterial({ color: PALETTE.bubble }), BUBBLES);
+    this.ring = new THREE.InstancedMesh(
+      circle,
+      new THREE.MeshBasicMaterial({ color: PALETTE.ink }),
+      BUBBLES,
+    );
+    this.fill = new THREE.InstancedMesh(
+      circle,
+      new THREE.MeshBasicMaterial({ color: PALETTE.bubble }),
+      BUBBLES,
+    );
     for (const m of [this.ring, this.fill]) {
       m.frustumCulled = false;
       m.renderOrder = 11;

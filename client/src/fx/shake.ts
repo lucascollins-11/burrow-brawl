@@ -24,7 +24,9 @@ export class ScreenShake {
     this.trauma = Math.max(0, this.trauma - this.decay * dt);
     const s = this.trauma * this.trauma; // squared feels punchier
     // Smooth pseudo-noise from sines at unrelated frequencies.
-    this.offsetX = s * this.maxOffset * (Math.sin(this.t * 53.1) + Math.sin(this.t * 31.7 + 1)) * 0.5;
-    this.offsetY = s * this.maxOffset * (Math.sin(this.t * 47.3 + 2) + Math.sin(this.t * 29.9 + 5)) * 0.5;
+    this.offsetX =
+      s * this.maxOffset * (Math.sin(this.t * 53.1) + Math.sin(this.t * 31.7 + 1)) * 0.5;
+    this.offsetY =
+      s * this.maxOffset * (Math.sin(this.t * 47.3 + 2) + Math.sin(this.t * 29.9 + 5)) * 0.5;
   }
 }

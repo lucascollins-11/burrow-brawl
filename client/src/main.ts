@@ -10,6 +10,7 @@ import {
 } from "@burrow-brawl/shared";
 import * as THREE from "three";
 import { audio } from "./audio";
+import { FxSystem } from "./fx";
 import { PanZoomCamera } from "./camera";
 import { DebugHud } from "./hud";
 import { buildScene } from "./scene";
@@ -56,18 +57,12 @@ const aimLine = new THREE.Line(
 scene.add(aimLine);
 scene.add(critterViews.group);
 
-// Soda line: anything whose feet drop below it is knocked out.
-const soda = new THREE.Mesh(
-  new THREE.PlaneGeometry(4000, 400),
-  new THREE.MeshBasicMaterial({ color: 0xff8fb8, transparent: true, opacity: 0.55 }),
-);
-soda.position.set(1024, -runner.state.waterY - 200, 20);
-scene.add(soda);
-
 let carveRadius = 40;
 let wireframe = false;
 let terrainHash = hashTerrain(runner.state.terrain);
 const cam = new PanZoomCamera(renderer.domElement);
+// Visual FX: backdrop, animated soda, explosion particles, shake, damage popups (see fx/index.ts).
+const fx = new FxSystem(scene, cam.camera, { sodaLevel: -runner.state.waterY, container: app });
 const hud = new DebugHud(hudEl);
 const cursor = new THREE.Vector2();
 
@@ -114,6 +109,7 @@ function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1);
   cam.update(dt);
   const tickEvents = runner.advance(dt * 1000);
+  fx.onSimEvents(tickEvents, runner.state);
   if (tickEvents.some((e) => e.type === "explosion"))
     terrainHash = hashTerrain(runner.state.terrain);
   critterViews.sync(runner.state.critters, activeId);
@@ -154,7 +150,7 @@ function frame(): void {
     fuse: simInput.fuseSeconds,
     projectiles: runner.state.projectiles.length,
   });
-  renderer.render(scene, cam.camera);
+  fx.frame(dt, renderer, scene, cam.camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
