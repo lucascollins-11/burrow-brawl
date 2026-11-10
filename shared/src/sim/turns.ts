@@ -88,7 +88,9 @@ function aliveTeams(sim: SimState, teams: number): number[] {
   return out;
 }
 
-function isSettled(sim: SimState): boolean {
+export function isSettled(sim: SimState): boolean {
+  // Shots still in the air (or a grenade waiting on its fuse) keep the turn from ending.
+  if (sim.projectiles.length > 0) return false;
   return sim.critters.every(
     (c) => c.status !== "alive" || (c.grounded && c.vx === 0 && c.vy === 0),
   );

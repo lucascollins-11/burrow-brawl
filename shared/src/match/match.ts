@@ -3,18 +3,13 @@
 // commands, run stepWorld, then the turn controller. Same config + same
 // commands at the same ticks => same state hash everywhere.
 
+import { generateMap } from "../maps/generate";
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
+import { createCritter, createWorld, stepWorld } from "../sim";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
 import type { WeaponId } from "../weapons/load";
-import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
-import {
-  createDemoTerrain,
-  deserializeTerrain,
-  hashTerrain,
-  serializeTerrain,
-  type Terrain,
-} from "../terrain";
+import { basicTurns, type TurnRules, type TurnState } from "../sim/turns";
+import { deserializeTerrain, hashTerrain, serializeTerrain, type Terrain } from "../terrain";
 import { fromBase64, toBase64 } from "./base64";
 
 // ------------------------------------------------------------ commands
@@ -95,6 +90,10 @@ export interface MatchConfig {
   windMax: number;
   mapWidth: number;
   mapHeight: number;
+  /** Sudden death: from the round after this one the soda rises every turn. 0 or absent = off. */
+  suddenDeathRound?: number;
+  /** Cells the soda line rises per turn once sudden death starts. Default 8. */
+  waterRisePerTurn?: number;
 }
 
 export interface MatchState {
@@ -112,6 +111,9 @@ export interface StepOutput {
   turnChanged: boolean;
 }
 
+/** The one turn controller every match uses (server, clients, hot-seat). */
+export const MATCH_TURNS = basicTurns;
+
 export const TICKS_PER_SECOND = 60;
 /** The server broadcasts a state hash on every tick divisible by this (protocol section 7). */
 export const HASH_EVERY = 30;
@@ -127,34 +129,53 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
 }
 
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
-export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns): MatchState {
+export function createMatch(cfg: MatchConfig): MatchState {
+  const turns = MATCH_TURNS;
   const rng = Prng.fromSeed(cfg.seed);
-  const terrain = createDemoTerrain(cfg.mapWidth, cfg.mapHeight);
-  const spawnRng = rng.fork("spawn");
-  const margin = 80;
-  const spacing = 40;
-  const taken: number[] = [];
+  const total = cfg.teamSizes.reduce((a, b) => a + b, 0);
+  // Fit every critter on the map: wide spacing for few critters, tighter for many. If the
+  // generator still finds too few spawn columns, retry with half the spacing (deterministic).
+  let spacing = Math.max(40, Math.min(160, Math.floor((cfg.mapWidth - 200) / Math.max(1, total))));
+  let map = generateMap(rng.fork("map"), {
+    width: cfg.mapWidth,
+    height: cfg.mapHeight,
+    spawnCount: total,
+    minSpawnSpacing: spacing,
+  });
+  for (let i = 0; i < 3 && map.spawns.length < total; i++) {
+    spacing = Math.max(12, spacing >> 1);
+    map = generateMap(rng.fork("map"), {
+      width: cfg.mapWidth,
+      height: cfg.mapHeight,
+      spawnCount: total,
+      minSpawnSpacing: spacing,
+    });
+  }
+  const terrain = map.terrain;
   const critters: Critter[] = [];
   let id = 1;
+  let spawnIndex = 0;
   // Interleave teams so nobody gets all the high ground.
   const maxSize = Math.max(...cfg.teamSizes);
   for (let i = 0; i < maxSize; i++) {
     for (let team = 0; team < cfg.teamSizes.length; team++) {
       if (i >= (cfg.teamSizes[team] ?? 0)) continue;
-      let x = margin;
-      for (let tries = 0; tries < 64; tries++) {
-        x = spawnRng.nextRange(margin, cfg.mapWidth - margin);
-        if (taken.every((t) => Math.abs(t - x) >= spacing) && findSurfaceY(terrain, x) > 0) break;
+      const sp = map.spawns[spawnIndex++];
+      // Never stack critters on a fallback spot: a map too small for the match is a config error.
+      if (!sp) {
+        throw new RangeError(
+          `map ${cfg.mapWidth}x${cfg.mapHeight} has room for ${map.spawns.length} critters, need ${total}`,
+        );
       }
-      taken.push(x);
-      const c = createCritter(id++, team, x, findSurfaceY(terrain, x));
+      const c = createCritter(id++, team, sp.x, sp.y);
       critters.push({ ...c, hp: cfg.startHealth });
     }
   }
-  const sim = createWorld(terrain, critters, cfg.mapHeight - 40);
+  const sim = createWorld(terrain, critters, map.waterY);
+  const first = turns.init(sim, rulesFor(cfg), 0, rng);
   return {
-    sim,
-    turns: turns.init(sim, rulesFor(cfg), 0, rng),
+    sim: { ...sim, wind: first.wind },
+    turns: first,
     rng: rng.getState(),
     move: 0,
   };
@@ -185,12 +206,8 @@ function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): Cr
  * unless someone has control, so stale or late commands can't desync.
  * Mutates only the terrain (shared, as in stepWorld).
  */
-export function stepMatch(
-  cfg: MatchConfig,
-  state: MatchState,
-  cmds: readonly Cmd[],
-  turns: TurnController = basicTurns,
-): StepOutput {
+export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cmd[]): StepOutput {
+  const turns = MATCH_TURNS;
   const rules = rulesFor(cfg);
   const tick = state.sim.tick + 1;
   let ts = state.turns;
@@ -222,8 +239,14 @@ export function stepMatch(
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
   const turnChanged =
     next.turn !== state.turns.turn || (next.phase === "over") !== (state.turns.phase === "over");
+  let simOut: SimState = { ...r.state, wind: next.wind };
+  // Sudden death: once the round limit passes, the soda rises at the start of every turn.
+  const sdRound = cfg.suddenDeathRound ?? 0;
+  if (turnChanged && next.phase !== "over" && sdRound > 0 && next.round > sdRound) {
+    simOut = { ...simOut, waterY: Math.max(0, simOut.waterY - (cfg.waterRisePerTurn ?? 8)) };
+  }
   return {
-    state: { sim: r.state, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
+    state: { sim: simOut, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
     events: r.events,
     turnChanged,
   };

@@ -35,14 +35,5 @@ export function buildScene(): THREE.Scene {
   grid.position.set(1024, -512, 0.5);
   scene.add(grid);
 
-  // Test cube so the 3D-on-2D-plane look can be judged.
-  const cube = new THREE.Mesh(
-    new THREE.BoxGeometry(60, 60, 60),
-    new THREE.MeshStandardMaterial({ color: 0xe0805a, roughness: 0.8 }),
-  );
-  cube.position.set(1024, -512, 30);
-  cube.name = "test-cube";
-  scene.add(cube);
-
   return scene;
 }

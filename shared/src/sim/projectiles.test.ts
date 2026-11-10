@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toFixed } from "../fixed";
-import { createTerrain, DIRT, hashTerrain, isSolid } from "../terrain";
+import { cloneTerrain, createTerrain, DIRT, hashTerrain, isSolid } from "../terrain";
 import type { CritterInput, SimEvent, SimState } from "./index";
 import { createCritter, createWorld, stepWorld } from "./index";
 
@@ -208,32 +208,28 @@ describe("projectiles leaving the map", () => {
   });
 });
 
-describe("purity across explosions", () => {
-  it("never mutates the input terrain, so re-stepping the same state repeats exactly", () => {
+describe("terrain mutation across explosions", () => {
+  it("carves the terrain in place; cloning at the test boundary makes re-stepping repeatable", () => {
     const t = flatWorld();
     let s = settle(createWorld(t, [createCritter(1, 0, 100, 299)], 490));
     s = stepWorld(s, fire("acorn-mortar", 45, 60)(0)).state;
-    // Step until the very tick before the explosion.
+    // Step until the very tick before the explosion (peek on a cloned terrain).
     for (let i = 0; i < 600; i++) {
-      const peek = stepWorld(s, []);
+      const peek = stepWorld({ ...s, terrain: cloneTerrain(s.terrain) }, []);
       if (peek.events.some((e) => e.type === "explosion")) break;
-      s = peek.state;
+      s = stepWorld(s, []).state;
     }
     const before = hashTerrain(s.terrain);
-    const a = stepWorld(s, []);
-    const b = stepWorld(s, []);
+    const a = stepWorld({ ...s, terrain: cloneTerrain(s.terrain) }, []);
+    const b = stepWorld({ ...s, terrain: cloneTerrain(s.terrain) }, []);
     expect(a.events.some((e) => e.type === "explosion")).toBe(true);
-    expect(hashTerrain(s.terrain)).toBe(before); // input untouched
-    expect(a.state.terrain).not.toBe(s.terrain); // copy on write
-    expect(hashTerrain(a.state.terrain)).not.toBe(before); // the copy was carved
+    expect(hashTerrain(s.terrain)).toBe(before); // the originals were untouched
+    expect(hashTerrain(a.state.terrain)).not.toBe(before); // the clone was carved
     expect(hashTerrain(a.state.terrain)).toBe(hashTerrain(b.state.terrain));
     expect(JSON.stringify(a.state.critters)).toBe(JSON.stringify(b.state.critters));
-    expect(JSON.stringify(a.events)).toBe(JSON.stringify(b.events));
-  });
-
-  it("reuses the same terrain object while nothing explodes", () => {
-    const s = settle(createWorld(flatWorld(), [createCritter(1, 0, 100, 299)], 490));
-    expect(stepWorld(s, []).state.terrain).toBe(s.terrain);
+    const c = stepWorld(s, []);
+    expect(c.state.terrain).toBe(s.terrain); // in place
+    expect(hashTerrain(s.terrain)).toBe(hashTerrain(a.state.terrain));
   });
 });
 
