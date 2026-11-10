@@ -4,9 +4,9 @@ import { CRITTER_HEIGHT_CELLS, CRITTER_WIDTH_CELLS, TEAM_COLORS, createMolekin }
 
 describe("TEAM_COLORS", () => {
   it("has four teams with unique ids and colours", () => {
-    expect(TEAM_COLORS).toHaveLength(4);
-    expect(new Set(TEAM_COLORS.map((t) => t.id)).size).toBe(4);
-    expect(new Set(TEAM_COLORS.map((t) => t.hex)).size).toBe(4);
+    expect(TEAM_COLORS).toHaveLength(8);
+    expect(new Set(TEAM_COLORS.map((t) => t.id)).size).toBe(8);
+    expect(new Set(TEAM_COLORS.map((t) => t.hex)).size).toBe(8);
   });
 });
 
@@ -48,7 +48,7 @@ describe("createMolekin", () => {
     expect(material.color.getHex()).toBe(TEAM_COLORS[slot]?.hex);
   });
 
-  it.each([-1, 4, 1.5])("rejects invalid team slot %s", (slot) => {
+  it.each([-1, 8, 1.5])("rejects invalid team slot %s", (slot) => {
     expect(() => createMolekin(slot)).toThrow(RangeError);
   });
 });

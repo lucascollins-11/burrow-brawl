@@ -16,9 +16,9 @@ export const PROTOCOL_VERSION = 3;
 
 export const ROOM_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const ROOM_CODE_LENGTH = 5;
-export const MAX_MEMBERS = 4; // v1: one player per team, no spectators
+export const MAX_MEMBERS = 8; // one player per team, no spectators
 export const MIN_TEAMS = 2;
-export const MAX_TEAMS = 4;
+export const MAX_TEAMS = 8;
 export const MAX_CRITTERS = 4;
 export const NICKNAME_MIN = 2;
 export const NICKNAME_MAX = 16;

@@ -1,0 +1,159 @@
+// sim3d contract. Types and signatures only: the implementation lives next to this file
+// (owner: sim3d). Changes to this file go through the architect.
+//
+// Rules:
+// - Positions and velocities are Q16.16 in voxel units (see ../fixed), +y up. Positions fit in
+//   int32 because the largest grid is 384 voxels.
+// - No floats, no Math.random, no Date. Angles are integers looked up in the sine table.
+// - Multiplying two Q16.16 values can exceed 2^53 as a JS number. Every multiply, dot product
+//   and length goes through helpers that are property-tested against a BigInt reference.
+// - There is no rigid-body solver. Critters use a kinematic controller; projectiles are points
+//   marched voxel by voxel. Collision reads terrain3d's binary solid test, never the mesh.
+// - The sim never sees the camera. Clients convert camera-relative input into the integer
+//   headings below before sending.
+// - stepWorld mutates the terrain in place (through terrain3d.applyEdit) and returns new
+//   immutable critter and projectile records, like the 2D sim.
+
+import type { Fixed } from "../fixed";
+import type { TerrainEdit, VoxelTerrain } from "../terrain3d/api";
+import type { WeaponId } from "../weapons/load";
+
+/** A full turn is YAW_STEPS units: 0 = +x, YAW_STEPS / 4 = +z. */
+export const YAW_STEPS = 1024;
+/** Pitch in whole degrees: 0 = level, positive = up. */
+export const PITCH_MIN = -89;
+export const PITCH_MAX = 89;
+
+/** Critter body in voxels: feet at (x, y, z), a vertical cylinder checked voxel by voxel. */
+export const CRITTER_HEIGHT = 6;
+/** Radius in half-voxels (3 = 1.5 voxels). The footprint is a fixed list of column offsets. */
+export const CRITTER_RADIUS_HALF = 3;
+/** Walking climbs at most this many voxels per step and snaps down at most this many. */
+export const MAX_STEP_UP = 1;
+export const MAX_STEP_DOWN = 2;
+
+export interface Vec3 {
+  readonly x: Fixed;
+  readonly y: Fixed;
+  readonly z: Fixed;
+}
+
+export type CritterStatus = "alive" | "dead" | "drowned";
+
+export interface Critter {
+  readonly id: number;
+  readonly team: number;
+  /** Feet centre. */
+  readonly pos: Vec3;
+  readonly vel: Vec3;
+  /** Facing heading, 0..YAW_STEPS-1. */
+  readonly yaw: number;
+  readonly hp: number;
+  readonly status: CritterStatus;
+  readonly grounded: boolean;
+  /** Highest voxel y reached since leaving the ground; drives fall damage. */
+  readonly peakY: number;
+}
+
+export interface Projectile {
+  readonly id: number;
+  readonly ownerId: number;
+  readonly weaponId: WeaponId;
+  readonly pos: Vec3;
+  readonly vel: Vec3;
+  readonly age: number;
+  /** Ticks until detonation, or -1 for impact-only weapons. */
+  readonly fuseTicks: number;
+  readonly bounces: number;
+  readonly resting: boolean;
+}
+
+export interface FireCommand {
+  readonly weaponId: WeaponId;
+  /** 0..YAW_STEPS-1. */
+  readonly yaw: number;
+  /** PITCH_MIN..PITCH_MAX. */
+  readonly pitch: number;
+  /** 0..100 percent of the weapon's max speed. */
+  readonly power: number;
+  readonly fuseSeconds?: number;
+  /** Target voxel for placed or called-in weapons. */
+  readonly target?: { readonly x: number; readonly y: number; readonly z: number };
+}
+
+/** One critter's input for one tick. The match layer builds this from relayed commands. */
+export interface CritterInput {
+  readonly critterId: number;
+  /** Walk heading 0..YAW_STEPS-1, or -1 to stand still. Held until changed. */
+  readonly moveYaw: number;
+  readonly jump?: boolean;
+  readonly backflip?: boolean;
+  readonly fire?: FireCommand;
+}
+
+export interface SimState {
+  readonly tick: number;
+  readonly critters: readonly Critter[];
+  readonly projectiles: readonly Projectile[];
+  readonly nextProjectileId: number;
+  /** Shared and mutated in place. Hashed through terrain3d.hash, snapshotted as recipe + edits. */
+  readonly terrain: VoxelTerrain;
+  /**
+   * Wind this turn as a horizontal vector, each component -100..100. Rolled by the turn
+   * controller as a heading and a strength, stored as components so the sim does no trig.
+   */
+  readonly windX: number;
+  readonly windZ: number;
+  /** Soda surface row for the sim (starts at terrain.seaY, rises in sudden death). */
+  readonly seaY: number;
+}
+
+export type DamageCause = "fall" | "explosion" | "hit" | "water";
+
+export type SimEvent =
+  | { readonly type: "jumped"; readonly critterId: number; readonly backflip: boolean }
+  | { readonly type: "landed"; readonly critterId: number; readonly fallDistance: number }
+  | {
+      readonly type: "damage";
+      readonly critterId: number;
+      readonly amount: number;
+      readonly cause: DamageCause;
+    }
+  | { readonly type: "died"; readonly critterId: number; readonly cause: DamageCause }
+  | {
+      readonly type: "fired";
+      readonly critterId: number;
+      readonly projectileId: number;
+      readonly weaponId: WeaponId;
+    }
+  | { readonly type: "bounced"; readonly projectileId: number }
+  /** A blast at a voxel. The terrain change itself is `edit`, already applied. */
+  | {
+      readonly type: "explosion";
+      readonly projectileId: number;
+      readonly weaponId: WeaponId;
+      readonly edit: TerrainEdit;
+    }
+  | { readonly type: "projectileLost"; readonly projectileId: number };
+
+export interface StepResult {
+  readonly state: SimState;
+  readonly events: readonly SimEvent[];
+}
+
+/** Injected randomness (the match PRNG). */
+export interface Rng {
+  nextInt(maxExclusive: number): number;
+}
+
+/** What sim3d exports. The match layer (createMatch / stepMatch / hashMatch) is its only caller. */
+export interface Sim3dApi {
+  createWorld(terrain: VoxelTerrain, critters: readonly Critter[]): SimState;
+  createCritter(id: number, team: number, x: number, y: number, z: number, hp: number): Critter;
+  /** Advance one 60 Hz tick. Critters and projectiles are stepped in array order. */
+  stepWorld(state: SimState, inputs: readonly CritterInput[], rng: Rng): StepResult;
+  /** True when no projectile is live and every living critter is grounded and still. */
+  isSettled(state: SimState): boolean;
+  /** True if a critter standing with feet at voxel (x, y, z) would overlap solid terrain. */
+  bodyBlocked(t: VoxelTerrain, x: number, y: number, z: number): boolean;
+}
