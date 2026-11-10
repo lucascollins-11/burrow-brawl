@@ -6,6 +6,7 @@
 // `basicTurns` is a minimal stand-in so online play works before S5 lands.
 // S5 may replace it with a richer TurnController that keeps this shape.
 
+import { gadgetsBusy } from "./gadgets";
 import type { Rng, SimEvent, SimState } from "./types";
 
 export type TurnPhase =
@@ -90,7 +91,7 @@ function aliveTeams(sim: SimState, teams: number): number[] {
 
 export function isSettled(sim: SimState): boolean {
   // Shots still in the air (or a grenade waiting on its fuse) keep the turn from ending.
-  if (sim.projectiles.length > 0) return false;
+  if (sim.projectiles.length > 0 || gadgetsBusy(sim)) return false;
   return sim.critters.every(
     (c) => c.status !== "alive" || (c.grounded && c.vx === 0 && c.vy === 0),
   );

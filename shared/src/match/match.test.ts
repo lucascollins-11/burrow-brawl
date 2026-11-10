@@ -95,6 +95,55 @@ describe("match model", () => {
     expect(r).toMatchObject({ ok: true });
   });
 
+  it("is deterministic with every gadget in play (rope, drill, boulder, crates), with snapshot resume", () => {
+    const g: MatchConfig = { ...cfg, mapWidth: 768, mapHeight: 384, turnTicks: 150, seed: 11 };
+    const ticks = 900;
+    const seen = new Set<string>();
+    const weapons = ["rope-claw", "drill-hat", "boulder-of-doom", "acorn-mortar"] as const;
+    const r = checkDeterminism<MatchState, Cmd>({
+      seed: 3,
+      ticks,
+      init: () => {
+        const m = createMatch(g);
+        // Plenty of uses for everyone, so the script reaches every gadget.
+        const inv = { "drill-hat": 9, "boulder-of-doom": 9 };
+        return { ...m, sim: { ...m.sim, inventory: m.sim.inventory.map(() => ({ ...inv })) } };
+      },
+      inputs: scriptedInputs(9, ticks, (rng): Cmd[] => {
+        const roll = rng.nextInt(30);
+        if (roll === 0) return [{ k: "jump" }];
+        if (roll === 1) return [{ k: "move", dir: rng.pick([-1, 0, 1] as const) }];
+        if (roll === 2) {
+          return [
+            {
+              k: "fire",
+              weaponId: rng.pick(weapons),
+              angleDeg: rng.nextInt(360),
+              power: rng.nextRange(20, 100),
+            },
+          ];
+        }
+        return [];
+      }),
+      step: (s, cmds) => {
+        const out = stepMatch(g, s, cmds);
+        for (const e of out.events) {
+          seen.add(e.type === "gadget" ? `${e.weaponId}:${e.phase}` : e.type);
+          if (e.type === "fired") seen.add(`fired:${e.weaponId}`);
+        }
+        return out.state;
+      },
+      hash: hashMatch,
+      save: (s) => saveMatch(s),
+      load: (snap) => loadMatch(snap as ReturnType<typeof saveMatch>),
+    });
+    expect(r).toMatchObject({ ok: true });
+    // The script really exercised the gadgets (otherwise determinism proves nothing here).
+    expect(seen.has("rope-claw:fired")).toBe(true);
+    expect(seen.has("drill-hat:fired")).toBe(true);
+    expect(seen.has("fired:boulder-of-doom")).toBe(true);
+  }, 60_000);
+
   it("held move applies only to the active critter and resets on a new turn", () => {
     let s = createMatch(cfg);
     s = run(s, 30); // land

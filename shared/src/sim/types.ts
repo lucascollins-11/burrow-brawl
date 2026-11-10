@@ -40,6 +40,59 @@ export interface Projectile {
   readonly resting: boolean;
 }
 
+/** Rope Claw: a hook in flight, or attached to terrain with the critter swinging on it. One per critter. */
+export interface Rope {
+  readonly critterId: number;
+  readonly phase: "flying" | "attached";
+  /** Hook position (flying) or anchor point (attached), Q16.16 cells. */
+  readonly x: Fixed;
+  readonly y: Fixed;
+  /** Unit flight direction while flying, Q16.16. */
+  readonly dx: Fixed;
+  readonly dy: Fixed;
+  /** Cells flown so far. */
+  readonly travelled: number;
+  /** Rope length once attached, in raw Q16.16 cell units. */
+  readonly length: number;
+}
+
+/** Drill Hat: the critter digs a tunnel while this exists. */
+export interface Drill {
+  readonly critterId: number;
+  readonly ticksLeft: number;
+  readonly mode: "down" | "side";
+}
+
+/** Boulder of Doom: rolls along the ground, flattening terrain and crushing critters it touches. */
+export interface Boulder {
+  readonly id: number;
+  readonly ownerId: number;
+  readonly x: Fixed;
+  readonly y: Fixed;
+  readonly dir: -1 | 1;
+  readonly age: number;
+  /** Critter ids already crushed by this boulder (each is hit once). */
+  readonly hit: readonly number[];
+}
+
+export type CrateKind = "health" | "weapon";
+
+/** Supply crate: falls, rests on the ground, and is collected when a critter touches it. */
+export interface Crate {
+  readonly id: number;
+  /** Centre column (cells, integer) and Q16.16 y of the crate's centre. */
+  readonly x: number;
+  readonly y: Fixed;
+  readonly vy: Fixed;
+  readonly kind: CrateKind;
+  /** Weapon granted (kind "weapon"). */
+  readonly weaponId: WeaponId | null;
+  readonly grounded: boolean;
+}
+
+/** Per team: weapon id -> uses left. Weapons with unlimited ammo are not listed. */
+export type Inventory = Readonly<Record<string, number>>;
+
 export interface FireCommand {
   readonly weaponId: WeaponId;
   /** Aim direction in whole degrees: 0 = right, 90 = up, 180 = left. */
@@ -59,6 +112,14 @@ export interface SimState {
   readonly waterY: number;
   readonly projectiles: readonly Projectile[];
   readonly nextProjectileId: number;
+  readonly ropes: readonly Rope[];
+  readonly drills: readonly Drill[];
+  readonly boulders: readonly Boulder[];
+  readonly crates: readonly Crate[];
+  /** Ids for boulders and crates. */
+  readonly nextEntityId: number;
+  /** Per team index: limited-ammo weapons and how many uses are left. */
+  readonly inventory: readonly Inventory[];
   /** Wind strength from -100 (full left) to 100 (full right). */
   readonly wind: number;
 }
@@ -92,8 +153,9 @@ export type SimEvent =
   | {
       readonly type: "fired";
       readonly critterId: number;
+      /** 0 when the weapon makes no projectile. */
       readonly projectileId: number;
-      readonly weaponId: ProjectileWeaponId;
+      readonly weaponId: WeaponId;
     }
   | { readonly type: "bounced"; readonly projectileId: number }
   /** Terrain was carved by a circle at (x, y). Replays and clients re-apply this to their mask. */
@@ -106,7 +168,29 @@ export type SimEvent =
       readonly radius: number;
       readonly cellsRemoved: number;
     }
-  | { readonly type: "projectileLost"; readonly projectileId: number };
+  | { readonly type: "projectileLost"; readonly projectileId: number }
+  /** Rope Claw and Drill Hat milestones (for sounds and effects). */
+  | {
+      readonly type: "gadget";
+      readonly critterId: number;
+      readonly weaponId: "rope-claw" | "drill-hat";
+      readonly phase: "fired" | "attached" | "released" | "ended";
+    }
+  | {
+      readonly type: "crateDropped";
+      readonly crateId: number;
+      readonly x: number;
+      readonly kind: CrateKind;
+    }
+  | {
+      readonly type: "crateCollected";
+      readonly crateId: number;
+      readonly critterId: number;
+      readonly kind: CrateKind;
+      readonly weaponId: WeaponId | null;
+      /** Health restored (kind "health"). */
+      readonly amount: number;
+    };
 
 /** Injected randomness. Opus's seeded PRNG (O2) will implement this; the sim never touches Math.random. */
 export interface Rng {

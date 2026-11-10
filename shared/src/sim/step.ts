@@ -18,6 +18,7 @@ import {
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
+import { gadgetsOnFire, isGadgetWeapon, stepGadgets, type GadgetState } from "./gadgets";
 import { spawnProjectile, stepProjectiles } from "./projectiles";
 import type {
   Critter,
@@ -208,19 +209,36 @@ function resolve(
  * Critters are stepped in array order, so results are order-stable.
  */
 export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?: Rng): StepResult {
-  void rng; // reserved for later systems (crate drops, scatter); S4 weapons are fully deterministic
+  void rng; // reserved for later systems (scatter); weapons are fully deterministic
   const moveEvents: SimEvent[] = [];
+  const roped = new Set(state.ropes.filter((r) => r.phase === "attached").map((r) => r.critterId));
+  const prev = state.critters;
+  // A critter hanging on a rope is moved by the rope code (stepGadgets), not by walking and falling.
   let critters = state.critters.map((c) =>
-    stepCritter(state.terrain, c, withInput(inputs, c.id), moveEvents),
+    roped.has(c.id) ? c : stepCritter(state.terrain, c, withInput(inputs, c.id), moveEvents),
   );
 
-  // Fire commands spawn projectiles after movement, in critter order.
+  const g: GadgetState = {
+    critters,
+    ropes: [...state.ropes],
+    drills: [...state.drills],
+    boulders: [...state.boulders],
+    crates: [...state.crates],
+    inventory: [...state.inventory],
+    nextEntityId: state.nextEntityId,
+  };
+
+  // Fire commands spawn projectiles (or start a gadget) after movement, in critter order.
   const spawned: Projectile[] = [];
   let nextId = state.nextProjectileId;
   const fireEvents: SimEvent[] = [];
   critters = critters.map((c) => {
     const cmd = withInput(inputs, c.id)?.fire;
     if (!cmd || c.status !== "alive") return c;
+    if (isGadgetWeapon(cmd.weaponId)) {
+      g.critters = critters;
+      return gadgetsOnFire(state.terrain, g, c, cmd, fireEvents)?.critter ?? c;
+    }
     const made = spawnProjectile(c, cmd, nextId);
     if (!made) return c;
     nextId++;
@@ -246,7 +264,13 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
   critters = flown.critters;
   const terrain = flown.terrain;
 
-  const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
+  // Ropes, drills, boulders and crates.
+  const gadgetEvents: SimEvent[] = [];
+  g.critters = critters;
+  stepGadgets(terrain, g, prev, inputs, gadgetEvents);
+  critters = g.critters;
+
+  const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents, ...gadgetEvents];
   critters = critters.map((c) => resolve(c, state.waterY, events, moveEvents));
   return {
     state: {
@@ -256,6 +280,12 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?
       terrain,
       projectiles: flown.projectiles,
       nextProjectileId: nextId,
+      ropes: g.ropes,
+      drills: g.drills,
+      boulders: g.boulders,
+      crates: g.crates,
+      inventory: g.inventory,
+      nextEntityId: g.nextEntityId,
     },
     events,
   };

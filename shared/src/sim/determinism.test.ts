@@ -12,50 +12,18 @@ import { createCritter, createWorld, findSurfaceY, stepWorld } from "./index";
 
 /** Hash of everything that matters: all sim state plus the terrain mask. */
 function simHash(s: SimState): number {
-  return new StateHasher()
-    .value({
-      tick: s.tick,
-      waterY: s.waterY,
-      wind: s.wind,
-      nextProjectileId: s.nextProjectileId,
-      critters: s.critters,
-      projectiles: s.projectiles,
-    })
-    .i32(hashTerrain(s.terrain))
-    .digest();
+  const { terrain, ...rest } = s;
+  return new StateHasher().value(rest).i32(hashTerrain(terrain)).digest();
 }
 
 function save(s: SimState): unknown {
-  return {
-    tick: s.tick,
-    waterY: s.waterY,
-    critters: s.critters,
-    projectiles: s.projectiles,
-    nextProjectileId: s.nextProjectileId,
-    wind: s.wind,
-    terrain: Array.from(serializeTerrain(s.terrain)),
-  };
+  const { terrain, ...rest } = s;
+  return { ...structuredClone(rest), terrain: Array.from(serializeTerrain(terrain)) };
 }
 
 function load(saved: unknown): SimState {
-  const o = saved as {
-    tick: number;
-    waterY: number;
-    critters: SimState["critters"];
-    projectiles: SimState["projectiles"];
-    nextProjectileId: number;
-    wind: number;
-    terrain: number[];
-  };
-  return {
-    tick: o.tick,
-    waterY: o.waterY,
-    critters: o.critters,
-    projectiles: o.projectiles,
-    nextProjectileId: o.nextProjectileId,
-    wind: o.wind,
-    terrain: deserializeTerrain(Uint8Array.from(o.terrain)),
-  };
+  const { terrain, ...rest } = saved as Omit<SimState, "terrain"> & { terrain: number[] };
+  return { ...rest, terrain: deserializeTerrain(Uint8Array.from(terrain)) } as SimState;
 }
 
 describe("sim determinism", () => {

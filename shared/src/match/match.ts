@@ -5,7 +5,7 @@
 
 import { generateMap } from "../maps/generate";
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, stepWorld } from "../sim";
+import { createCritter, createWorld, maybeDropCrate, releaseRopes, stepWorld } from "../sim";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
 import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnRules, type TurnState } from "../sim/turns";
@@ -249,9 +249,17 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
   if (turnChanged && next.phase !== "over" && sdRound > 0 && next.round > sdRound) {
     simOut = { ...simOut, waterY: Math.max(0, simOut.waterY - (cfg.waterRisePerTurn ?? 8)) };
   }
+  let events: readonly SimEvent[] = r.events;
+  // Ropes let go when control ends; a crate may drop whenever a turn starts (rolled from the match rng).
+  if (next.phase !== "control" && next.phase !== "retreat") simOut = releaseRopes(simOut);
+  if (turnChanged && next.phase !== "over") {
+    const drop = maybeDropCrate(simOut, rng);
+    simOut = drop.sim;
+    if (drop.events.length > 0) events = [...events, ...drop.events];
+  }
   return {
     state: { sim: simOut, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
-    events: r.events,
+    events,
     turnChanged,
   };
 }
