@@ -7,6 +7,7 @@ import {
   backToLobby as backToLobbyState,
   errorText,
   initialState,
+  isHost,
   withError,
   withResult,
   type MatchResult,
@@ -23,7 +24,8 @@ import "./styles.css";
 
 export interface UiOptions {
   /** Connect to the server (guest session + socket). Defaults to `GameClient.connect`. */
-  connect?: ((nickname: string) => Promise<LobbyClient>) | undefined;
+  connect?:
+    ((nickname: string, onStatus: (s: UiStatus) => void) => Promise<LobbyClient>) | undefined;
   /** Called on every button press so the audio manager can play a click. */
   onClick?: () => void;
   /** The match started (or we rejoined one). Hand `client` and `match` to the game scene. */
@@ -47,8 +49,12 @@ export interface UiHandle {
   dispose(): void;
 }
 
-const defaultConnect = (nickname: string): Promise<LobbyClient> =>
-  GameClient.connect({ nickname }) as Promise<LobbyClient>;
+// `onStatus` carries the pre-connect statuses ("waking" while the free-tier server cold-starts).
+const defaultConnect = (nickname: string, onStatus: (s: UiStatus) => void): Promise<LobbyClient> =>
+  GameClient.connect({
+    nickname,
+    onStatus: (s) => onStatus(s as UiStatus),
+  }) as Promise<LobbyClient>;
 
 /** Mounts the title, lobby and results screens over the canvas. */
 export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
@@ -149,8 +155,8 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
     if (state.screen === "results" && state.room && state.result) {
       shell.append(
         renderResults(state.room, state.result, state.you?.id, {
-          // Hidden until GameClient has rematch() (o3b); the button then appears by itself.
-          ...(typeof client?.rematch === "function"
+          // Host only (the server answers not_host to everyone else).
+          ...(typeof client?.rematch === "function" && isHost(state)
             ? { backToLobby: () => void backToLobby() }
             : {}),
           leave,
@@ -279,7 +285,11 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
     render();
     try {
       teardown();
-      const c = await connect(nick);
+      const c = await connect(nick, (s) => {
+        if (mine !== attemptId || !busy) return;
+        status = s;
+        render();
+      });
       if (mine !== attemptId) return c.close();
       client = c;
       attach(c);

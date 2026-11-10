@@ -1,4 +1,5 @@
 import type { Cmd, MatchConfig, MatchState, SimEvent } from "@burrow-brawl/shared";
+import type { MatchSource } from "./source";
 import { createMatch, stepMatch, TICKS_PER_SECOND } from "@burrow-brawl/shared";
 
 export interface MatchEndInfo {
@@ -15,7 +16,8 @@ const MAX_TICKS_PER_FRAME = 5;
  * Hot-seat match driver. It runs the exact code path the online match uses
  * (createMatch / stepMatch with Cmds), at a fixed 60 Hz from variable-rate frames.
  */
-export class MatchRunner {
+export class MatchRunner implements MatchSource {
+  readonly localTeams = null;
   state: MatchState;
   readonly recentEvents: SimEvent[] = [];
   private acc = 0;

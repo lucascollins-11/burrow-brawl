@@ -6,6 +6,8 @@ export type Screen = "title" | "connecting" | "lobby" | "starting" | "results";
 /** End-of-match info. `winnerTeamId` null means a draw. Mirrors protocol `match.end` (stats later). */
 export interface MatchResult {
   winnerTeamId: string | null;
+  /** True when we only know the room is in its results phase (e.g. we reconnected and missed `match.end`). */
+  unknown?: boolean;
 }
 
 export interface UiState {
@@ -51,8 +53,14 @@ export function applyRoom(
     return state;
   const base = { ...state, you, room };
   if (room.phase === "lobby") return { ...base, screen: "lobby", error: null, result: null };
-  // Keep the results overlay up while the room sits in its results phase.
-  if (room.phase === "results" && state.result) return { ...base, screen: "results" };
+  // Keep the results overlay up while the room sits in its results phase. If we never saw
+  // `match.end` (we reconnected into the results phase) show a generic "match over".
+  if (room.phase === "results")
+    return {
+      ...base,
+      screen: "results",
+      result: state.result ?? { winnerTeamId: null, unknown: true },
+    };
   return { ...base, screen: "starting" };
 }
 

@@ -1,6 +1,6 @@
 import type { MatchConfig, MatchState } from "@burrow-brawl/shared";
 import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
-import { TEAM_COLORS } from "../art/molekin";
+import { defaultLooks, type TeamLook } from "./teamLook";
 import type { GameInput } from "./input";
 import { WEAPONS } from "./input";
 
@@ -48,6 +48,8 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return e;
 }
 
+const hexCss = (hex: number): string => `#${hex.toString(16).padStart(6, "0")}`;
+
 /** Game HUD: turn timer, wind, per-team health, weapon picker, power bar, win banner. Plain DOM. */
 export class GameHud {
   private readonly root: HTMLElement;
@@ -68,7 +70,11 @@ export class GameHud {
   constructor(
     private readonly config: MatchConfig,
     private readonly input: GameInput,
-    onRematch: () => void,
+    onRematch: (() => void) | null,
+    /** How each sim team is named and coloured; defaults to the four stock hat colours. */
+    private readonly looks: readonly TeamLook[] = defaultLooks(config.teamSizes.length),
+    /** Online: sim team indexes this player controls. Null in hot-seat (everyone shares the keyboard). */
+    private readonly localTeams: ReadonlySet<number> | null = null,
   ) {
     const style = document.createElement("style");
     style.textContent = STYLE;
@@ -89,14 +95,14 @@ export class GameHud {
     const teams = el("div", "bb-teams", this.root);
     config.teamSizes.forEach((_, i) => {
       const t = el("div", "bb-team", teams);
-      t.style.borderColor = `#${(TEAM_COLORS[i]?.hex ?? 0).toString(16).padStart(6, "0")}`;
+      t.style.borderColor = hexCss(this.looks[i]?.hex ?? 0);
       const name = el("div", "bb-team-name", t);
       const label = el("span", "", name);
-      label.textContent = `${TEAM_COLORS[i]?.name ?? `Team ${i + 1}`}`;
+      label.textContent = this.looks[i]?.name ?? `Team ${i + 1}`;
       this.teamTexts.push(el("span", "", name));
       const b = el("div", "bb-bar", t);
       const fill = el("div", "", b);
-      fill.style.background = `#${(TEAM_COLORS[i]?.hex ?? 0).toString(16).padStart(6, "0")}`;
+      fill.style.background = hexCss(this.looks[i]?.hex ?? 0);
       this.teams.push(t);
       this.teamBars.push(fill);
     });
@@ -122,9 +128,15 @@ export class GameHud {
 
     this.banner = el("div", "bb-banner", this.root);
     this.bannerText = el("div", "", this.banner);
-    const again = el("button", "", this.banner);
-    again.textContent = "Play again";
-    again.addEventListener("click", onRematch);
+    if (onRematch) {
+      const again = el("button", "", this.banner);
+      again.textContent = "Play again";
+      again.addEventListener("click", onRematch);
+    }
+  }
+
+  dispose(): void {
+    this.root.remove();
   }
 
   update(state: MatchState): void {
@@ -135,11 +147,12 @@ export class GameHud {
     this.timer.textContent = ts.phase === "over" ? "" : String(secs);
     this.timer.classList.toggle("low", controlling && secs <= 5);
     const teamName = (i: number | null): string =>
-      i === null ? "" : (TEAM_COLORS[i]?.name ?? `Team ${i + 1}`);
+      i === null ? "" : (this.looks[i]?.name ?? `Team ${i + 1}`);
+    const mine = ts.activeTeam !== null && this.localTeams?.has(ts.activeTeam) === true;
     this.turn.textContent =
       ts.phase === "over"
         ? "Match over"
-        : `Round ${ts.round} · ${teamName(ts.activeTeam)}${ts.phase === "retreat" ? " (retreat!)" : ts.phase === "settling" ? " (waiting)" : ""}`;
+        : `Round ${ts.round} · ${mine ? "YOUR TURN" : teamName(ts.activeTeam)}${ts.phase === "retreat" ? " (retreat!)" : ts.phase === "settling" ? " (waiting)" : ""}`;
 
     const max = Math.max(1, this.config.windMax);
     const pct = (Math.abs(ts.wind) / max) * 50;
@@ -166,9 +179,10 @@ export class GameHud {
 
     WEAPONS.forEach((w, i) => {
       this.weaponButtons[i]!.classList.toggle("sel", this.input.weapon === w.id);
-      this.weaponButtons[i]!.disabled = ts.phase !== "control";
+      this.weaponButtons[i]!.disabled =
+        ts.phase !== "control" || (this.localTeams !== null && !mine);
     });
-    this.skipButton.disabled = !controlling;
+    this.skipButton.disabled = !controlling || (this.localTeams !== null && !mine);
     this.powerFill.style.width = `${this.input.charge}%`;
     this.powerText.textContent =
       this.input.weapon === "fizz-grenade"

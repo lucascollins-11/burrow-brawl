@@ -9,6 +9,8 @@ export class CritterViews {
   /** One pivot per critter; the Molekin inside keeps its own scale and feet-at-origin offset. */
   private readonly models = new Map<number, THREE.Group>();
   private readonly marker: THREE.Mesh;
+  /** Optional hat colour per sim team index (online: from the lobby). Defaults to TEAM_COLORS. */
+  hats: readonly number[] = [];
 
   constructor() {
     this.marker = new THREE.Mesh(
@@ -25,7 +27,7 @@ export class CritterViews {
       let m = this.models.get(c.id);
       if (!m) {
         m = new THREE.Group();
-        m.add(createMolekin(c.team));
+        m.add(createMolekin(c.team, this.hats[c.team]));
         this.models.set(c.id, m);
         this.group.add(m);
       }
