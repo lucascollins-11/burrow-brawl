@@ -25,8 +25,12 @@ Lives in the repo at `docs/protocol.md`; message types live in
 
 ## 2. Transport
 
-- One WebSocket per client at `wss://<host>/ws`. Same origin as the client
-  build. No WebRTC, no UDP in v1.
+- One WebSocket per client at `<VITE_GAME_SERVER_URL>/ws`, e.g.
+  `wss://brawl-server.fly.dev/ws`. The client is a static site on Vercel and
+  the game server is a separate host, so this is cross-origin: the server
+  accepts the WebSocket upgrade and `/api` CORS only from origins listed in
+  `ALLOWED_ORIGINS` (plus its own origin when it serves the client itself in
+  local dev or single-host mode). No WebRTC, no UDP in v1.
 - Frames are JSON in v1 (`{ "t": "<type>", ...fields }`). All encoding and
   decoding goes through one codec module (`shared/src/net/codec.ts`,
   `encode(msg): string | Uint8Array`, `decode(frame): unknown`). Nothing else
