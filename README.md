@@ -7,3 +7,17 @@ You command teams of Molekins on destructible toy-diorama terrain, with wind, a 
 - Network protocol: [docs/protocol.md](docs/protocol.md)
 - Terrain spec: [docs/terrain-spec.md](docs/terrain-spec.md)
 - Weapon data: [shared/weapons/](shared/weapons/)
+
+## Development
+
+Requires Node 22+ and pnpm 10.
+
+```sh
+pnpm install
+pnpm lint          # ESLint
+pnpm format:check  # Prettier (use `pnpm format` to fix)
+pnpm typecheck     # tsc in every workspace package
+pnpm test          # Vitest across shared, client and server
+```
+
+Workspaces: `shared/` (deterministic sim and shared types), `client/` (Vite + Three.js app), `server/` (WebSocket server).
