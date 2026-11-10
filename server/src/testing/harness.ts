@@ -51,6 +51,7 @@ export async function startHarness(
   };
   const server = createGameServer(config, {
     now: () => clock.now,
+    ticker: "manual",
     ...(queue ? { codeGen: () => queue.shift() ?? "ZZZZZ" } : {}),
   });
   const port = await server.listen();
@@ -173,6 +174,35 @@ export class TestClient {
         });
       });
     }
+  }
+
+  /** Wait until a message matching `pred` arrives; returns it and everything before it, in order. */
+  async drainUntil(
+    pred: (m: ServerMessage) => boolean,
+    timeoutMs = 2_000,
+  ): Promise<ServerMessage[]> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const i = this.inbox.findIndex(pred);
+      if (i >= 0) return this.inbox.splice(0, i + 1);
+      if (this.closeCode !== null)
+        throw new Error(`socket closed (${this.closeCode}) while draining`);
+      const left = deadline - Date.now();
+      if (left <= 0)
+        throw new Error(`timed out draining; inbox: ${this.inbox.map((m) => m.t).join(",")}`);
+      await new Promise<void>((res) => {
+        const timer = setTimeout(res, left);
+        this.waiters.push(() => {
+          clearTimeout(timer);
+          res();
+        });
+      });
+    }
+  }
+
+  /** Messages received so far that nobody has consumed (does not clear them). */
+  peek(): readonly ServerMessage[] {
+    return this.inbox;
   }
 
   /** Wait for a room.update / room.joined whose state satisfies `pred`. */
