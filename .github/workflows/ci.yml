@@ -38,3 +38,30 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  # Production-shape smoke test: server bundle run standalone with NODE_ENV=production,
+  # ALLOWED_ORIGINS and a JWT secret; client built with VITE_GAME_SERVER_URL and hosted
+  # statically on another origin; two browsers play through lobby, match and one shot.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build the Render image
+        run: docker build -f server/Dockerfile -t burrow-brawl-server .
+
+      - name: Smoke test (two browsers, lobby to first shot)
+        run: pnpm smoke
