@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "root-punch",
+  "name": "Root Punch",
+  "description": "A melee uppercut that launches an adjacent critter high into the air.",
+  "category": "melee",
+  "behavior": "melee-launch",
+  "targeting": "none",
+  "ammo": 3,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 25,
+  "blastRadius": 0,
+  "knockback": 700,
+  "params": {
+    "range": 40,
+    "launchAngleDegrees": 70,
+    "targetsEnemiesOnly": true,
+    "fallDamageMultiplier": 1.0
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "beehive-strike",
+  "name": "Beehive Strike",
+  "description": "Click a spot and five bombs fall from the sky around it.",
+  "category": "strike",
+  "behavior": "airstrike",
+  "targeting": "click-point",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 25,
+  "blastRadius": 30,
+  "knockback": 240,
+  "params": {
+    "bombCount": 5,
+    "spreadWidth": 300,
+    "dropHeight": 600,
+    "dropIntervalSeconds": 0.35,
+    "damageFalloff": "linear"
+  }
+}

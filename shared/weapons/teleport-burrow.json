@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "teleport-burrow",
+  "name": "Teleport Burrow",
+  "description": "Burrow underground and pop back up at any clear spot you pick. Ends your turn.",
+  "category": "utility",
+  "behavior": "teleport",
+  "targeting": "click-point",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "range": "map",
+    "destinationMustBeOpen": true,
+    "burrowSeconds": 0.8,
+    "fallDamage": false
+  }
+}

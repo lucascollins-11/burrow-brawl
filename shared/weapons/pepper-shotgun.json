@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "pepper-shotgun",
+  "name": "Pepper Shotgun",
+  "description": "Two instant blasts in the aimed direction. Both fire in one turn.",
+  "category": "hitscan",
+  "behavior": "hitscan-burst",
+  "targeting": "aim-angle",
+  "ammo": 3,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 18,
+  "blastRadius": 0,
+  "knockback": 120,
+  "params": {
+    "shotsPerTurn": 2,
+    "range": 500,
+    "spreadDegrees": 2,
+    "tunnelWidth": 4,
+    "endsTurnAfter": "last-shot"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "boulder-of-doom",
+  "name": "Boulder of Doom",
+  "description": "A huge boulder rolls slowly across the map, flattening everything in its path.",
+  "category": "super",
+  "behavior": "rolling-boulder",
+  "targeting": "aim-angle",
+  "ammo": 1,
+  "crateOnly": true,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 60,
+  "blastRadius": 20,
+  "knockback": 500,
+  "params": {
+    "rollSpeed": 90,
+    "maxRollSeconds": 12,
+    "rollsOverTerrain": true,
+    "carvesTerrain": true,
+    "carveRadius": 20,
+    "stopsAtBedrock": true
+  }
+}

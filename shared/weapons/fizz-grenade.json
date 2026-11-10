@@ -1,0 +1,24 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "fizz-grenade",
+  "name": "Fizz Grenade",
+  "description": "Thrown fizzing grenade that bounces around before it goes off.",
+  "category": "projectile",
+  "behavior": "bouncing-throw",
+  "targeting": "aim-angle-power",
+  "ammo": 4,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 35,
+  "blastRadius": 35,
+  "knockback": 260,
+  "params": {
+    "fuseSeconds": { "min": 1, "max": 5, "default": 3 },
+    "maxBounces": 3,
+    "bounciness": 0.45,
+    "maxSpeed": 700,
+    "gravity": 600,
+    "damageFalloff": "linear"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "spring-boots",
+  "name": "Spring Boots",
+  "description": "One very high jump. The turn carries on after landing.",
+  "category": "utility",
+  "behavior": "super-jump",
+  "targeting": "aim-angle",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "jumpSpeed": 1000,
+    "maxAngleDegrees": 85,
+    "ignoreFallDamageBelow": 200
+  }
+}

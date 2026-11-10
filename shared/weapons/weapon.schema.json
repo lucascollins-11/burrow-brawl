@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "burrow-brawl/weapon.schema.json",
+  "title": "Burrow Brawl weapon",
+  "description": "Data for one weapon. Units: terrain in cells (1 cell = 1 unit), time in seconds, damage in HP (critters start at 100), knockback as an impulse in units/s.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "description",
+    "category",
+    "behavior",
+    "targeting",
+    "ammo",
+    "crateOnly",
+    "endsTurn",
+    "windAffected",
+    "damage",
+    "blastRadius",
+    "knockback",
+    "params"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable kebab-case id, used in code and saves. Never change once released."
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "description": { "type": "string", "maxLength": 160 },
+    "category": {
+      "type": "string",
+      "enum": ["projectile", "hitscan", "melee", "utility", "placed", "strike", "super", "pass"]
+    },
+    "behavior": {
+      "type": "string",
+      "description": "Id of the small behavior script that runs this weapon (e.g. charged-arc, bouncing-throw, rope)."
+    },
+    "targeting": {
+      "type": "string",
+      "enum": ["none", "aim-angle", "aim-power", "aim-angle-power", "click-point", "placement"]
+    },
+    "ammo": {
+      "description": "Uses per match per team. null means unlimited.",
+      "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+    },
+    "crateOnly": {
+      "type": "boolean",
+      "description": "If true, the weapon is only obtained from supply crates, never in the starting arsenal."
+    },
+    "endsTurn": {
+      "type": "boolean",
+      "description": "If true, the turn ends after the weapon resolves (plus the 3s retreat)."
+    },
+    "windAffected": {
+      "type": "boolean",
+      "description": "If true, the projectile is pushed by the current wind."
+    },
+    "damage": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Damage at the blast centre or per hit, before falloff."
+    },
+    "blastRadius": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Splash radius in cells. 0 means no area effect."
+    },
+    "knockback": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Knockback impulse at the blast centre, falling off with distance."
+    },
+    "params": {
+      "type": "object",
+      "description": "Behavior-specific tuning. Keys are defined by the behavior script named in 'behavior'.",
+      "additionalProperties": true
+    }
+  }
+}

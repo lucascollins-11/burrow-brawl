@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "drill-hat",
+  "name": "Drill Hat",
+  "description": "Spin the hat and dig a tunnel down or sideways for three seconds.",
+  "category": "utility",
+  "behavior": "dig-tunnel",
+  "targeting": "aim-angle",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "durationSeconds": 3,
+    "digSpeedCellsPerSecond": 60,
+    "tunnelRadius": 14,
+    "modes": ["down", "sideways"],
+    "stopsAtBedrock": true
+  }
+}

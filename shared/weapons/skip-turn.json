@@ -1,0 +1,17 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "skip-turn",
+  "name": "Skip Turn",
+  "description": "Do nothing and pass the turn to the next team.",
+  "category": "pass",
+  "behavior": "pass",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {}
+}

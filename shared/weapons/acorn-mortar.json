@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "acorn-mortar",
+  "name": "Acorn Mortar",
+  "description": "A charged lobbed acorn that explodes on impact. Wind pushes it.",
+  "category": "projectile",
+  "behavior": "charged-arc",
+  "targeting": "aim-angle-power",
+  "ammo": null,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": true,
+  "damage": 40,
+  "blastRadius": 40,
+  "knockback": 300,
+  "params": {
+    "chargeSeconds": { "min": 0.2, "max": 2.0 },
+    "maxSpeed": 900,
+    "gravity": 600,
+    "explodeOn": "terrain-or-critter",
+    "damageFalloff": "linear"
+  }
+}
