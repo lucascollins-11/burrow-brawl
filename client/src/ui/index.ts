@@ -7,6 +7,7 @@ import {
   backToLobby as backToLobbyState,
   errorText,
   initialState,
+  isHost,
   withError,
   withResult,
   type MatchResult,
@@ -82,7 +83,7 @@ export function mountUi(root: HTMLElement, opts: UiOptions = {}): UiHandle {
       shell.append(
         renderResults(state.room, state.result, state.you?.id, {
           // Host only (the server answers not_host to everyone else).
-          ...(typeof client?.rematch === "function"
+          ...(typeof client?.rematch === "function" && isHost(state)
             ? { backToLobby: () => void backToLobby() }
             : {}),
           leave,
