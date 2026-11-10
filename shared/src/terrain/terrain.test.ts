@@ -138,6 +138,21 @@ describe("raycast", () => {
   });
 });
 
+describe("raycast edge cases", () => {
+  it("returns hit: false at the end point when the line crosses only air", () => {
+    const t = createTerrain(32, 32);
+    expect(raycast(t, 0, 0, 20, 7)).toEqual({ hit: false, x: 20, y: 7 });
+    expect(raycast(t, 30, 30, 2, 5)).toEqual({ hit: false, x: 2, y: 5 });
+  });
+
+  it("rejects non-integer arguments instead of looping forever", () => {
+    const t = createTerrain(32, 32);
+    expect(() => raycast(t, 0, 0, 2.5, 0)).toThrow(RangeError);
+    expect(() => raycast(t, 0.5, 0, 4, 0)).toThrow(RangeError);
+    expect(() => raycast(t, 0, 0, Number.NaN, 0)).toThrow(RangeError);
+  });
+});
+
 describe("surfaceNormal", () => {
   it("points up on a flat floor", () => {
     const t = createTerrain(40, 40);
