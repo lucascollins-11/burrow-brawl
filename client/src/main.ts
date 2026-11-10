@@ -1,5 +1,6 @@
 import { carveCircle, fromFixed, hashTerrain } from "@burrow-brawl/shared";
 import * as THREE from "three";
+import { audio } from "./audio";
 import { PanZoomCamera } from "./camera";
 import { CritterViews } from "./game/critters";
 import { matchConfigFromUrl } from "./game/config";
@@ -10,6 +11,8 @@ import { ProjectileViews } from "./game/projectileView";
 import { DebugHud } from "./hud";
 import { buildScene } from "./scene";
 import { TerrainRenderer } from "./terrain/renderer";
+import { mountUi } from "./ui";
+import { MockTransport } from "./ui/mockTransport";
 
 const app = document.getElementById("app")!;
 const hudEl = document.getElementById("hud")!;
@@ -183,3 +186,14 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Lobby overlay. Add ?nolobby to the URL to go straight to the debug scene, ?mock for a fake server.
+const params = new URLSearchParams(location.search);
+if (!params.has("nolobby")) {
+  const mock = params.has("mock");
+  mountUi(document.body, {
+    onClick: () => audio.play("uiClick"),
+    transport: mock ? () => new MockTransport() : undefined,
+    guestToken: mock ? async () => ({ token: "mock", nickname: "You" }) : undefined,
+  });
+}
