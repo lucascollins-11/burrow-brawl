@@ -1,0 +1,18 @@
+# Render Blueprint for the game server (WebSocket + health check).
+# The client is hosted separately on Vercel; see docs/deploy.md.
+services:
+  - type: web
+    name: burrow-brawl-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Render terminates TLS in front of the container, so trust its X-Forwarded-For header.
+      - key: TRUST_PROXY
+        value: "1"

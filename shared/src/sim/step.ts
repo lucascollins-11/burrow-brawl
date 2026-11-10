@@ -18,7 +18,16 @@ import {
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
-import type { Critter, CritterInput, Rng, SimEvent, SimState, StepResult } from "./types";
+import { spawnProjectile, stepProjectiles } from "./projectiles";
+import type {
+  Critter,
+  CritterInput,
+  Projectile,
+  Rng,
+  SimEvent,
+  SimState,
+  StepResult,
+} from "./types";
 
 const cell = (f: Fixed): number => f >> 16; // floor for negatives too
 
@@ -199,12 +208,55 @@ function resolve(
  * Critters are stepped in array order, so results are order-stable.
  */
 export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng?: Rng): StepResult {
-  void rng; // reserved for S4 (explosion scatter, crate drops); movement is fully deterministic without it
+  void rng; // reserved for later systems (crate drops, scatter); S4 weapons are fully deterministic
   const moveEvents: SimEvent[] = [];
-  const stepped = state.critters.map((c) =>
+  let critters = state.critters.map((c) =>
     stepCritter(state.terrain, c, withInput(inputs, c.id), moveEvents),
   );
-  const events: SimEvent[] = [...moveEvents];
-  const critters = stepped.map((c) => resolve(c, state.waterY, events, moveEvents));
-  return { state: { ...state, tick: state.tick + 1, critters }, events };
+
+  // Fire commands spawn projectiles after movement, in critter order.
+  const spawned: Projectile[] = [];
+  let nextId = state.nextProjectileId;
+  const fireEvents: SimEvent[] = [];
+  critters = critters.map((c) => {
+    const cmd = withInput(inputs, c.id)?.fire;
+    if (!cmd || c.status !== "alive") return c;
+    const made = spawnProjectile(c, cmd, nextId);
+    if (!made) return c;
+    nextId++;
+    spawned.push(made.projectile);
+    fireEvents.push({
+      type: "fired",
+      critterId: c.id,
+      projectileId: made.projectile.id,
+      weaponId: made.projectile.weaponId,
+    });
+    return { ...c, facing: made.facing };
+  });
+
+  // Projectiles fly after being spawned (so they move on the tick they are fired) and may explode.
+  const blastEvents: SimEvent[] = [];
+  const flown = stepProjectiles(
+    state.terrain,
+    [...state.projectiles, ...spawned],
+    critters,
+    state.wind,
+    blastEvents,
+  );
+  critters = flown.critters;
+  const terrain = flown.terrain;
+
+  const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
+  critters = critters.map((c) => resolve(c, state.waterY, events, moveEvents));
+  return {
+    state: {
+      ...state,
+      tick: state.tick + 1,
+      critters,
+      terrain,
+      projectiles: flown.projectiles,
+      nextProjectileId: nextId,
+    },
+    events,
+  };
 }
