@@ -1,21 +1,14 @@
-import {
-  carveCircle,
-  cloneTerrain,
-  createCritter,
-  createDemoTerrain,
-  createWorld,
-  findSurfaceY,
-  fromFixed,
-  hashTerrain,
-} from "@burrow-brawl/shared";
+import { carveCircle, cloneTerrain, fromFixed, hashTerrain } from "@burrow-brawl/shared";
 import * as THREE from "three";
 import { PanZoomCamera } from "./camera";
+import { CritterViews } from "./game/critters";
+import { matchConfigFromUrl } from "./game/config";
+import { GameHud } from "./game/gameHud";
+import { GameInput } from "./game/input";
+import { MatchRunner } from "./game/matchRunner";
+import { ProjectileViews } from "./game/projectileView";
 import { DebugHud } from "./hud";
 import { buildScene } from "./scene";
-import { CritterViews } from "./sim/critterView";
-import { ProjectileViews } from "./sim/projectileView";
-import { SimInput } from "./sim/input";
-import { SimRunner } from "./sim/runner";
 import { TerrainRenderer } from "./terrain/renderer";
 
 const app = document.getElementById("app")!;
@@ -28,20 +21,26 @@ app.appendChild(renderer.domElement);
 app.addEventListener("contextmenu", (e) => e.preventDefault());
 
 const scene = buildScene();
-const terrain = createDemoTerrain();
-const terrainRenderer = new TerrainRenderer(terrain);
+const input = new GameInput();
+const config = matchConfigFromUrl();
+
+// Hot-seat match: same createMatch/stepMatch path the online match uses.
+let lastTurn = -1;
+const runner = new MatchRunner(config, (state) => {
+  const ts = state.turns;
+  const controlling = ts.phase === "control" || ts.phase === "retreat";
+  input.enabled = controlling;
+  if (ts.turn !== lastTurn) {
+    lastTurn = ts.turn;
+    input.newTurn();
+  }
+  return input.read();
+});
+
+const terrainRenderer = new TerrainRenderer(runner.state.sim.terrain);
 scene.add(terrainRenderer.group);
-const spawnXs = [500, 1500];
-const critters = spawnXs.map((x, i) => createCritter(i + 1, i, x, findSurfaceY(terrain, x)));
-const simInput = new SimInput();
-let activeId = 1;
-const runner: SimRunner = new SimRunner(createWorld(terrain, critters, terrain.height - 40), () => [
-  simInput.read(activeId, activeCritter()?.facing ?? 1),
-]);
-function activeCritter() {
-  return runner.state.critters.find((c) => c.id === activeId);
-}
 const critterViews = new CritterViews();
+scene.add(critterViews.group);
 const projectileViews = new ProjectileViews();
 scene.add(projectileViews.group);
 
@@ -51,49 +50,52 @@ const aimLine = new THREE.Line(
   new THREE.LineBasicMaterial({ color: 0x3b2a1a }),
 );
 scene.add(aimLine);
-scene.add(critterViews.group);
 
-// Soda line: anything whose feet drop below it is knocked out.
+// Soda: anything whose feet drop below the line is knocked out. The line rises in sudden death.
 const soda = new THREE.Mesh(
-  new THREE.PlaneGeometry(4000, 400),
+  new THREE.PlaneGeometry(6000, 1200),
   new THREE.MeshBasicMaterial({ color: 0xff8fb8, transparent: true, opacity: 0.55 }),
 );
-soda.position.set(1024, -runner.state.waterY - 200, 20);
 scene.add(soda);
+
+const gameHud = new GameHud(config, input, () => {
+  const q = new URLSearchParams(window.location.search);
+  q.set("seed", String(crypto.getRandomValues(new Uint32Array(1))[0]));
+  window.location.search = q.toString();
+});
 
 let carveRadius = 40;
 let wireframe = false;
-let terrainHash = hashTerrain(runner.state.terrain);
-const cam = new PanZoomCamera(renderer.domElement);
+let debugVisible = false;
+let terrainHash = hashTerrain(runner.state.sim.terrain);
+const cam = new PanZoomCamera(renderer.domElement, 500);
 const hud = new DebugHud(hudEl);
+hudEl.style.display = "none";
 const cursor = new THREE.Vector2();
 
 renderer.domElement.addEventListener("pointermove", (e) => {
   const rect = renderer.domElement.getBoundingClientRect();
   cursor.copy(cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top));
 });
-// Debug carving: right-click (or ctrl+click) carves a circle. [ and ] change the radius, M toggles wireframe.
+// Debug carving (F3 shows the debug HUD): right-click or ctrl+click carves a circle.
 renderer.domElement.addEventListener("pointerdown", (e) => {
   if (e.button !== 2 && !(e.button === 0 && e.ctrlKey)) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const w = cam.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
   // Copy on write, like explosions in the sim: never mutate the terrain a state already points at.
-  const next = cloneTerrain(runner.state.terrain);
+  const next = cloneTerrain(runner.state.sim.terrain);
   const res = carveCircle(next, Math.round(w.x), Math.round(-w.y), carveRadius);
   if (res.cellsRemoved > 0) {
-    runner.state = { ...runner.state, terrain: next };
+    runner.state = { ...runner.state, sim: { ...runner.state.sim, terrain: next } };
     terrainHash = hashTerrain(next);
   }
 });
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Tab") {
+  if (e.key === "F3") {
     e.preventDefault();
-    activeId = activeId === 1 ? 2 : 1;
+    debugVisible = !debugVisible;
+    hudEl.style.display = debugVisible ? "block" : "none";
   }
-  if (e.key === ",")
-    runner.state = { ...runner.state, wind: Math.max(-100, runner.state.wind - 10) };
-  if (e.key === ".")
-    runner.state = { ...runner.state, wind: Math.min(100, runner.state.wind + 10) };
   if (e.key === "[") carveRadius = Math.max(4, carveRadius - 4);
   if (e.key === "]") carveRadius = Math.min(120, carveRadius + 4);
   if (e.key.toLowerCase() === "m") {
@@ -106,51 +108,77 @@ window.addEventListener("resize", () => {
   cam.resize();
 });
 
+// Start framed on the first active critter.
+{
+  const first = runner.state.sim.critters.find((c) => c.id === runner.state.turns.activeCritter);
+  if (first)
+    cam.camera.position.set(fromFixed(first.x), -fromFixed(first.y), cam.camera.position.z);
+}
+
 const clock = new THREE.Clock();
 function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1);
-  cam.update(dt);
   const tickEvents = runner.advance(dt * 1000);
-  if (tickEvents.some((e) => e.type === "explosion"))
-    terrainHash = hashTerrain(runner.state.terrain);
-  critterViews.sync(runner.state.critters, activeId);
-  projectileViews.sync(runner.state.projectiles);
-  const ac = activeCritter();
-  aimLine.visible = ac?.status === "alive";
-  if (ac) {
-    const a = (simInput.angleFor(ac.facing) * Math.PI) / 180; // display only; the sim uses integer tables
-    const len = 20 + simInput.charge * 0.6;
-    const ox = fromFixed(ac.x);
-    const oy = -fromFixed(ac.y) + 12;
+  const { sim, turns } = runner.state;
+  if (tickEvents.some((e) => e.type === "explosion")) terrainHash = hashTerrain(sim.terrain);
+
+  const active = sim.critters.find((c) => c.id === turns.activeCritter);
+  const controlling = turns.phase === "control" || turns.phase === "retreat";
+  if (active) input.facing = active.facing;
+
+  cam.update(dt);
+  // Follow the active critter, then any shot in flight.
+  const follow = sim.projectiles[0]
+    ? { x: fromFixed(sim.projectiles[0].x), y: -fromFixed(sim.projectiles[0].y) }
+    : active && controlling
+      ? { x: fromFixed(active.x), y: -fromFixed(active.y) }
+      : null;
+  if (follow) {
+    cam.camera.position.x += (follow.x - cam.camera.position.x) * Math.min(1, dt * 3);
+    cam.camera.position.y += (follow.y - cam.camera.position.y) * Math.min(1, dt * 3);
+  }
+
+  terrainRenderer.setTerrain(sim.terrain);
+  terrainRenderer.update();
+  critterViews.sync(sim.critters, controlling ? turns.activeCritter : null, clock.elapsedTime);
+  projectileViews.sync(sim.projectiles);
+  soda.position.set(1024, -sim.waterY - 600, 20);
+
+  aimLine.visible = !!active && active.status === "alive" && turns.phase === "control";
+  if (active) {
+    const a = (input.angle() * Math.PI) / 180; // display only; the sim uses integer tables
+    const len = 20 + input.charge * 0.6;
+    const ox = fromFixed(active.x);
+    const oy = -fromFixed(active.y) + 12;
     aimLine.geometry.setFromPoints([
       new THREE.Vector3(ox, oy, 16),
       new THREE.Vector3(ox + Math.cos(a) * len, oy + Math.sin(a) * len, 16),
     ]);
   }
-  terrainRenderer.setTerrain(runner.state.terrain);
-  terrainRenderer.update();
-  const cube = scene.getObjectByName("test-cube");
-  if (cube) cube.rotation.y += dt;
-  hud.tick(dt);
-  hud.render({
-    camX: cam.camera.position.x,
-    camY: cam.camera.position.y,
-    viewHeight: cam.viewHeight,
-    cursorX: cursor.x,
-    cursorY: cursor.y,
-    carveRadius,
-    pendingChunks: terrainRenderer.pendingChunks,
-    terrainHash,
-    critter: runner.state.critters.find((c) => c.id === activeId),
-    tick: runner.state.tick,
-    events: runner.recentEvents,
-    wind: runner.state.wind,
-    weapon: simInput.weapon,
-    elevation: simInput.elevation,
-    charge: simInput.charge,
-    fuse: simInput.fuseSeconds,
-    projectiles: runner.state.projectiles.length,
-  });
+
+  gameHud.update(runner.state);
+  if (debugVisible) {
+    hud.tick(dt);
+    hud.render({
+      camX: cam.camera.position.x,
+      camY: cam.camera.position.y,
+      viewHeight: cam.viewHeight,
+      cursorX: cursor.x,
+      cursorY: cursor.y,
+      carveRadius,
+      pendingChunks: terrainRenderer.pendingChunks,
+      terrainHash,
+      critter: active,
+      tick: sim.tick,
+      events: runner.recentEvents,
+      wind: sim.wind,
+      weapon: input.weapon,
+      elevation: input.elevation,
+      charge: input.charge,
+      fuse: input.fuseSeconds,
+      projectiles: sim.projectiles.length,
+    });
+  }
   renderer.render(scene, cam.camera);
   requestAnimationFrame(frame);
 }
