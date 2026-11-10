@@ -63,5 +63,18 @@ jobs:
       - name: Build the Render image
         run: docker build -f server/Dockerfile -t burrow-brawl-server .
 
+      - name: Run the Render image and check /healthz
+        run: |
+          docker run -d --name bb-server -p 3000:3000 \
+            -e JWT_SECRET="$(openssl rand -base64 48)" \
+            -e ALLOWED_ORIGINS=http://127.0.0.1:4173 \
+            burrow-brawl-server
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/healthz; then echo; docker stop bb-server; exit 0; fi
+            sleep 1
+          done
+          docker logs bb-server
+          exit 1
+
       - name: Smoke test (two browsers, lobby to first shot)
         run: pnpm smoke
