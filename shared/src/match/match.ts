@@ -4,8 +4,9 @@
 // commands at the same ticks => same state hash everywhere.
 
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, findSurfaceY, isProjectileWeapon, stepWorld } from "../sim";
-import type { Critter, CritterInput, FireCommand, Projectile, SimEvent, SimState } from "../sim";
+import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
+import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
+import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
 import {
   createDemoTerrain,
@@ -24,28 +25,37 @@ import { fromBase64, toBase64 } from "./base64";
  *
  * - move: held direction, stays in effect until changed or the turn ends
  * - jump / backflip: one-shot, applied on the tick they're stamped for
- * - fire: one-shot; launches a projectile weapon (angle in whole degrees, 0 = right, 90 = up;
- *   power 0..100; fuse in whole seconds for timed weapons) and starts the retreat phase
+ * - fire: one-shot; passed to the sim as CritterInput.fire. If the sim reports
+ *   a "fired" event for the active critter, control ends and retreat starts.
+ *   Unsupported weapons do nothing and the turn continues.
  * - skip: end the turn now
  */
 export type Cmd =
   | { k: "move"; dir: -1 | 0 | 1 }
   | { k: "jump" }
   | { k: "backflip" }
-  | {
-      k: "fire";
-      weapon: "acorn-mortar" | "fizz-grenade";
-      angle: number;
-      power: number;
-      fuse?: number;
-    }
+  | ({ k: "fire" } & FireCommand)
   | { k: "skip" };
 
-export const MAX_CMDS_PER_INPUT = 16;
+const WEAPON_IDS = [
+  "acorn-mortar",
+  "fizz-grenade",
+  "pepper-shotgun",
+  "root-punch",
+  "spring-boots",
+  "rope-claw",
+  "drill-hat",
+  "beehive-strike",
+  "jelly-mine",
+  "boulder-of-doom",
+  "teleport-burrow",
+  "skip-turn",
+] as const satisfies readonly WeaponId[];
 
-function isInt(v: unknown, min: number, max: number): v is number {
-  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
-}
+const isIntIn = (v: unknown, min: number, max: number): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+
+export const MAX_CMDS_PER_INPUT = 16;
 
 export function isCmd(v: unknown): v is Cmd {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
@@ -54,18 +64,18 @@ export function isCmd(v: unknown): v is Cmd {
   switch (o.k) {
     case "move":
       return keys.length === 2 && (o.dir === -1 || o.dir === 0 || o.dir === 1);
-    case "fire":
-      return (
-        isProjectileWeapon(String(o.weapon)) &&
-        isInt(o.angle, 0, 359) &&
-        isInt(o.power, 0, 100) &&
-        (o.fuse === undefined || isInt(o.fuse, 1, 5)) &&
-        keys.length === (o.fuse === undefined ? 4 : 5)
-      );
     case "jump":
     case "backflip":
     case "skip":
       return keys.length === 1;
+    case "fire":
+      return (
+        keys.every((k) => ["k", "weaponId", "angleDeg", "power", "fuseSeconds"].includes(k)) &&
+        (WEAPON_IDS as readonly unknown[]).includes(o.weaponId) &&
+        isIntIn(o.angleDeg, 0, 359) &&
+        isIntIn(o.power, 0, 100) &&
+        (o.fuseSeconds === undefined || isIntIn(o.fuseSeconds, 1, 5))
+      );
     default:
       return false;
   }
@@ -85,7 +95,7 @@ export interface MatchConfig {
   windMax: number;
   mapWidth: number;
   mapHeight: number;
-  /** Sudden death: from this round on the soda rises every turn. 0 or absent = off. */
+  /** Sudden death: from the round after this one the soda rises every turn. 0 or absent = off. */
   suddenDeathRound?: number;
   /** Cells the soda line rises per turn once sudden death starts. Default 8. */
   waterRisePerTurn?: number;
@@ -163,22 +173,22 @@ function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): Cr
   for (const c of cmds) {
     if (c.k === "jump") jump = true;
     if (c.k === "backflip") backflip = true;
-    if (c.k === "fire" && fire === undefined) {
+    if (c.k === "fire" && !fire) {
       fire = {
-        weaponId: c.weapon,
-        angleDeg: c.angle,
+        weaponId: c.weaponId,
+        angleDeg: c.angleDeg,
         power: c.power,
-        ...(c.fuse === undefined ? {} : { fuseSeconds: c.fuse }),
+        ...(c.fuseSeconds === undefined ? {} : { fuseSeconds: c.fuseSeconds }),
       };
     }
   }
-  return { critterId, move, jump, backflip, ...(fire ? { fire } : {}) };
+  return fire ? { critterId, move, jump, backflip, fire } : { critterId, move, jump, backflip };
 }
 
 /**
  * Advance one tick with the commands stamped for it. Commands are ignored
  * unless someone has control, so stale or late commands can't desync.
- * Pure: an explosion works on a copy of the terrain (see stepWorld), so `state` is never modified.
+ * Mutates only the terrain (shared, as in stepWorld).
  */
 export function stepMatch(
   cfg: MatchConfig,
@@ -197,29 +207,34 @@ export function stepMatch(
     for (const c of cmds) if (c.k === "move") move = c.dir;
     inputs.push(inputFor(ts.activeCritter!, move, cmds));
     if (cmds.some((c) => c.k === "skip")) ts = turns.endTurn(ts, rules, "skip", tick);
-    else if (cmds.some((c) => c.k === "fire")) ts = turns.endTurn(ts, rules, "fired", tick);
+  }
+  // Only one shot per turn: no firing during retreat.
+  if (ts.phase === "retreat" && inputs[0]?.fire) {
+    const { fire: _drop, ...rest } = inputs[0];
+    void _drop;
+    inputs[0] = rest;
   }
   if (turns.activeTeam(ts) === null) inputs.length = 0;
   if (turns.activeTeam(ts) === null) move = 0;
 
   const rng = Prng.fromState(state.rng);
-  // Wind belongs to the turn controller; the sim just reads it each tick.
-  const r = stepWorld({ ...state.sim, wind: ts.wind }, inputs, rng);
+  // The turn controller owns wind; the sim (projectiles, S4) reads SimState.wind.
+  const sim = { ...state.sim, wind: ts.wind } as SimState;
+  const r = stepWorld(sim, inputs, rng);
+  if (r.events.some((e) => e.type === "fired" && e.critterId === ts.activeCritter)) {
+    ts = turns.endTurn(ts, rules, "fired", tick);
+  }
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
   const turnChanged =
     next.turn !== state.turns.turn || (next.phase === "over") !== (state.turns.phase === "over");
-  let sim: SimState = { ...r.state, wind: next.wind };
-  // Sudden death (stub): once the round limit passes, the soda rises at the start of every turn.
-  if (
-    turnChanged &&
-    next.phase !== "over" &&
-    (cfg.suddenDeathRound ?? 0) > 0 &&
-    next.round > (cfg.suddenDeathRound ?? 0)
-  ) {
-    sim = { ...sim, waterY: Math.max(0, sim.waterY - (cfg.waterRisePerTurn ?? 8)) };
+  let simOut: SimState = { ...r.state, wind: next.wind };
+  // Sudden death: once the round limit passes, the soda rises at the start of every turn.
+  const sdRound = cfg.suddenDeathRound ?? 0;
+  if (turnChanged && next.phase !== "over" && sdRound > 0 && next.round > sdRound) {
+    simOut = { ...simOut, waterY: Math.max(0, simOut.waterY - (cfg.waterRisePerTurn ?? 8)) };
   }
   return {
-    state: { sim, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
+    state: { sim: simOut, turns: next, rng: rng.getState(), move: turnChanged ? 0 : move },
     events: r.events,
     turnChanged,
   };
@@ -230,18 +245,10 @@ export function stepMatch(
 /** u32 hash of the full match state (protocol section 7). */
 export function hashMatch(state: MatchState): number {
   const h = new StateHasher();
-  const s = state.sim;
-  h.int(s.tick).int(s.waterY).i32(s.wind).i32(s.nextProjectileId);
-  h.i32(hashTerrain(s.terrain)).i32(s.critters.length);
-  for (const c of s.critters) {
-    h.i32(c.id).i32(c.team).i32(c.x).i32(c.y).i32(c.vx).i32(c.vy).i32(c.facing).i32(c.hp);
-    h.str(c.status).bool(c.grounded).i32(c.peakY);
-  }
-  h.i32(s.projectiles.length);
-  for (const p of s.projectiles) {
-    h.i32(p.id).i32(p.ownerId).str(p.weaponId).i32(p.x).i32(p.y).i32(p.vx).i32(p.vy);
-    h.i32(p.age).i32(p.fuseTicks).i32(p.bounces).bool(p.resting);
-  }
+  // Every sim field except the terrain goes through the canonical hasher, so
+  // fields added later (projectiles, crates) are covered automatically.
+  const { terrain, ...rest } = state.sim;
+  h.i32(hashTerrain(terrain)).value(rest);
   h.value(state.turns);
   for (const w of state.rng) h.i32(w);
   h.i32(state.move);
@@ -252,12 +259,8 @@ export function hashMatch(state: MatchState): number {
 
 /** JSON-safe full state, as sent in `snapshot` and `match.start`. */
 export interface MatchSnapshot {
-  tick: number;
-  waterY: number;
-  critters: Critter[];
-  projectiles: Projectile[];
-  nextProjectileId: number;
-  wind: number;
+  /** Every SimState field except terrain (tick, critters, waterY, and whatever S4+ adds). */
+  sim: Omit<SimState, "terrain">;
   /** serializeTerrain() output, base64. */
   terrain: string;
   turns: TurnState;
@@ -266,14 +269,10 @@ export interface MatchSnapshot {
 }
 
 export function saveMatch(state: MatchState): MatchSnapshot {
+  const { terrain, ...rest } = state.sim;
   return {
-    tick: state.sim.tick,
-    waterY: state.sim.waterY,
-    critters: state.sim.critters.map((c) => ({ ...c })),
-    projectiles: state.sim.projectiles.map((p) => ({ ...p })),
-    nextProjectileId: state.sim.nextProjectileId,
-    wind: state.sim.wind,
-    terrain: toBase64(serializeTerrain(state.sim.terrain)),
+    sim: structuredClone(rest),
+    terrain: toBase64(serializeTerrain(terrain)),
     turns: structuredClone(state.turns),
     rng: [...state.rng] as [number, number, number, number],
     move: state.move,
@@ -282,15 +281,7 @@ export function saveMatch(state: MatchState): MatchSnapshot {
 
 export function loadMatch(snap: MatchSnapshot): MatchState {
   const terrain: Terrain = deserializeTerrain(fromBase64(snap.terrain));
-  const sim: SimState = {
-    tick: snap.tick,
-    waterY: snap.waterY,
-    critters: snap.critters.map((c) => ({ ...c })),
-    terrain,
-    projectiles: snap.projectiles.map((p) => ({ ...p })),
-    nextProjectileId: snap.nextProjectileId,
-    wind: snap.wind,
-  };
+  const sim = { ...structuredClone(snap.sim), terrain } as SimState;
   return {
     sim,
     turns: structuredClone(snap.turns),

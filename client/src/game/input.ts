@@ -76,10 +76,10 @@ export class GameInput {
     this.charge = 0;
     this.queued.push({
       k: "fire",
-      weapon: this.weapon,
-      angle: this.angle(),
+      weaponId: this.weapon,
+      angleDeg: this.angle(),
       power,
-      ...(this.weapon === "fizz-grenade" ? { fuse: this.fuseSeconds } : {}),
+      ...(this.weapon === "fizz-grenade" ? { fuseSeconds: this.fuseSeconds } : {}),
     });
   }
 
