@@ -11,12 +11,16 @@ export interface TeamColor {
   readonly hex: number;
 }
 
-/** Hat colours for the four team slots. Index is the team slot (0 to 3). */
+/** Hat colours for the eight team slots. Index is the team slot (0 to 7). */
 export const TEAM_COLORS = [
   { id: "tomato", name: "Tomato", hex: 0xe85d4a },
   { id: "sky", name: "Sky", hex: 0x4aa3df },
   { id: "mustard", name: "Mustard", hex: 0xf2b544 },
   { id: "mint", name: "Mint", hex: 0x5cc49b },
+  { id: "grape", name: "Grape", hex: 0x8e5ad6 },
+  { id: "bubblegum", name: "Bubblegum", hex: 0xf06fb0 },
+  { id: "lime", name: "Lime", hex: 0x9bd13a },
+  { id: "ink", name: "Ink", hex: 0x3d4a6b },
 ] as const satisfies readonly TeamColor[];
 
 /**

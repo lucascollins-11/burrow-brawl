@@ -158,7 +158,7 @@ describe("rooms", () => {
 
   it("errors on unknown codes and full rooms", async () => {
     h = await startHarness();
-    const { code } = await lobby(4);
+    const { code } = await lobby(8);
     const late = await h.player();
     expect(await late.request({ t: "room.join", code: "ZZZZZ" })).toMatchObject({
       code: "room_not_found",
@@ -256,14 +256,15 @@ describe("lobby", () => {
     const r = await b.room((s) => s.settings.turnSeconds === 30);
     expect(r.members.every((m) => !m.ready)).toBe(true);
 
-    expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ t: "ok" });
-    expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ t: "ok" });
+    for (let i = 0; i < 6; i++) {
+      expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ t: "ok" });
+    }
     expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ code: "not_allowed" });
-    const four = await b.room((s) => s.teams.length === 4);
-    expect(new Set(four.teams.map((t) => t.hatColor)).size).toBe(4);
+    const eight = await b.room((s) => s.teams.length === 8);
+    expect(new Set(eight.teams.map((t) => t.hatColor)).size).toBe(8);
     expect(await host.request({ t: "lobby.removeTeam", teamId: "t2" })).toMatchObject({ t: "ok" });
-    const three = await b.room((s) => s.teams.length === 3);
-    expect(three.members.find((m) => m.id === b.id)?.teamId).toBeNull();
+    const seven = await b.room((s) => s.teams.length === 7);
+    expect(seven.members.find((m) => m.id === b.id)?.teamId).toBeNull();
   });
 
   it("start needs every member on a team and ready", async () => {
