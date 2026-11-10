@@ -26,9 +26,7 @@ describe("weapon data files", () => {
   });
 
   it.each(weaponFiles)("%s validates against weapon.schema.json", (file) => {
-    const data = readWeapon(file);
-    delete data["$schema"]; // editor metadata, not weapon data
-    expect(validate(data), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate(readWeapon(file)), JSON.stringify(validate.errors)).toBe(true);
   });
 
   it("has unique ids", () => {

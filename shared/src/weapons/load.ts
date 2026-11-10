@@ -29,14 +29,9 @@ export type WeaponId =
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
-/**
- * Converts a raw JSON import into WeaponData. The "$schema" key is editor
- * metadata, not weapon data, so it is removed here.
- */
+/** Casts a raw JSON import to WeaponData. The schema check lives in weapons.test.ts. */
 function toWeaponData(json: Record<string, unknown>): WeaponData {
-  const data: Record<string, unknown> = { ...json };
-  delete data["$schema"];
-  return data as unknown as WeaponData;
+  return json as unknown as WeaponData;
 }
 
 const registry: WeaponRegistry = Object.freeze({
