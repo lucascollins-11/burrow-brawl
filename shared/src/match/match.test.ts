@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isSolid } from "../terrain";
 import { checkDeterminism, scriptedInputs } from "../determinism";
 import { basicTurns } from "../sim/turns";
 import { fromBase64, toBase64 } from "./base64";
@@ -155,13 +156,26 @@ describe("match model", () => {
     expect(s.sim.waterY).toBe(before - 10);
   });
 
-  it("places every critter on generated terrain, even for a full 4x4 match", () => {
-    const big: MatchConfig = { ...cfg, teamSizes: [4, 4, 4, 4] };
-    const s = createMatch(big);
-    expect(s.sim.critters).toHaveLength(16);
-    const xs = new Set(s.sim.critters.map((c) => c.x >> 16));
-    expect(xs.size).toBe(16);
-    for (const c of s.sim.critters) expect(c.y >> 16).toBeLessThan(s.sim.waterY);
+  it("places 4 teams of 4 on distinct spawns standing on ground, across seeds", () => {
+    const full: MatchConfig = { ...cfg, mapWidth: 2048, mapHeight: 1024, teamSizes: [4, 4, 4, 4] };
+    for (const seed of [1, 2, 3, 77, 4242, 99999]) {
+      const s = createMatch({ ...full, seed });
+      expect(s.sim.critters).toHaveLength(16);
+      const xs = new Set(s.sim.critters.map((c) => c.x >> 16));
+      expect(xs.size).toBe(16);
+      for (const c of s.sim.critters) {
+        const x = c.x >> 16;
+        const y = c.y >> 16;
+        expect(y).toBeLessThan(s.sim.waterY);
+        expect(isSolid(s.sim.terrain, x, y + 1)).toBe(true); // ground under the feet
+        expect(isSolid(s.sim.terrain, x, y - 10)).toBe(false); // clear above
+      }
+    }
+  });
+
+  it("throws instead of stacking critters when the map has no room for them", () => {
+    const tiny: MatchConfig = { ...cfg, mapWidth: 160, mapHeight: 128, teamSizes: [4, 4, 4, 4] };
+    expect(() => createMatch(tiny)).toThrow(RangeError);
   });
 
   it("times out turns and rotates teams and critters", () => {

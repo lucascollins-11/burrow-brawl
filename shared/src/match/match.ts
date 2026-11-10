@@ -5,10 +5,10 @@
 
 import { generateMap } from "../maps/generate";
 import { Prng, StateHasher, type PrngState } from "../determinism";
-import { createCritter, createWorld, findSurfaceY, stepWorld } from "../sim";
+import { createCritter, createWorld, stepWorld } from "../sim";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim";
 import type { WeaponId } from "../weapons/load";
-import { basicTurns, type TurnController, type TurnRules, type TurnState } from "../sim/turns";
+import { basicTurns, type TurnRules, type TurnState } from "../sim/turns";
 import { deserializeTerrain, hashTerrain, serializeTerrain, type Terrain } from "../terrain";
 import { fromBase64, toBase64 } from "./base64";
 
@@ -111,6 +111,9 @@ export interface StepOutput {
   turnChanged: boolean;
 }
 
+/** The one turn controller every match uses (server, clients, hot-seat). */
+export const MATCH_TURNS = basicTurns;
+
 export const TICKS_PER_SECOND = 60;
 /** The server broadcasts a state hash on every tick divisible by this (protocol section 7). */
 export const HASH_EVERY = 30;
@@ -126,7 +129,8 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
 }
 
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
-export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns): MatchState {
+export function createMatch(cfg: MatchConfig): MatchState {
+  const turns = MATCH_TURNS;
   const rng = Prng.fromSeed(cfg.seed);
   const total = cfg.teamSizes.reduce((a, b) => a + b, 0);
   // Fit every critter on the map: wide spacing for few critters, tighter for many. If the
@@ -157,9 +161,13 @@ export function createMatch(cfg: MatchConfig, turns: TurnController = basicTurns
     for (let team = 0; team < cfg.teamSizes.length; team++) {
       if (i >= (cfg.teamSizes[team] ?? 0)) continue;
       const sp = map.spawns[spawnIndex++];
-      const x = sp?.x ?? Math.floor(cfg.mapWidth / 2);
-      const y = sp?.y ?? findSurfaceY(terrain, x);
-      const c = createCritter(id++, team, x, y);
+      // Never stack critters on a fallback spot: a map too small for the match is a config error.
+      if (!sp) {
+        throw new RangeError(
+          `map ${cfg.mapWidth}x${cfg.mapHeight} has room for ${map.spawns.length} critters, need ${total}`,
+        );
+      }
+      const c = createCritter(id++, team, sp.x, sp.y);
       critters.push({ ...c, hp: cfg.startHealth });
     }
   }
@@ -198,12 +206,8 @@ function inputFor(critterId: number, move: -1 | 0 | 1, cmds: readonly Cmd[]): Cr
  * unless someone has control, so stale or late commands can't desync.
  * Mutates only the terrain (shared, as in stepWorld).
  */
-export function stepMatch(
-  cfg: MatchConfig,
-  state: MatchState,
-  cmds: readonly Cmd[],
-  turns: TurnController = basicTurns,
-): StepOutput {
+export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cmd[]): StepOutput {
+  const turns = MATCH_TURNS;
   const rules = rulesFor(cfg);
   const tick = state.sim.tick + 1;
   let ts = state.turns;
