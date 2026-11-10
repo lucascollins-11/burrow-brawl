@@ -1,0 +1,21 @@
+.fx-popups {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+.fx-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font: 900 24px "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  color: #ff6b81;
+  -webkit-text-stroke: 5px #4a3426;
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 #4a3426;
+  will-change: transform, opacity;
+  white-space: nowrap;
+}
+.fx-popup.fx-heal { color: #5bc87a; }
+.fx-popup.fx-text { color: #fff6e6; }
