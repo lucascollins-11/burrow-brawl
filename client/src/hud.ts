@@ -1,3 +1,6 @@
+import type { Critter, SimEvent } from "@burrow-brawl/shared";
+import { fromFixed } from "@burrow-brawl/shared";
+
 /** Minimal debug HUD: fps, camera, zoom, cursor and terrain state. */
 export class DebugHud {
   private frames = 0;
@@ -25,6 +28,9 @@ export class DebugHud {
     carveRadius: number;
     pendingChunks: number;
     terrainHash: number;
+    critter: Critter | undefined;
+    tick: number;
+    events: readonly SimEvent[];
   }): void {
     this.el.textContent =
       `fps    ${this.fps.toFixed(0)}\n` +
@@ -32,7 +38,10 @@ export class DebugHud {
       `zoom   ${info.viewHeight.toFixed(0)} units tall\n` +
       `cursor ${info.cursorX.toFixed(0)}, ${info.cursorY.toFixed(0)}\n` +
       `carve  r=${info.carveRadius}  hash ${info.terrainHash.toString(16)}  pending chunks ${info.pendingChunks}\n` +
-      `[drag] pan  [wheel] zoom  [WASD/arrows] pan\n` +
+      `tick ${info.tick}  critter ${info.critter ? `#${info.critter.id} ${info.critter.status} hp ${info.critter.hp} ${info.critter.grounded ? "ground" : "air"} @ ${fromFixed(info.critter.x).toFixed(1)}, ${fromFixed(info.critter.y).toFixed(1)}` : "none"}\n` +
+      `events ${info.events.map((e) => e.type).join(" ")}\n` +
+      `[A/D or arrows] walk  [Space] jump  [Enter] backflip  [Tab] switch critter\n` +
+      `[drag] pan  [wheel] zoom  [I/J/K/L] pan\n` +
       `[right-click / ctrl+click] carve  [ ] radius  [M] wireframe`;
   }
 }
