@@ -40,7 +40,7 @@ const NOSE_COLOR = 0xf4a7b9;
  * Builds one Molekin with its feet at the origin, CRITTER_HEIGHT_CELLS tall, facing +z.
  * Throws a RangeError if teamIndex is not a valid team slot.
  */
-export function createMolekin(teamIndex: number): THREE.Group {
+export function createMolekin(teamIndex: number, hatHex?: number): THREE.Group {
   const team = TEAM_COLORS[teamIndex];
   if (team === undefined) {
     throw new RangeError(
@@ -56,7 +56,7 @@ export function createMolekin(teamIndex: number): THREE.Group {
   group.position.y = -LOCAL_FEET_Y * scale;
 
   const furMaterial = new THREE.MeshStandardMaterial({ color: FUR_COLOR, roughness: 0.9 });
-  const hatMaterial = new THREE.MeshStandardMaterial({ color: team.hex, roughness: 0.6 });
+  const hatMaterial = new THREE.MeshStandardMaterial({ color: hatHex ?? team.hex, roughness: 0.6 });
   const frameMaterial = new THREE.MeshStandardMaterial({ color: FRAME_COLOR, roughness: 0.5 });
   const lensMaterial = new THREE.MeshStandardMaterial({
     color: LENS_COLOR,
