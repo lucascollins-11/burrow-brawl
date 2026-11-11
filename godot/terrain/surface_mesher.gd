@@ -49,15 +49,24 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 		push_error("surface_mesher: block must be %d bytes" % (S * S * S))
 		return result
 
-	# Pass 1: which samples are solid; skip chunks that are entirely air or entirely rock.
+	# Pass 1: which samples are solid, and how many per y layer. Skip chunks that are entirely air
+	# or entirely rock, and later skip whole layers that cannot contain the surface.
 	var count := S * S * S
+	var layer_area := S * S
 	var solid := PackedByteArray()
 	solid.resize(count)
+	var layer_solid := PackedInt32Array()
+	layer_solid.resize(S)
 	var n_solid := 0
-	for i in range(count):
-		if block[i] >= ISO:
-			solid[i] = 1
-			n_solid += 1
+	for y in range(S):
+		var in_layer := 0
+		var row := y * layer_area
+		for i in range(row, row + layer_area):
+			if block[i] >= ISO:
+				solid[i] = 1
+				in_layer += 1
+		layer_solid[y] = in_layer
+		n_solid += in_layer
 	if n_solid == 0 or n_solid == count:
 		return result
 
@@ -72,6 +81,8 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 
 	# Pass 2: one vertex per cell that straddles the surface.
 	for cy in range(CELLS):
+		if _uniform_pair(layer_solid, cy, layer_area):
+			continue
 		for cz in range(CELLS):
 			var base := (cy * S + cz) * S
 			for cx in range(CELLS):
@@ -126,6 +137,8 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 	# Pass 3: a quad for every sample edge that starts inside the chunk and changes sign.
 	var indices := PackedInt32Array()
 	for y in range(PAD, PAD + CHUNK):
+		if _uniform_pair(layer_solid, y, layer_area):
+			continue
 		for z in range(PAD, PAD + CHUNK):
 			var base2 := (y * S + z) * S
 			for x in range(PAD, PAD + CHUNK):
@@ -163,6 +176,14 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 	result["normals"] = normals
 	result["indices"] = indices
 	return result
+
+
+## True when sample layers y and y + 1 are both entirely air or both entirely rock, so the cells
+## between them cannot hold the surface.
+static func _uniform_pair(layer_solid: PackedInt32Array, y: int, layer_area: int) -> bool:
+	var a := layer_solid[y]
+	var b := layer_solid[y + 1]
+	return a == b and (a == 0 or a == layer_area)
 
 
 ## Two triangles for the quad a-b-c-e. `flip` is the counter-clockwise order of the quad as seen

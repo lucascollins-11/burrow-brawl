@@ -154,27 +154,41 @@ func apply_patch(msg: Dictionary) -> PackedInt32Array:
 
 ## Copy chunk `ci` plus a 1-voxel border: PADDED^3 bytes, layout (y * PADDED + z) * PADDED + x.
 func copy_chunk_padded(ci: int) -> PackedByteArray:
-	var cx := ci % chunks_x
-	var cz := (ci / chunks_x) % chunks_z
-	var cy := ci / (chunks_x * chunks_z)
+	return extract_padded(density, size_x, size_y, size_z, ci)
+
+
+## Same, from a density snapshot. Static and thread-safe: a worker can call it with a reference to
+## `density` (arrays are copy-on-write, so later patches never change what the worker sees).
+static func extract_padded(
+	src_density: PackedByteArray, sx: int, sy: int, sz: int, ci: int
+) -> PackedByteArray:
+	var chunks_x_n := sx / CHUNK
+	var chunks_z_n := sz / CHUNK
+	var cx := ci % chunks_x_n
+	var cz := (ci / chunks_x_n) % chunks_z_n
+	var cy := ci / (chunks_x_n * chunks_z_n)
 	var ox := cx * CHUNK - 1
 	var oy := cy * CHUNK - 1
 	var oz := cz * CHUNK - 1
 	var out := PackedByteArray()
-	var row_in_x := ox >= 0 and ox + PADDED <= size_x
+	var row_in_x := ox >= 0 and ox + PADDED <= sx
 	for y in range(PADDED):
 		var wy := oy + y
 		for z in range(PADDED):
 			var wz := oz + z
-			if wy < 0 or wy >= size_y or wz < 0 or wz >= size_z:
+			if wy < 0 or wy >= sy or wz < 0 or wz >= sz:
 				var fill := PackedByteArray()
 				fill.resize(PADDED)
 				fill.fill(255 if wy < 0 else 0)
 				out.append_array(fill)
 			elif row_in_x:
-				var src := (wy * size_z + wz) * size_x + ox
-				out.append_array(density.slice(src, src + PADDED))
+				var src := (wy * sz + wz) * sx + ox
+				out.append_array(src_density.slice(src, src + PADDED))
 			else:
 				for x in range(PADDED):
-					out.append(density_at(ox + x, wy, wz))
+					var wx := ox + x
+					if wx < 0 or wx >= sx:
+						out.append(0)
+					else:
+						out.append(src_density[(wy * sz + wz) * sx + wx])
 	return out

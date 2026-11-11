@@ -87,13 +87,14 @@ func _dispatch() -> void:
 		var serial := _next_serial
 		_next_serial += 1
 		_serial[ci] = serial
-		var block := store.copy_chunk_padded(ci)
 		_in_flight += 1
-		WorkerThreadPool.add_task(_mesh_task.bind(ci, serial, block))
+		var dims := Vector3i(store.size_x, store.size_y, store.size_z)
+		WorkerThreadPool.add_task(_mesh_task.bind(ci, serial, store.density, dims))
 
 
-func _mesh_task(ci: int, serial: int, block: PackedByteArray) -> void:
+func _mesh_task(ci: int, serial: int, snapshot: PackedByteArray, dims: Vector3i) -> void:
 	var t0 := Time.get_ticks_usec()
+	var block := Store.extract_padded(snapshot, dims.x, dims.y, dims.z, ci)
 	var mesh_data := Mesher.mesh_block(block)
 	var msec := float(Time.get_ticks_usec() - t0) / 1000.0
 	_mutex.lock()
