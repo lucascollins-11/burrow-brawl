@@ -156,7 +156,7 @@ export function renderLobby(s: UiState, a: LobbyActions): HTMLElement {
     { class: "settings" },
     h("h3", { text: "Match settings" }),
     settingRow("Turn time", "turnSeconds", 15, 90, 5, "s"),
-    settingRow("Molekins per team", "crittersPerTeam", 1, 4, 1),
+    settingRow("Squirmlings per team", "crittersPerTeam", 1, 4, 1),
     host ? null : h("p", { class: "hint", text: "Only the host can change settings." }),
   );
 

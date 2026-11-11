@@ -17,7 +17,7 @@ export function viewFromMatch(
     critters: sim.critters.map((c) => ({
       id: c.id,
       team: c.team,
-      name: `Mole ${c.id}`,
+      name: `Squirmling ${c.id}`,
       x: c.pos.x / FIXED_ONE,
       y: c.pos.y / FIXED_ONE,
       z: c.pos.z / FIXED_ONE,

@@ -8,8 +8,8 @@ names, characters, art, audio, maps or look.
 
 ## 1. Concept
 
-- **Critters:** teams of 4 "Molekins": round, felt-and-clay looking moles with
-  oversized hard hats, goggles and tiny tool belts. Each team picks a hat color
+- **Critters:** teams of 4 "Squirmlings": chunky stacked-ring clay worms (see
+  [characters.md](characters.md)) with hats on the head ring, goggles and tiny tool belts. Each team picks a hat color
   and a hat style (miner, chef, pirate tricorn, traffic cone, etc.).
 - **Setting:** a toy-box diorama look. Terrain is chunky, layered "cake" soil
   (crust, dirt, clay, bedrock that can't be destroyed) floating over a pit of
@@ -125,3 +125,18 @@ any existing game.
 **M3: Fun pass (weeks 5+)**
 - Rest of the arsenal, crates, sudden death, sfx and voice lines, art polish,
   more maps, stats screen.
+
+## 8. End goal: one link for friends (Lucas, 2026-11-10)
+
+Friends open a single website URL, one makes a lobby, the others join by room
+code or invite link (`/r/ABCDE`), and they play a full match in the browser.
+No installs and no account required (guest nickname).
+
+Deployment shape (updated): the static client is hosted on Vercel (Lucas OK'd
+Vercel/Netlify), auto-deployed from main. Vercel can't host long-lived
+WebSockets, so the game server runs separately as one Node process in Docker
+on Render or Fly.io, over WSS. The client reads the server URL from
+`VITE_GAME_SERVER_URL`, and the server allows that origin. The server can still
+serve the client itself for local dev and for a single-host fallback.
+At M2, Lucas needs to connect Vercel to the repo and create a Render or Fly.io
+account (task H4/O5).

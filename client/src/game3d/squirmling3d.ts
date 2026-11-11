@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { teamColor } from "./teamColors";
 import { CRITTER_HEIGHT, type HatStyle } from "./viewState";
 
-// Procedural Molekin: a round clay mole with goggles, nose, little feet and a team-coloured hat.
+// Procedural Squirmling placeholder: a round clay body with goggles, nose, little feet and a team-coloured hat.
+// The stacked-ring design in docs/characters.md replaces this model.
 // Built at its own size, then scaled so it stands CRITTER_HEIGHT (6) voxels tall with its feet at y = 0
 // and faces +z. Meshes are shared by every critter (one geometry set), so 32 critters stay cheap.
 
@@ -109,10 +110,14 @@ export function buildHat(style: HatStyle, hex: number): THREE.Group {
   return hat;
 }
 
-/** One Molekin, feet at the origin, facing +z, 6 voxels tall. */
-export function createMolekin3D(team: number, style: HatStyle, hex = teamColor(team)): THREE.Group {
+/** One Squirmling, feet at the origin, facing +z, 6 voxels tall. */
+export function createSquirmling3D(
+  team: number,
+  style: HatStyle,
+  hex = teamColor(team),
+): THREE.Group {
   const root = new THREE.Group();
-  root.name = `molekin-team-${team}`;
+  root.name = `squirmling-team-${team}`;
   const model = new THREE.Group();
   model.name = "model";
   model.scale.setScalar(SCALE);
@@ -139,7 +144,7 @@ export function createMolekin3D(team: number, style: HatStyle, hex = teamColor(t
 }
 
 /** Idle wobble and propeller spin; call every frame with elapsed seconds. */
-export function animateMolekin(root: THREE.Group, t: number, active: boolean): void {
+export function animateSquirmling(root: THREE.Group, t: number, active: boolean): void {
   const model = root.getObjectByName("model");
   if (model) {
     const s = active ? 1 + Math.sin(t * 6) * 0.015 : 1;
@@ -149,4 +154,4 @@ export function animateMolekin(root: THREE.Group, t: number, active: boolean): v
   if (prop) prop.rotation.y = t * 14;
 }
 
-export const MOLEKIN_SCALE = SCALE;
+export const SQUIRMLING_SCALE = SCALE;

@@ -2,7 +2,7 @@
 
 Lucas chose **true 3D gameplay in the browser**: critters move on a 3D island,
 you aim in 3D with an orbit camera, and explosions carve 3D terrain. The game
-stays original. Names, characters, art and maps are our own (Molekins,
+stays original. Names, characters, art and maps are our own (Squirmlings,
 toy-diorama look), and we copy nothing from any existing game. The game
 supports up to **8 players**.
 
@@ -29,7 +29,7 @@ supports up to **8 players**.
    view with yaw/pitch crosshairs and a power charge. The camera follows the projectile and then the blast.
 5. **Weapons.** A full arsenal of 40 original weapons and utilities (see arsenal.md), built on ~12 shared behavior
    primitives. Each one gets a weapon-case row in the online determinism table.
-6. **Rendering.** 3D Molekin models (procedural to start, Blender glTF later), a skybox and diorama
+6. **Rendering.** 3D Squirmling models (see characters.md) (procedural to start, Blender glTF later), a skybox and diorama
    backdrop, a water plane, shadows, and 8 team colors.
 
 ## 8 players
