@@ -79,12 +79,20 @@ func controller_name(team_dict: Dictionary) -> String:
 	return str(member(str(ctrl)).get("nickname", ""))
 
 
-## Same rule as the server's lobby.start: 2+ teams, every member seated, everyone ready, lobby phase.
+## Same rule as the server's lobby.start: at least 2 teams with a seated player, every member on a
+## team, ready and connected, in the lobby phase.
 func can_start() -> bool:
-	if not is_active() or phase() != "lobby" or teams().size() < Proto.MIN_TEAMS:
+	if not is_active() or phase() != "lobby":
+		return false
+	var seated := 0
+	for raw in teams():
+		var t: Dictionary = raw
+		if t.get("controllerId") != null:
+			seated += 1
+	if seated < Proto.MIN_TEAMS:
 		return false
 	for raw in members():
 		var m: Dictionary = raw
-		if m.get("teamId") == null or not bool(m.get("ready", false)):
+		if m.get("teamId") == null or not bool(m.get("ready", false)) or not bool(m.get("connected", false)):
 			return false
 	return true

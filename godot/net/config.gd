@@ -3,7 +3,7 @@ class_name NetConfig
 extends RefCounted
 
 ## The Render service. Override for local play with: godot --path godot -- --server=http://localhost:8080
-const DEFAULT_SERVER := "https://burrow-brawl-server.onrender.com"
+const DEFAULT_SERVER := "wss://burrow-brawl.onrender.com"
 
 
 static func server_base() -> String:

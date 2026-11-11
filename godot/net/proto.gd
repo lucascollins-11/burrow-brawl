@@ -29,6 +29,14 @@ static func decode(text: String) -> Dictionary:
 	return msg
 
 
+## Fields of the hello frame. resume_token is sent only when there is one (a reconnect).
+static func hello_fields(session_token: String, resume_token: String) -> Dictionary:
+	var fields := {"token": session_token, "protocolVersion": PROTOCOL_VERSION, "view": true}
+	if resume_token != "":
+		fields["resumeToken"] = resume_token
+	return fields
+
+
 ## Trimmed nickname, or "" when it is outside 2 to 16 characters.
 static func valid_nickname(raw: String) -> String:
 	var s := raw.strip_edges()

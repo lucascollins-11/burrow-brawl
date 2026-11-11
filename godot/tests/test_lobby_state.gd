@@ -62,6 +62,15 @@ func test_can_start_needs_two_seated_ready_teams_in_the_lobby() -> void:
 	check(not lobby.can_start(), "a room that is not in the lobby cannot start")
 
 
+func test_can_start_needs_every_member_connected() -> void:
+	var lobby := LobbyState.new()
+	lobby.my_id = "h"
+	var g := member("g", "t2", true)
+	g["connected"] = false
+	lobby.apply_room(room("lobby", [member("h", "t1", true), g], [team("t1", "h"), team("t2", "g")]))
+	check(not lobby.can_start(), "a disconnected member blocks the start")
+
+
 func test_host_seat_and_controller_lookups() -> void:
 	var lobby := LobbyState.new()
 	lobby.my_id = "g"
