@@ -30,6 +30,9 @@ describe("parseClientMessage", () => {
       parseClientMessage({ t: "hello", token: "abc", protocolVersion: PROTOCOL_VERSION }).ok,
     ).toBe(true);
     expect(parseClientMessage({ t: "room.join", seq: 1, code: "abcde" }).ok).toBe(true);
+    expect(
+      parseClientMessage({ t: "hello", token: "abc", protocolVersion: 1, view: true }).ok,
+    ).toBe(true);
     expect(parseClientMessage({ t: "lobby.setTeam", teamId: null }).ok).toBe(true);
     expect(parseClientMessage({ t: "lobby.setSettings", patch: { turnSeconds: 30 } }).ok).toBe(
       true,
@@ -46,6 +49,9 @@ describe("parseClientMessage", () => {
     expect(parseClientMessage({ t: "room.create", seq: -1 }).ok).toBe(false);
     expect(parseClientMessage({ t: "hello", token: "", protocolVersion: 1 }).ok).toBe(false);
     expect(parseClientMessage({ t: "lobby.ready", ready: "yes" }).ok).toBe(false);
+    expect(parseClientMessage({ t: "hello", token: "a", protocolVersion: 1, view: false }).ok).toBe(
+      false,
+    );
     expect(parseClientMessage({ t: "ping", clientTime: Infinity }).ok).toBe(false);
   });
 

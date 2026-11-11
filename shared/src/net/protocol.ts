@@ -134,7 +134,15 @@ export const DEFAULT_SETTINGS: MatchSettings = {
 export type TeamPatch = Partial<Pick<TeamSetup, "name" | "hatColor" | "hatStyle" | "critterNames">>;
 
 export type ClientMessage =
-  | { t: "hello"; seq?: number; token: string; protocolVersion: number; resumeToken?: string }
+  | {
+      t: "hello";
+      seq?: number;
+      token: string;
+      protocolVersion: number;
+      resumeToken?: string;
+      /** A view client (docs/view-protocol.md): gets streamed state instead of tick batches. */
+      view?: true;
+    }
   | { t: "room.create"; seq?: number }
   | { t: "room.join"; seq?: number; code: string }
   | { t: "room.leave"; seq?: number }
@@ -198,7 +206,7 @@ const ID_MAX = 64;
 
 /** Only these keys may appear on a message of the given type (plus t, seq). */
 const ALLOWED_KEYS: Record<ClientMessageType, readonly string[]> = {
-  hello: ["token", "protocolVersion", "resumeToken"],
+  hello: ["token", "protocolVersion", "resumeToken", "view"],
   "room.create": [],
   "room.join": ["code"],
   "room.leave": [],
@@ -343,6 +351,7 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
       if (!isInt(raw.protocolVersion, 0, 0xffff)) return bad("bad protocolVersion");
       if (raw.resumeToken !== undefined && !isStr(raw.resumeToken, 128))
         return bad("bad resumeToken");
+      if (raw.view !== undefined && raw.view !== true) return bad("bad view");
       return ok();
     case "room.join":
       if (!isStr(raw.code, 16)) return bad("bad code");
