@@ -38,6 +38,8 @@ export interface MatchHost {
 export interface MatchRunnerOptions {
   /** "realtime" runs its own 60 Hz loop; "manual" waits for advance() (tests). */
   ticker: "realtime" | "manual";
+  /** The step function. Tests swap in a throwing one; production always uses stepMatch. */
+  step?: typeof stepMatch;
 }
 
 export class MatchRunner {
@@ -200,7 +202,19 @@ export class MatchRunner {
     const next = this.tick + 1;
     const cmds = this.pending.get(next) ?? [];
     this.pending.delete(next);
-    const r = stepMatch(this.config, this.state, cmds);
+    let r: ReturnType<typeof stepMatch>;
+    try {
+      r = (this.opts.step ?? stepMatch)(this.config, this.state, cmds);
+    } catch (err) {
+      // A sim bug (e.g. an i32 overflow guard) must end only this match, never the process or
+      // the other rooms. The room goes to results and can rematch.
+      console.error(`[match ${this.id}] step to tick ${next} threw; ending the match`, err);
+      this.ended = true;
+      this.host.broadcast({ t: "match.end", winnerTeamId: null, tick: this.tick, reason: "error" });
+      this.stop();
+      this.host.onEnd(null);
+      return;
+    }
     this.state = r.state;
     const t = this.tick;
 

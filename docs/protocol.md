@@ -280,6 +280,9 @@ ships. Where they differ, this subsection is what the code does.
   and the room moves to phase `results` with everyone unready. The host sends
   `match.rematch` to go back to `lobby` with the same teams and settings
   (`GameClient.rematch()`); anyone else gets `not_host`.
+- **Sim error:** if a server step throws (a sim bug), only that match ends:
+  `match.end { winnerTeamId: null, tick, reason: "error" }`, then `results` as
+  above. Other rooms and the process are unaffected.
 - **Desync:** client sends `desync { tick, h }`. The server replies with
   `snapshot { snapshot }` at its current tick; later commands arrive in the
   following `tick` batches.
