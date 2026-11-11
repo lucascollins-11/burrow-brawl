@@ -17,8 +17,10 @@ function host() {
   const ends: (string | null)[] = [];
   const h: MatchHost = {
     broadcast: (m) => sent.push(m),
+    broadcastTo: (_kind, m) => sent.push(m as ServerMessage),
     sendTo: () => {},
     isConnected: () => true,
+    isView: () => false,
     onEnd: (w) => ends.push(w),
   };
   return { h, sent, ends };
