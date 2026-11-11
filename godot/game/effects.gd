@@ -56,7 +56,50 @@ func explode(at: Vector3, radius: float) -> void:
 	debris.emitting = true
 	get_tree().create_timer(2.5).timeout.connect(debris.queue_free)
 
+	_smoke(at, radius)
 	_shake = minf(1.0, _shake + radius / 14.0)
+
+
+## A lingering cartoon smoke cloud: soft grey balls that rise, swell and fade.
+func _smoke(at: Vector3, radius: float) -> void:
+	var smoke := CPUParticles3D.new()
+	smoke.position = at
+	smoke.amount = 18
+	smoke.lifetime = 2.2
+	smoke.one_shot = true
+	smoke.explosiveness = 0.85
+	smoke.direction = Vector3.UP
+	smoke.spread = 55.0
+	smoke.initial_velocity_min = radius * 0.4
+	smoke.initial_velocity_max = radius * 1.1
+	smoke.gravity = Vector3(0, 3.0, 0)
+	smoke.damping_min = 1.5
+	smoke.damping_max = 3.0
+	smoke.scale_amount_min = 0.7
+	smoke.scale_amount_max = 1.3
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.4))
+	curve.add_point(Vector2(0.5, 1.0))
+	curve.add_point(Vector2(1.0, 1.5))
+	smoke.scale_amount_curve = curve
+	var fade := Gradient.new()
+	fade.set_color(0, Color(0.92, 0.9, 0.88, 0.85))
+	fade.set_color(1, Color(0.6, 0.58, 0.58, 0.0))
+	smoke.color_ramp = fade
+	var ball := SphereMesh.new()
+	ball.radius = maxf(0.8, radius * 0.35)
+	ball.height = ball.radius * 2.0
+	ball.radial_segments = 10
+	ball.rings = 6
+	smoke.mesh = ball
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smoke.material_override = m
+	add_child(smoke)
+	smoke.emitting = true
+	get_tree().create_timer(3.2).timeout.connect(smoke.queue_free)
 
 
 ## Small puff for shots that do not explode (muzzle, impacts).
@@ -81,24 +124,29 @@ func puff(at: Vector3, radius := 2.0) -> void:
 	tw.chain().tween_callback(p.queue_free)
 
 
-## Floating "-23" above a point.
+## Floating "-23" above a point. Bigger hits are bigger and redder, and every number pops in.
 func damage(at: Vector3, amount: int) -> void:
+	var heavy := clampf(float(amount) / 60.0, 0.0, 1.0)
 	var label := Label3D.new()
 	label.text = "-%d" % amount
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	label.pixel_size = 0.05
-	label.font_size = 64
-	label.outline_size = 18
-	label.modulate = Color("e85d4a")
+	label.font_size = int(lerpf(56.0, 104.0, heavy))
+	label.outline_size = 22
+	label.modulate = Color("ffb52e").lerp(Color("e8392b"), heavy)
 	label.outline_modulate = Color("fff8ea")
 	label.position = at
+	label.scale = Vector3.ONE * 0.2
 	add_child(label)
 	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(label, "position:y", at.y + 8.0, 1.4)
-	tw.tween_property(label, "modulate:a", 0.0, 1.4).set_delay(0.5)
-	tw.chain().tween_callback(label.queue_free)
+	tw.tween_property(label, "scale", Vector3.ONE * 1.25, 0.12)
+	tw.tween_property(label, "scale", Vector3.ONE, 0.1)
+	var rise := create_tween()
+	rise.set_parallel(true)
+	rise.tween_property(label, "position:y", at.y + 8.0, 1.4)
+	rise.tween_property(label, "modulate:a", 0.0, 0.9).set_delay(0.6)
+	rise.chain().tween_callback(label.queue_free)
 
 
 ## Decay the shake and pick this frame's camera offset. Add `shake_offset` to the camera, then remove it.

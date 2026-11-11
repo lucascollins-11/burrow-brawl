@@ -97,3 +97,26 @@ static func _team_name(v: Dictionary, index: int) -> String:
 		if t["index"] == index:
 			return str(t["name"])
 	return TeamStyle.name_of(index)
+
+
+## Final table for the results screen: winner first, then by teams alive, then total health.
+## Each row is a summarize_teams row plus "rank" (1 = best) and "winner".
+static func standings(v: Dictionary) -> Array:
+	var rows := summarize_teams(v)
+	var winner = v["winner_team"]
+	rows.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			var aw: bool = winner != null and a["index"] == winner
+			var bw: bool = winner != null and b["index"] == winner
+			if aw != bw:
+				return aw
+			if a["alive"] != b["alive"]:
+				return a["alive"] > b["alive"]
+			if a["hp"] != b["hp"]:
+				return a["hp"] > b["hp"]
+			return a["index"] < b["index"]
+	)
+	for i in range(rows.size()):
+		rows[i]["rank"] = i + 1
+		rows[i]["winner"] = winner != null and rows[i]["index"] == winner
+	return rows
