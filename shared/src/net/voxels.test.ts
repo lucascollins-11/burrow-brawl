@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { base64Decode, base64Encode, decodeVoxels, encodeVoxels, rleEncode } from "./voxels";
+import {
+  base64Decode,
+  base64Encode,
+  base64EncodePortable,
+  decodeVoxels,
+  encodeVoxels,
+  rleEncode,
+} from "./voxels";
 
 describe("voxel encoding", () => {
   it("base64 matches Node's Buffer for every length mod 3", () => {
@@ -7,6 +14,7 @@ describe("voxel encoding", () => {
       const b = Uint8Array.from({ length: n }, (_, i) => (i * 97 + n) & 255);
       const want = Buffer.from(b).toString("base64");
       expect(base64Encode(b)).toBe(want);
+      expect(base64EncodePortable(b)).toBe(want);
       expect(Array.from(base64Decode(want))).toEqual(Array.from(b));
     }
   });
