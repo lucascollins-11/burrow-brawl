@@ -49,7 +49,7 @@ func test_view_model_interpolates_between_two_states_in_voxels() -> void:
 			{
 				"tick": 0,
 				"turns": {"phase": "control", "activeTeam": 0, "activeCritter": 1},
-				"seaY": 5 * one,
+				"seaY": 5,
 				"critters": [{"id": 1, "team": 0, "x": 10 * one, "y": 20 * one, "z": 30 * one, "yaw": 0, "hp": 100}],
 				"projectiles": [],
 			},
@@ -59,7 +59,7 @@ func test_view_model_interpolates_between_two_states_in_voxels() -> void:
 		{
 			"tick": 12,
 			"turns": {"phase": "control", "activeTeam": 0, "activeCritter": 1},
-			"seaY": 5 * one,
+			"seaY": 5,
 			"critters": [{"id": 1, "team": 0, "x": 14 * one, "y": 20 * one, "z": 30 * one, "yaw": 0, "hp": 90}],
 			"projectiles": [],
 		}
