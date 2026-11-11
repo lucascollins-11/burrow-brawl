@@ -17,12 +17,15 @@ import {
   type RoomState,
   type ServerMessage,
   type TeamSetup,
+  type ViewServerMessage,
 } from "@burrow-brawl/shared/src/net";
 import { MatchRunner } from "../match/runner";
 
 /** What a room needs from a live connection. */
 export interface Peer {
-  send(msg: ServerMessage): void;
+  /** True for a view client (hello.view); it gets streamed state instead of tick batches. */
+  readonly view?: boolean;
+  send(msg: ServerMessage | ViewServerMessage): void;
   close(code: number, reason: string): void;
 }
 
@@ -357,7 +360,12 @@ export class Room {
       teams.map((t) => t.controllerId!),
       {
         broadcast: (msg) => this.broadcast(msg),
+        broadcastTo: (kind, msg) => {
+          for (const m of this.members.values())
+            if (m.peer && (m.peer.view === true) === (kind === "view")) m.peer.send(msg);
+        },
         sendTo: (memberId, msg) => this.members.get(memberId)?.peer?.send(msg),
+        isView: (memberId) => this.members.get(memberId)?.peer?.view === true,
         isConnected: (memberId) => this.members.get(memberId)?.connected ?? false,
         onEnd: () => this.endMatch(),
       },
