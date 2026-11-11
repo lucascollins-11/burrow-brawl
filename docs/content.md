@@ -1,7 +1,5 @@
 # Burrow Brawl 3D: modes, maps and characters (v1, 2026-11-10)
 
-> **Status: later, after step 2.** Modes, maps and characters start after online 3D Brawl is live. Kept here as the plan.
-
 This is the full content scope for the genre, all our own designs. Nothing here is modeled
 on a specific existing game's modes, maps or characters.
 
@@ -37,7 +35,7 @@ Maps come in sizes S/M/L/XL, which scale with team count (XL for 7-8 teams). Map
 modifiers (ice, wind gusts, rising tide) are optional per match.
 
 ## Characters
-- **Molekins**: our own round clay moles. They're customizable per team and per critter:
+- **Squirmlings**: our own stacked-ring toy worms (see characters.md). They're customizable per team and per critter:
   - Hats: 30+ at launch (miner, chef, traffic cone, propeller, crown, flowerpot…)
   - Fur and skin colors, eyes, accessories (goggles, scarf, bandana), a gravestone style when knocked out
   - Team name, individual critter names (with a random silly-name generator), and a team flag
@@ -49,7 +47,7 @@ modifiers (ice, wind gusts, rising tide) are optional per match.
 - **Unlocks**: challenge medals unlock hats, voices and maps.
 
 ## Build order (added to 3d-plan.md milestones)
-- 3D-M3 (online): Brawl + custom rules, 2 maps (Picnic Table, Toy Chest), basic Molekin customization
+- 3D-M3 (online): Brawl + custom rules, 2 maps (Picnic Table, Toy Chest), basic Squirmling customization
 - 3D-M4a: Fort Wars, Crate Rush, Training, 2 more maps, voice packs, 15 hats
 - 3D-M4b: Burrow Dash, Hot Potato, King of the Toybox, 10 challenges, 4 more maps
 - 3D-M5: the remaining challenges, unlocks, more hats and accessories, polish

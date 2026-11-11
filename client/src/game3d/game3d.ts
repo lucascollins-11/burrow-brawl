@@ -24,7 +24,7 @@ import type { Controls3D } from "./controls";
 import { Effects3D } from "./effects3d";
 import { Environment } from "./environment";
 import { Hud3D } from "./hud3d";
-import { animateMolekin, createMolekin3D } from "./molekin3d";
+import { animateSquirmling, createSquirmling3D } from "./squirmling3d";
 import { defaultHat } from "./teamColors";
 import { viewFromMatch } from "./viewAdapter";
 import { CRITTER_HEIGHT, type TeamView, type ViewState } from "./viewState";
@@ -246,7 +246,7 @@ export class Game3D {
       let m = this.critters.get(c.id);
       if (!m) {
         const team = this.teams[c.team];
-        m = createMolekin3D(c.team, team?.hat ?? defaultHat(c.team), team?.color);
+        m = createSquirmling3D(c.team, team?.hat ?? defaultHat(c.team), team?.color);
         this.critters.set(c.id, m);
         this.stage.scene.add(m);
       }
@@ -255,7 +255,7 @@ export class Game3D {
       const isActive = c.id === v.activeCritterId;
       const heading = isActive && aimHeadingDeg !== null ? aimHeadingDeg : c.headingDeg;
       m.rotation.y = (heading * Math.PI) / 180;
-      animateMolekin(m, this.time, isActive);
+      animateSquirmling(m, this.time, isActive);
     }
   }
 

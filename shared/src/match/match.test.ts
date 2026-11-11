@@ -54,7 +54,7 @@ describe("base64", () => {
       const b = Uint8Array.from({ length: n }, (_, i) => (i * 97 + 13) & 255);
       expect(fromBase64(toBase64(b))).toEqual(b);
     }
-    expect(toBase64(new TextEncoder().encode("Molekin"))).toBe("TW9sZWtpbg==");
+    expect(toBase64(new TextEncoder().encode("Squirmling"))).toBe("U3F1aXJtbGluZw==");
     expect(() => fromBase64("abc")).toThrow();
     expect(() => fromBase64("ab!d")).toThrow();
   });

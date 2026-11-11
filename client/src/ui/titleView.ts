@@ -81,7 +81,7 @@ export function renderTitle(
     "div",
     { class: "panel title" },
     h("h1", { text: "Burrow Brawl" }),
-    h("p", { class: "tagline", text: "Tiny moles. Big hats. Bigger craters." }),
+    h("p", { class: "tagline", text: "Tiny Squirmlings. Big hats. Bigger craters." }),
     opts.code ? h("p", { class: "invite", text: `You were invited to room ${opts.code}` }) : null,
     nick,
     err,
