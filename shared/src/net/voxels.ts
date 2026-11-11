@@ -9,7 +9,18 @@ const LOOKUP = (() => {
   return t;
 })();
 
+interface NodeBuffer {
+  from(b: Uint8Array): { toString(enc: "base64"): string };
+}
+const NodeBuf = (globalThis as { Buffer?: NodeBuffer }).Buffer;
+
 export function base64Encode(bytes: Uint8Array): string {
+  if (NodeBuf) return NodeBuf.from(bytes).toString("base64");
+  return base64EncodePortable(bytes);
+}
+
+/** Standard base64 with padding, without Node's Buffer (browsers, tests). */
+export function base64EncodePortable(bytes: Uint8Array): string {
   const parts: string[] = [];
   let chunk = "";
   for (let i = 0; i < bytes.length; i += 3) {
@@ -54,16 +65,20 @@ export function base64Decode(s: string): Uint8Array {
 
 /** Run-length pairs [count - 1, value]; one pair covers 1..256 equal bytes. */
 export function rleEncode(bytes: Uint8Array): Uint8Array {
-  const out: number[] = [];
+  // Worst case is two bytes per input byte; write into one buffer and trim.
+  const out = new Uint8Array(bytes.length * 2);
+  let o = 0;
   let i = 0;
-  while (i < bytes.length) {
+  const n = bytes.length;
+  while (i < n) {
     const v = bytes[i]!;
-    let n = 1;
-    while (n < 256 && i + n < bytes.length && bytes[i + n] === v) n++;
-    out.push(n - 1, v);
-    i += n;
+    let run = 1;
+    while (run < 256 && i + run < n && bytes[i + run] === v) run++;
+    out[o++] = run - 1;
+    out[o++] = v;
+    i += run;
   }
-  return Uint8Array.from(out);
+  return out.subarray(0, o);
 }
 
 /** Decode run-length pairs; throws unless they expand to exactly `length` bytes. */
