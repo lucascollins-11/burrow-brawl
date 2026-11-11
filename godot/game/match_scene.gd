@@ -16,7 +16,12 @@ extends Node3D
 signal input_ready(msg: Dictionary)
 signal left_match
 
+## The character model. To swap the character, point this at another script with the same static API
+## (HEIGHT, create(team, hat_style, color), animate(root, t, active, moving), set_tag(root, text, color)).
+const CRITTER_MODEL := preload("res://game/squirmling.gd")
 const TERRAIN_SCRIPT := "res://terrain/terrain_view.gd"
+const LOBBY_SCENE := "res://ui/lobby.tscn"
+const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
 const HINT_WATCH := "Watching. Hold tight."
 const HINT_WALK := "WASD walk - Space jump - Enter backflip - F or Tab aim - Backspace skip"
@@ -68,7 +73,7 @@ func _ready() -> void:
 	add_child(hud)
 	hud.skip_pressed.connect(controls.skip)
 	hud.leave_pressed.connect(_leave)
-	hud.again_pressed.connect(_leave)
+	hud.again_pressed.connect(_back_to_lobby)
 	_make_marker()
 	_connect_net()
 
@@ -82,10 +87,13 @@ func _connect_net() -> void:
 	net.view_events.connect(handle_events)
 	net.terrain_patch.connect(handle_terrain_patch)
 	net.match_ended.connect(handle_match_end)
+	net.room_left.connect(_on_room_left)
+	net.disconnected.connect(_on_disconnected)
 	# The lobby switches scenes when match.start arrives, so pick up the one it kept for us.
-	var kept: Variant = net.get("last_match_start")
-	if typeof(kept) == TYPE_DICTIONARY and not (kept as Dictionary).is_empty():
-		handle_match_start(kept)
+	if net.has_method("current_match_start"):
+		var kept: Dictionary = net.call("current_match_start")
+		if not kept.is_empty():
+			handle_match_start(kept)
 
 
 ## Let a terrain node (godot/terrain) take part. See the header for the three methods it offers.
@@ -205,7 +213,7 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 		elif kind == "damage":
 			var c := _find(v["critters"], int(e.get("critterId", -1)))
 			if not c.is_empty():
-				fx.damage((c["pos"] as Vector3) + Vector3(0, Squirmling.HEIGHT, 0), int(e.get("amount", 0)))
+				fx.damage((c["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), int(e.get("amount", 0)))
 
 
 func _sync_critters(v: Dictionary, active: Dictionary) -> void:
@@ -216,7 +224,7 @@ func _sync_critters(v: Dictionary, active: Dictionary) -> void:
 		var node: Node3D = _critters.get(id, null)
 		if node == null:
 			var look: Dictionary = _look(int(c["team"]))
-			node = Squirmling.create(int(c["team"]), str(look["hat"]), look["color"])
+			node = CRITTER_MODEL.create(int(c["team"]), str(look["hat"]), look["color"])
 			_critters[id] = node
 			add_child(node)
 		node.visible = c["alive"]
@@ -226,9 +234,9 @@ func _sync_critters(v: Dictionary, active: Dictionary) -> void:
 		node.position = pos
 		node.rotation.y = deg_to_rad(float(c["heading_deg"]))
 		var is_active: bool = not active.is_empty() and active["id"] == id
-		Squirmling.animate(node, _time + float(id) * 0.37, is_active, moving)
+		CRITTER_MODEL.animate(node, _time + float(id) * 0.37, is_active, moving)
 		var team_color: Color = _look(int(c["team"]))["color"]
-		Squirmling.set_tag(node, "%s  %d" % [c["name"], c["hp"]], team_color.lightened(0.45))
+		CRITTER_MODEL.set_tag(node, "%s  %d" % [c["name"], c["hp"]], team_color.lightened(0.45))
 	for id in _critters.keys():
 		if not seen.has(id):
 			(_critters[id] as Node).queue_free()
@@ -252,7 +260,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		var p: Vector3 = active["pos"]
 		goal = {
 			"mode": "aim",
-			"target": p + Vector3(0, Squirmling.HEIGHT * 0.8, 0) + d * 22.0,
+			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.8, 0) + d * 22.0,
 			"yaw_deg": CameraMath.camera_yaw_for_heading(CameraMath.yaw_to_deg(aim.yaw)),
 			"pitch_deg": -float(aim.pitch_deg),
 			"dist": CameraMath.AIM_DIST + 22.0,
@@ -260,7 +268,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	else:
 		var tgt := _rig.target
 		if not active.is_empty():
-			tgt = (active["pos"] as Vector3) + Vector3(0, Squirmling.HEIGHT * 0.6, 0)
+			tgt = (active["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.6, 0)
 		goal = {
 			"mode": "orbit",
 			"target": tgt,
@@ -299,7 +307,7 @@ func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState)
 	_marker.visible = not active.is_empty() and v["phase"] == "control" and aim == null
 	if _marker.visible:
 		var p: Vector3 = active["pos"]
-		_marker.position = p + Vector3(0, Squirmling.HEIGHT + 3.5 + sin(_time * 4.0) * 0.4, 0)
+		_marker.position = p + Vector3(0, CRITTER_MODEL.HEIGHT + 3.5 + sin(_time * 4.0) * 0.4, 0)
 
 
 func _look(team: int) -> Dictionary:
@@ -347,6 +355,28 @@ func _clear_critters() -> void:
 		(_critters[id] as Node).queue_free()
 	_critters.clear()
 	_prev_pos.clear()
+
+
+func _back_to_lobby() -> void:
+	var net := get_node_or_null("/root/Net")
+	if net != null and net.get("lobby") != null and net.lobby.is_active():
+		get_tree().change_scene_to_file.call_deferred(LOBBY_SCENE)
+	else:
+		_go_title()
+	left_match.emit()
+
+
+func _on_room_left(_reason: String) -> void:
+	_go_title()
+
+
+func _on_disconnected(_reason: String) -> void:
+	_go_title()
+
+
+func _go_title() -> void:
+	if is_inside_tree():
+		get_tree().change_scene_to_file.call_deferred(TITLE_SCENE)
 
 
 func _leave() -> void:
