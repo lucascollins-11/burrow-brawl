@@ -47,6 +47,8 @@ export interface MatchHost {
 export interface MatchRunnerOptions {
   /** "realtime" runs its own 60 Hz loop; "manual" waits for advance() (tests). */
   ticker: "realtime" | "manual";
+  /** The step function. Tests swap in a throwing one; production always uses stepMatch. */
+  step?: typeof stepMatch;
 }
 
 export class MatchRunner {
@@ -232,7 +234,7 @@ export class MatchRunner {
     this.pending.delete(next);
     let r: ReturnType<typeof stepMatch>;
     try {
-      r = stepMatch(this.config, this.state, cmds);
+      r = (this.opts.step ?? stepMatch)(this.config, this.state, cmds);
     } catch (err) {
       // A sim bug must end this match only, never the process or other rooms.
       console.error(`[match ${this.id}] step failed at tick ${next}`, err);
