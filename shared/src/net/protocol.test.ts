@@ -55,6 +55,29 @@ describe("parseClientMessage", () => {
     expect(parseClientMessage({ t: "ping", clientTime: Infinity }).ok).toBe(false);
   });
 
+  it("accepts every Godot hat id and maps the old ones", () => {
+    const hat = (hatStyle: unknown) => {
+      const r = parseClientMessage({ t: "lobby.editTeam", teamId: "t1", patch: { hatStyle } });
+      return r.ok && r.value.t === "lobby.editTeam" ? r.value.patch.hatStyle : null;
+    };
+    for (const id of [
+      "miner",
+      "chef",
+      "cone",
+      "propeller",
+      "crown",
+      "pirate",
+      "flowerpot",
+      "bucket",
+    ])
+      expect(hat(id)).toBe(id);
+    expect(hat("tricorn")).toBe("pirate");
+    expect(hat("beanie")).toBe("bucket");
+    expect(hat("toString")).toBeNull();
+    expect(hat("sombrero")).toBeNull();
+    expect(hat(3)).toBeNull();
+  });
+
   it("validates and cleans team patches", () => {
     const r = parseClientMessage({
       t: "lobby.editTeam",
