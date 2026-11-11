@@ -2,8 +2,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["src", "../client/src/env.d.ts"]
+  "include": ["src", "bench", "../client/src/env.d.ts"]
 }

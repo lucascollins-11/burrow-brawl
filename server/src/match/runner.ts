@@ -121,8 +121,11 @@ export class MatchRunner {
     this.checkAbsent();
     if (this.opts.ticker === "realtime") {
       this.lastRealTime = performance.now();
-      // 4 ms timer + accumulator: steady 60 Hz without drift, catch up after stalls.
-      this.timer = setInterval(() => this.pump(), 4);
+      // Wake once per batch (CONFIRM_EVERY ticks, 50 ms) and run the ticks due: clients see
+      // nothing between batches anyway, and a 4 ms timer alone cost about 22 ms CPU per second
+      // per match (bench/cpu.ts), a fifth of Render's 0.1 CPU. The accumulator keeps 60 Hz
+      // without drift and catches up after stalls.
+      this.timer = setInterval(() => this.pump(), (CONFIRM_EVERY * 1000) / TICKS_PER_SECOND);
     }
   }
 
@@ -222,7 +225,8 @@ export class MatchRunner {
     this.acc = Math.min(this.acc + (now - this.lastRealTime), 250); // cap catch-up after a stall
     this.lastRealTime = now;
     const step = 1000 / TICKS_PER_SECOND;
-    while (this.acc >= step && !this.ended) {
+    // 1 ms of slack: a timer that fires a hair early still runs the whole batch, not 2 of 3 ticks.
+    while (this.acc >= step - 1 && !this.ended) {
       this.acc -= step;
       this.stepOnce();
     }
