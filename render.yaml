@@ -4,7 +4,7 @@ services:
   - type: web
     name: burrow-brawl-server
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./server/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
     autoDeploy: true
