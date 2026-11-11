@@ -1,0 +1,199 @@
+class_name ViewModel
+extends RefCounted
+## What the server last told us about the match (docs/view-protocol.md), kept as two samples per
+## moving thing so the scene can draw between them. The client never simulates: positions, health and
+## turns come only from `state` messages. Units: sim Q16.16 integers are divided by 65536 into voxels
+## (one voxel is one Godot unit), y up.
+
+const FIXED_ONE := 65536.0
+const TICKS_PER_SECOND := 60.0
+## The render clock trails the newest state by this many ticks (50 ms) to stay between two samples.
+const RENDER_DELAY_TICKS := 3.0
+const MAX_HP_DEFAULT := 100
+
+var match_id: String = ""
+var config: Dictionary = {}
+var team_ids: Array = []
+var teams: Array = []  # [{index, name, color, hat}]
+var local_teams: Array = []  # sim team indexes controlled by this client
+var turns: Dictionary = {}
+var sea_y: float = 0.0
+var latest_tick: int = 0
+var max_hp: int = MAX_HP_DEFAULT
+var started: bool = false
+
+var _critters: Dictionary = {}  # id -> {id, team, hp, status, grounded, a, b, ta, tb, yaw_a, yaw_b}
+var _projectiles: Dictionary = {}  # id -> {id, owner, weapon, a, b, ta, tb, fuse}
+var _events: Array = []
+var _render_tick: float = 0.0
+
+
+func set_teams(looks: Array) -> void:
+	teams = looks.duplicate()
+
+
+func set_local_teams(indexes: Array) -> void:
+	local_teams = indexes.duplicate()
+
+
+## match.start: always complete, so throw away everything we had.
+func apply_match_start(msg: Dictionary) -> void:
+	_critters.clear()
+	_projectiles.clear()
+	_events.clear()
+	match_id = str(msg.get("matchId", ""))
+	config = msg.get("config", {})
+	team_ids = msg.get("teamIds", [])
+	max_hp = int(config.get("startHealth", MAX_HP_DEFAULT))
+	var state: Dictionary = msg.get("state", {})
+	apply_state(state, true)
+	_render_tick = float(latest_tick)
+	if teams.size() < team_ids.size():
+		teams = []
+		for i in range(team_ids.size()):
+			teams.append(TeamStyle.default_look(i))
+	started = true
+
+
+## state: critters are only the ones that changed, projectiles are always the full list.
+func apply_state(msg: Dictionary, snap := false) -> void:
+	var tick := int(msg.get("tick", latest_tick))
+	latest_tick = maxi(latest_tick, tick)
+	turns = msg.get("turns", turns)
+	sea_y = float(msg.get("seaY", sea_y))
+	for c in msg.get("critters", []):
+		var id := int(c["id"])
+		var pos := _pos(c)
+		var yaw := CameraMath.yaw_to_deg(int(c.get("yaw", 0)))
+		var e: Dictionary = _critters.get(id, {})
+		if e.is_empty() or snap:
+			e = {"id": id, "a": pos, "b": pos, "ta": tick, "tb": tick, "yaw_a": yaw, "yaw_b": yaw}
+		else:
+			e["a"] = e["b"]
+			e["ta"] = e["tb"]
+			e["yaw_a"] = e["yaw_b"]
+			e["b"] = pos
+			e["tb"] = tick
+			e["yaw_b"] = yaw
+		e["team"] = int(c.get("team", e.get("team", 0)))
+		e["hp"] = int(c.get("hp", 0))
+		e["status"] = str(c.get("status", "alive"))
+		e["grounded"] = bool(c.get("grounded", true))
+		_critters[id] = e
+	var seen := {}
+	for p in msg.get("projectiles", []):
+		var id := int(p["id"])
+		seen[id] = true
+		var pos := _pos(p)
+		var e: Dictionary = _projectiles.get(id, {})
+		if e.is_empty():
+			e = {"id": id, "a": pos, "b": pos, "ta": tick, "tb": tick}
+		else:
+			e["a"] = e["b"]
+			e["ta"] = e["tb"]
+			e["b"] = pos
+			e["tb"] = tick
+		e["owner"] = int(p.get("ownerId", 0))
+		e["weapon"] = str(p.get("weaponId", ""))
+		e["fuse"] = int(p.get("fuseTicks", -1))
+		_projectiles[id] = e
+	for id in _projectiles.keys():
+		if not seen.has(id):
+			_projectiles.erase(id)
+
+
+func apply_events(msg: Dictionary) -> void:
+	for e in msg.get("events", []):
+		_events.append(e)
+
+
+## Events received since the last call (jumped, landed, damage, died, fired, bounced, explosion...).
+func take_events() -> Array:
+	var out := _events
+	_events = []
+	return out
+
+
+## Advance the render clock by real seconds. It runs at sim speed and is pulled back in if it drifts.
+func advance(dt: float) -> void:
+	_render_tick += dt * TICKS_PER_SECOND
+	var target := float(latest_tick) - RENDER_DELAY_TICKS
+	if _render_tick > float(latest_tick):
+		_render_tick = float(latest_tick)
+	elif _render_tick < target - 6.0:
+		_render_tick = target
+
+
+func render_tick() -> float:
+	return _render_tick
+
+
+static func _pos(d: Dictionary) -> Vector3:
+	return Vector3(float(d["x"]), float(d["y"]), float(d["z"])) / FIXED_ONE
+
+
+static func _lerp_between(a: Vector3, b: Vector3, ta: int, tb: int, t: float) -> Vector3:
+	if tb <= ta:
+		return b
+	return a.lerp(b, clampf((t - float(ta)) / float(tb - ta), 0.0, 1.0))
+
+
+## Everything the scene and HUD draw, with positions interpolated to the render clock.
+func snapshot() -> Dictionary:
+	var crit: Array = []
+	var ids := _critters.keys()
+	ids.sort()
+	for id in ids:
+		var e: Dictionary = _critters[id]
+		var pos := _lerp_between(e["a"], e["b"], e["ta"], e["tb"], _render_tick)
+		var yaw_a: float = e["yaw_a"]
+		var yaw := CameraMath.wrap_deg(
+			yaw_a + CameraMath.angle_delta(yaw_a, e["yaw_b"]) * _blend(e["ta"], e["tb"])
+		)
+		crit.append(
+			{
+				"id": id,
+				"team": e["team"],
+				"name": "Squirmling %d" % id,
+				"pos": pos,
+				"heading_deg": yaw,
+				"hp": e["hp"],
+				"max_hp": max_hp,
+				"alive": e["status"] == "alive",
+				"grounded": e["grounded"],
+			}
+		)
+	var shots: Array = []
+	for id in _projectiles.keys():
+		var p: Dictionary = _projectiles[id]
+		shots.append(
+			{
+				"id": id,
+				"weapon": p["weapon"],
+				"pos": _lerp_between(p["a"], p["b"], p["ta"], p["tb"], _render_tick),
+			}
+		)
+	var active_team = turns.get("activeTeam", null)
+	var phase: String = str(turns.get("phase", "control"))
+	var phase_end := int(turns.get("phaseEndTick", 0))
+	return {
+		"teams": teams,
+		"critters": crit,
+		"projectiles": shots,
+		"active_critter_id": turns.get("activeCritter", null),
+		"active_team": active_team,
+		"phase": phase,
+		"round": int(turns.get("round", 1)),
+		"turn": int(turns.get("turn", 0)),
+		"time_left": maxf(0.0, float(phase_end) - _render_tick) / TICKS_PER_SECOND,
+		"wind": Vector2(float(turns.get("windX", 0)), float(turns.get("windZ", 0))),
+		"sea_y": sea_y,
+		"winner_team": turns.get("winnerTeam", null),
+		"my_turn": active_team != null and local_teams.has(int(active_team)),
+	}
+
+
+func _blend(ta: int, tb: int) -> float:
+	if tb <= ta:
+		return 1.0
+	return clampf((_render_tick - float(ta)) / float(tb - ta), 0.0, 1.0)
