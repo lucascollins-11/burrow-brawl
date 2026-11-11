@@ -34,7 +34,7 @@ func set_store(new_store: Store) -> void:
 	if store == null:
 		return
 	if material == null:
-		material = TerrainMaterial.make(float(store.sea_y))
+		material = TerrainMaterial.make(float(store.sea_y), float(store.bedrock_y))
 	for ci in range(store.chunk_count()):
 		_dirty[ci] = true
 	_busy = true
