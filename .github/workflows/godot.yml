@@ -42,7 +42,19 @@ jobs:
         run: godot --headless --path godot --import
 
       - name: Headless tests
-        run: godot --headless --path godot -s res://tests/run_tests.gd
+        # Runs the core suite, then every godot/tests/*_tests.gd script. Any non-zero exit fails the
+        # job. Test output (including BENCH lines) goes to the log as it runs.
+        run: |
+          status=0
+          godot --headless --path godot -s res://tests/run_tests.gd || status=1
+          shopt -s nullglob
+          for f in godot/tests/*_tests.gd; do
+            name="$(basename "$f")"
+            echo "::group::$name"
+            godot --headless --path godot --script "res://tests/$name" || status=1
+            echo "::endgroup::"
+          done
+          exit "$status"
 
   export-windows:
     needs: test
