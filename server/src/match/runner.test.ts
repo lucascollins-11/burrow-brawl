@@ -67,3 +67,39 @@ describe("MatchRunner step errors", () => {
     err.mockRestore();
   });
 });
+
+describe("MatchRunner realtime ticker", () => {
+  it("wakes once per 3-tick batch and keeps 60 Hz", () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+    try {
+      const out = host();
+      const r = new MatchRunner(
+        MatchRunner.configFor(settings, 2),
+        ["t1", "t2"],
+        ["m1", "m2"],
+        out.h,
+        {
+          ticker: "realtime",
+        },
+      );
+      r.start();
+      vi.advanceTimersByTime(40);
+      expect(r.tick).toBe(0); // no wake before the first batch is due
+      vi.advanceTimersByTime(10);
+      expect(r.tick).toBe(3);
+      const seen: number[] = [];
+      for (let i = 0; i < 20; i++) {
+        vi.advanceTimersByTime(50);
+        seen.push(r.tick);
+      }
+      // Every wake runs a whole batch, so the tick is always a batch boundary.
+      expect(seen.every((t) => t % 3 === 0)).toBe(true);
+      expect(r.tick).toBe(63);
+      expect(vi.getTimerCount()).toBe(1);
+      r.stop();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
