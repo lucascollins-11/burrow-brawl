@@ -37,7 +37,23 @@ export const HAT_COLORS = [
   "#a7ffeb", // seafoam
 ] as const;
 
-export const HAT_STYLES = ["miner", "chef", "tricorn", "cone", "beanie", "propeller"] as const;
+/** Hat ids, in the Godot client's order (godot/game/hats/hats.gd IDS), so team defaults match. */
+export const HAT_STYLES = [
+  "miner",
+  "chef",
+  "cone",
+  "propeller",
+  "crown",
+  "pirate",
+  "flowerpot",
+  "bucket",
+] as const;
+
+/** Old hat ids that older clients may still send, and the hat each now means. */
+export const HAT_ALIASES: Readonly<Record<string, HatStyle>> = {
+  tricorn: "pirate",
+  beanie: "bucket",
+};
 
 export type HatColor = (typeof HAT_COLORS)[number];
 export type HatStyle = (typeof HAT_STYLES)[number];
@@ -278,11 +294,13 @@ export function validateTeamPatch(p: unknown): Parsed<TeamPatch> {
           return { ok: false, error: "bad hatColor" };
         out.hatColor = v as HatColor;
         break;
-      case "hatStyle":
-        if (!(HAT_STYLES as readonly unknown[]).includes(v))
+      case "hatStyle": {
+        const style = typeof v === "string" && Object.hasOwn(HAT_ALIASES, v) ? HAT_ALIASES[v] : v;
+        if (!(HAT_STYLES as readonly unknown[]).includes(style))
           return { ok: false, error: "bad hatStyle" };
-        out.hatStyle = v as HatStyle;
+        out.hatStyle = style as HatStyle;
         break;
+      }
       case "critterNames": {
         if (!Array.isArray(v) || v.length < 1 || v.length > MAX_CRITTERS)
           return { ok: false, error: "bad critterNames" };
