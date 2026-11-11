@@ -56,6 +56,99 @@ jobs:
           done
           exit "$status"
 
+  # Two Godot clients play one online match against a locally started game server: lobby, start,
+  # island decode and meshing, one shot, a crater on both clients, turn passing. Then the same run
+  # with a software renderer saves screenshots (best effort) so agents can see the game.
+  e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # needed only to attach screenshots to the pull request's release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build and start the game server
+        run: |
+          set -euo pipefail
+          pnpm --filter @burrow-brawl/server build
+          HOST=127.0.0.1 PORT=8080 node server/dist/index.js > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/healthz >/dev/null && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/healthz
+
+      - name: Install Godot
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/godot-bin"
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q godot.zip -d "$HOME/godot-bin"
+          mv "$HOME/godot-bin/Godot_v${GODOT_VERSION}_linux.x86_64" "$HOME/godot-bin/godot"
+          chmod +x "$HOME/godot-bin/godot"
+          echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Import project
+        run: godot --headless --path godot --import
+
+      - name: Online match, headless
+        run: godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080
+
+      - name: Online match with screenshots (software renderer, best effort)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 > /dev/null
+          mkdir -p shots
+          timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" \
+            godot --path godot --rendering-driver vulkan --resolution 1280x720 \
+            res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots"
+          ls -la shots
+
+      - name: Server log
+        if: always()
+        run: tail -n 60 server.log || true
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: shots
+          if-no-files-found: ignore
+
+      - name: Attach screenshots to the pull request's release
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(shots/*.png)
+          [ ${#files[@]} -gt 0 ] || { echo "no screenshots"; exit 0; }
+          TAG="godot-pr-${PR_NUMBER}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "$HEAD_SHA" \
+              --title "Godot build for PR #${PR_NUMBER}" \
+              --notes "Windows build from pull request #${PR_NUMBER}. Replaced on every push to the PR." || true
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+
   export-windows:
     needs: test
     runs-on: ubuntu-latest

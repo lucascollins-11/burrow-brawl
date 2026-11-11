@@ -125,6 +125,9 @@ export class Room {
    */
   attach(id: string, nickname: string, peer: Peer, re?: number): ErrorCode | null {
     const existing = this.members.get(id);
+    // A room.join on the connection that is already seated (e.g. a client that resumed in hello
+    // and then also joined): answer it, but don't resend the full match state.
+    const alreadyAttached = existing !== undefined && existing.peer === peer;
     if (existing) {
       if (existing.peer && existing.peer !== peer) {
         existing.peer.close(CloseCodes.replaced, "replaced by a newer connection");
@@ -162,7 +165,7 @@ export class Room {
     );
     this.broadcast({ t: "room.update", room: this.state() }, id);
     // Back into a running match: full snapshot plus stamped commands.
-    if (existing && this.match) this.match.resync(id);
+    if (existing && this.match && !alreadyAttached) this.match.resync(id);
     return null;
   }
 
@@ -252,7 +255,11 @@ export class Room {
         return null;
 
       case "room.sync":
-        me.peer?.send({ t: "room.update", room: this.state() });
+        // No connection attached means this member's seat was not resumed on this socket (for
+        // example the resume window passed): say so, so the client joins by code instead of
+        // getting an ok with no room.update.
+        if (!me.peer) return "not_in_room";
+        me.peer.send({ t: "room.update", room: this.state() });
         return null;
 
       case "chat": {
