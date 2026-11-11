@@ -103,7 +103,15 @@ jobs:
         run: godot --headless --path godot --import
 
       - name: Online match, headless
-        run: godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080
+        run: |
+          set -euo pipefail
+          godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 2>&1 | tee e2e.log
+          # Engine errors (for example a data race in the threaded mesher) must fail the job even
+          # when the match itself completes.
+          if grep -n "^ERROR:\|SCRIPT ERROR" e2e.log; then
+            echo "The engine reported errors during the match"
+            exit 1
+          fi
 
       - name: Same match against the live server (probe, best effort)
         continue-on-error: true

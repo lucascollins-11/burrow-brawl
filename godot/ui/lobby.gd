@@ -29,45 +29,76 @@ func _ready() -> void:
 
 
 func _build() -> void:
+	theme = MenuStyle.theme()
+	var backdrop := MenuBackdrop.new()
+	backdrop.quiet = true
+	add_child(backdrop)
+
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 24)
+		margin.add_theme_constant_override(side, 28)
 	add_child(margin)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 16)
 	margin.add_child(box)
 
+	# Header: the room code, big enough to read out to a friend.
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 16)
+	box.add_child(header)
+	var code_col := VBoxContainer.new()
+	code_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(code_col)
 	_code_label = Label.new()
-	_code_label.add_theme_font_size_override("font_size", 36)
-	box.add_child(_code_label)
+	_code_label.label_settings = MenuStyle.heading(56, Color("ffd23f"), 12)
+	code_col.add_child(_code_label)
 	_phase_label = Label.new()
-	box.add_child(_phase_label)
+	_phase_label.label_settings = MenuStyle.heading(22, Color.WHITE, 6)
+	code_col.add_child(_phase_label)
+	var copy := _button(header, "Copy code", _on_copy_pressed)
+	copy.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var leave := _button(header, "Leave room", _on_leave_pressed)
+	leave.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	MenuStyle.paint(leave, MenuStyle.RED.lightened(0.25))
 
-	box.add_child(_heading("Players"))
-	_members_box = VBoxContainer.new()
-	box.add_child(_members_box)
+	# Two cards side by side: teams (wide) and players.
+	var cards := HBoxContainer.new()
+	cards.add_theme_constant_override("separation", 20)
+	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(cards)
 
-	box.add_child(_heading("Teams (up to %d)" % Proto.MAX_TEAMS))
+	var teams_col := MenuStyle.card(cards, "Teams (up to %d)" % Proto.MAX_TEAMS)
+	(teams_col.get_parent() as Control).size_flags_stretch_ratio = 1.6
 	_teams_box = VBoxContainer.new()
-	box.add_child(_teams_box)
+	_teams_box.add_theme_constant_override("separation", 8)
+	teams_col.add_child(_teams_box)
+	var team_buttons := HBoxContainer.new()
+	team_buttons.add_theme_constant_override("separation", 10)
+	teams_col.add_child(team_buttons)
+	_add_button = _button(team_buttons, "Add team", _on_add_pressed)
+	_remove_button = _button(team_buttons, "Remove last team", _on_remove_pressed)
 
-	var controls := HBoxContainer.new()
-	controls.add_theme_constant_override("separation", 8)
-	box.add_child(controls)
-	_ready_button = _button(controls, "Ready", _on_ready_pressed)
-	_add_button = _button(controls, "Add team", _on_add_pressed)
-	_remove_button = _button(controls, "Remove last team", _on_remove_pressed)
-	_start_button = _button(controls, "Start match", _on_start_pressed)
+	var players_col := MenuStyle.card(cards, "Players")
+	_members_box = VBoxContainer.new()
+	_members_box.add_theme_constant_override("separation", 8)
+	players_col.add_child(_members_box)
 
-	var leave_row := HBoxContainer.new()
-	box.add_child(leave_row)
-	_button(leave_row, "Leave room", _on_leave_pressed)
-
+	# Footer: status on the left, the two big actions on the right.
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 14)
+	box.add_child(footer)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(_status)
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_status.label_settings = MenuStyle.heading(20, Color.WHITE, 6)
+	footer.add_child(_status)
+	_ready_button = _button(footer, "Ready", _on_ready_pressed)
+	_ready_button.custom_minimum_size = Vector2(200, 0)
+	_start_button = _button(footer, "Start match", _on_start_pressed)
+	_start_button.custom_minimum_size = Vector2(240, 0)
+	MenuStyle.paint(_start_button, MenuStyle.ORANGE, 28)
 
 
 func _refresh() -> void:
@@ -81,6 +112,7 @@ func _refresh() -> void:
 
 	var is_ready := bool(lobby.me().get("ready", false))
 	_ready_button.text = "Not ready" if is_ready else "Ready"
+	MenuStyle.paint(_ready_button, MenuStyle.CREAM if is_ready else MenuStyle.GREEN, 28)
 
 	var team_count := lobby.teams().size()
 	var host := lobby.is_host()
@@ -90,6 +122,11 @@ func _refresh() -> void:
 	_add_button.disabled = team_count >= Proto.MAX_TEAMS
 	_remove_button.disabled = team_count <= Proto.MIN_TEAMS
 	_start_button.disabled = not lobby.can_start()
+	if lobby.phase() == "lobby":
+		if host:
+			_status.text = "" if lobby.can_start() else "Everyone needs a team and to press Ready."
+		else:
+			_status.text = "Waiting for the host to start." if is_ready else "Take a seat on a team, then press Ready."
 
 
 func _phase_text(phase: String) -> String:
@@ -109,19 +146,29 @@ func _rebuild_members() -> void:
 	for raw in lobby.members():
 		var m: Dictionary = raw
 		var member_id := str(m.get("id", ""))
-		var tags := PackedStringArray()
-		if member_id == lobby.host_id():
-			tags.append("host")
-		if bool(m.get("ready", false)):
-			tags.append("ready")
-		if member_id == Net.my_id:
-			tags.append("you")
-		var seat := "no team"
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var dot := ColorRect.new()
+		dot.custom_minimum_size = Vector2(14, 14)
+		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		dot.color = MenuStyle.GREY
 		if m.get("teamId") != null:
-			seat = str(lobby.team(str(m["teamId"])).get("name", "?"))
+			dot.color = Color.html(str(lobby.team(str(m["teamId"])).get("hatColor", "#b9ad9c")))
+		row.add_child(dot)
 		var label := Label.new()
-		label.text = "%s  [%s]  %s" % [str(m.get("nickname", "")), ", ".join(tags), seat]
-		_members_box.add_child(label)
+		label.text = str(m.get("nickname", ""))
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.clip_text = true
+		row.add_child(label)
+		if member_id == Net.my_id:
+			row.add_child(MenuStyle.chip("YOU", MenuStyle.PAPER))
+		if member_id == lobby.host_id():
+			row.add_child(MenuStyle.chip("HOST", Color("ffd23f")))
+		if bool(m.get("ready", false)):
+			row.add_child(MenuStyle.chip("READY", MenuStyle.GREEN))
+		elif m.get("teamId") == null:
+			row.add_child(MenuStyle.chip("NO TEAM", MenuStyle.GREY))
+		_members_box.add_child(row)
 
 
 func _rebuild_teams() -> void:
@@ -131,34 +178,50 @@ func _rebuild_teams() -> void:
 	for raw in lobby.teams():
 		var t: Dictionary = raw
 		var team_id := str(t.get("id", ""))
+		var color := Color.html(str(t.get("hatColor", "#ffffff")))
+		var panel := PanelContainer.new()
+		var sb := MenuStyle.box(color.lerp(Color.WHITE, 0.55), 14, 3, 6, 0)
+		panel.add_theme_stylebox_override("panel", sb)
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		row.add_theme_constant_override("separation", 12)
+		panel.add_child(row)
 
-		var swatch := ColorRect.new()
-		swatch.color = Color.html(str(t.get("hatColor", "#ffffff")))
-		swatch.custom_minimum_size = Vector2(24, 24)
+		var swatch := Panel.new()
+		var dot := StyleBoxFlat.new()
+		dot.bg_color = color
+		dot.set_corner_radius_all(16)
+		dot.set_border_width_all(3)
+		dot.border_color = MenuStyle.INK
+		swatch.add_theme_stylebox_override("panel", dot)
+		swatch.custom_minimum_size = Vector2(32, 32)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(swatch)
 
 		var controller := lobby.controller_name(t)
 		var name_label := Label.new()
 		name_label.text = str(t.get("name", "Team"))
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_label.add_theme_font_size_override("font_size", 22)
 		row.add_child(name_label)
+		var who := Label.new()
+		who.text = controller if controller != "" else "open seat"
+		who.modulate = Color(1, 1, 1, 1.0 if controller != "" else 0.55)
+		who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		who.clip_text = true
+		row.add_child(who)
 
 		var seat := Button.new()
+		seat.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		if team_id == mine:
 			seat.text = "Leave seat"
 			seat.pressed.connect(_on_set_team.bind(""))
+			row.add_child(seat)
 		elif controller == "":
 			seat.text = "Take seat"
 			seat.disabled = mine != ""
+			MenuStyle.paint(seat, MenuStyle.BLUE)
 			seat.pressed.connect(_on_set_team.bind(team_id))
-		else:
-			seat.text = controller
-			seat.disabled = true
-		row.add_child(seat)
-
-		_teams_box.add_child(row)
+			row.add_child(seat)
+		_teams_box.add_child(panel)
 
 
 func _clear(box: Node) -> void:
@@ -204,6 +267,11 @@ func _on_remove_pressed() -> void:
 
 func _on_start_pressed() -> void:
 	Net.start_match()
+
+
+func _on_copy_pressed() -> void:
+	DisplayServer.clipboard_set(Net.lobby.code())
+	_status.text = "Room code copied."
 
 
 func _on_leave_pressed() -> void:

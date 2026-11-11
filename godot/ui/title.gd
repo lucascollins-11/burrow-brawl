@@ -19,56 +19,85 @@ func _ready() -> void:
 
 
 func _build() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.99, 0.93, 0.85)  # warm paper; the real look comes in G2
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	theme = MenuStyle.theme()
+	add_child(MenuBackdrop.new())
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 18)
+	center.add_child(column)
+
+	var logo := Label.new()
+	logo.text = "BURROW BRAWL"
+	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	logo.label_settings = MenuStyle.heading(84, Color("ffd23f"), 16)
+	column.add_child(logo)
+
+	var tagline := Label.new()
+	tagline.text = "Squirmlings. Soda sea. Very large holes."
+	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tagline.label_settings = MenuStyle.heading(24, Color.WHITE, 6)
+	column.add_child(tagline)
+
+	var card_row := CenterContainer.new()
+	column.add_child(card_row)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(460, 0)
+	card_row.add_child(panel)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(360, 0)
 	box.add_theme_constant_override("separation", 12)
-	center.add_child(box)
+	panel.add_child(box)
 
-	var title := Label.new()
-	title.text = "Burrow Brawl"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 48)
-	box.add_child(title)
-
+	var nick_label := Label.new()
+	nick_label.text = "Your name"
+	box.add_child(nick_label)
 	_nick_edit = LineEdit.new()
-	_nick_edit.placeholder_text = "Nickname (2 to 16 characters)"
+	_nick_edit.placeholder_text = "2 to 16 characters"
 	_nick_edit.max_length = Proto.NICKNAME_MAX
 	box.add_child(_nick_edit)
 
 	_create_button = Button.new()
 	_create_button.text = "Create room"
+	MenuStyle.paint(_create_button, MenuStyle.ORANGE, 28)
 	_create_button.pressed.connect(_on_create_pressed)
 	box.add_child(_create_button)
 
+	var or_label := Label.new()
+	or_label.text = "or join a friend"
+	or_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	or_label.modulate = Color(1, 1, 1, 0.7)
+	box.add_child(or_label)
+
 	var join_row := HBoxContainer.new()
+	join_row.add_theme_constant_override("separation", 10)
 	box.add_child(join_row)
 	_code_edit = LineEdit.new()
 	_code_edit.placeholder_text = "Room code"
 	_code_edit.max_length = Proto.ROOM_CODE_LENGTH
 	_code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_code_edit.text_submitted.connect(func(_t: String) -> void: _on_join_pressed())
 	join_row.add_child(_code_edit)
 	_join_button = Button.new()
-	_join_button.text = "Join by code"
+	_join_button.text = "Join"
+	MenuStyle.paint(_join_button, MenuStyle.BLUE, 22)
 	_join_button.pressed.connect(_on_join_pressed)
 	join_row.add_child(_join_button)
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.custom_minimum_size = Vector2(0, 52)
 	box.add_child(_status)
 
 	var server_label := Label.new()
 	server_label.text = "Server: " + NetConfig.server_base()
-	server_label.modulate = Color(0, 0, 0, 0.5)
-	box.add_child(server_label)
+	server_label.add_theme_font_size_override("font_size", 13)
+	server_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+	server_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 10)
+	server_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	add_child(server_label)
 
 
 func _on_create_pressed() -> void:
@@ -105,4 +134,4 @@ func _set_busy(busy: bool) -> void:
 
 func _show(text: String, is_error: bool) -> void:
 	_status.text = text
-	_status.modulate = Color(0.7, 0, 0) if is_error else Color(0, 0, 0)
+	_status.add_theme_color_override("font_color", Color("c0392b") if is_error else MenuStyle.INK)
