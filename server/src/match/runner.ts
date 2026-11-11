@@ -19,19 +19,27 @@ import {
   type MatchConfig,
   type MatchState,
 } from "@burrow-brawl/shared";
-import type { ServerMessage } from "@burrow-brawl/shared/src/net";
+import type { ServerMessage, ViewServerMessage } from "@burrow-brawl/shared/src/net";
+import { ViewStream } from "./view";
 
 /** Broadcast a watermark batch every N ticks (20/s). */
 export const CONFIRM_EVERY = 3;
 /** Keep stamped commands this many ticks back for late joiners. */
 const MAX_PENDING_AHEAD = 4;
 
+/** Lockstep clients mirror the sim from tick batches; view clients draw streamed state. */
+export type ClientKind = "lockstep" | "view";
+
 export interface MatchHost {
   /** Send to every connected member. */
   broadcast(msg: ServerMessage): void;
+  /** Send to every connected member of one kind. */
+  broadcastTo(kind: ClientKind, msg: ServerMessage | ViewServerMessage): void;
   /** Send to one member if connected. */
-  sendTo(memberId: string, msg: ServerMessage): void;
+  sendTo(memberId: string, msg: ServerMessage | ViewServerMessage): void;
   isConnected(memberId: string): boolean;
+  /** True if the member's current connection is a view client. */
+  isView(memberId: string): boolean;
   /** The match finished; winner is a room team id or null for a draw. */
   onEnd(winnerTeamId: string | null): void;
 }
@@ -55,6 +63,7 @@ export class MatchRunner {
   private lastRealTime = 0;
   private acc = 0;
   private ended = false;
+  private readonly view: ViewStream;
 
   constructor(
     readonly config: MatchConfig,
@@ -66,6 +75,7 @@ export class MatchRunner {
     private readonly opts: MatchRunnerOptions,
   ) {
     this.state = createMatch(config);
+    this.view = new ViewStream(this.state);
   }
 
   static configFor(
@@ -106,7 +116,8 @@ export class MatchRunner {
   }
 
   start(): void {
-    this.host.broadcast(this.startMessage());
+    this.host.broadcastTo("lockstep", this.startMessage());
+    this.host.broadcastTo("view", this.viewStartMessage());
     this.checkAbsent();
     if (this.opts.ticker === "realtime") {
       this.lastRealTime = performance.now();
@@ -135,13 +146,30 @@ export class MatchRunner {
     };
   }
 
+  /** The complete world for a view client (docs/view-protocol.md section 3). */
+  viewStartMessage(): Extract<ViewServerMessage, { t: "match.start" }> {
+    return {
+      t: "match.start",
+      view: true,
+      matchId: this.id,
+      config: this.config,
+      teamIds: this.teamIds,
+      terrain: this.view.terrain(this.state.sim.terrain),
+      state: this.view.fullState(this.state),
+    };
+  }
+
   /** Resend everything a member needs after reconnecting. */
   resync(memberId: string): void {
-    this.host.sendTo(memberId, this.startMessage());
+    this.host.sendTo(
+      memberId,
+      this.host.isView(memberId) ? this.viewStartMessage() : this.startMessage(),
+    );
   }
 
   /** Client reported a hash mismatch: send it a snapshot (and log it, it's a bug). */
   onDesync(memberId: string, tick: number, h: number): void {
+    if (this.host.isView(memberId)) return; // view clients do not simulate
     console.warn(
       `[match ${this.id}] desync from ${memberId} at tick ${tick} (client hash ${h >>> 0})`,
     );
@@ -185,7 +213,8 @@ export class MatchRunner {
     if (this.outbox.length) msg.cmds = this.outbox;
     if (withHash) msg.h = hashMatch(this.state);
     this.outbox = [];
-    this.host.broadcast(msg);
+    this.host.broadcastTo("lockstep", msg);
+    for (const m of this.view.batch(this.state)) this.host.broadcastTo("view", m);
   }
 
   private pump(): void {
@@ -216,6 +245,7 @@ export class MatchRunner {
       return;
     }
     this.state = r.state;
+    this.view.record(r.events);
     const t = this.tick;
 
     const over = this.state.turns.phase === "over";

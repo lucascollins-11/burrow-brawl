@@ -1,0 +1,22 @@
+; Engine configuration file. Godot 4.4.1-stable (see godot/README.md). Text format on purpose.
+config_version=5
+
+[application]
+
+config/name="Burrow Brawl"
+config/features=PackedStringArray("4.4", "Forward Plus")
+config/icon="res://icon.svg"
+run/main_scene="res://ui/title.tscn"
+
+[autoload]
+
+Net="*res://net/net.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
