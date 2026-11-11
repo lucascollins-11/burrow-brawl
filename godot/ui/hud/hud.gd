@@ -43,7 +43,7 @@ func _ready() -> void:
 
 	# Banner with the timer, top centre.
 	var banner := _panel(14)
-	banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 10)
+	_place(banner, Control.PRESET_CENTER_TOP, 10)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	banner.add_child(row)
@@ -55,12 +55,12 @@ func _ready() -> void:
 
 	_order_box = HBoxContainer.new()
 	_order_box.add_theme_constant_override("separation", 6)
-	_order_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 68)
+	_place(_order_box, Control.PRESET_CENTER_TOP, 68)
 	root.add_child(_order_box)
 
 	# Team bars, top right.
 	var teams_panel := _panel(10)
-	teams_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
+	_place(teams_panel, Control.PRESET_TOP_RIGHT, 10)
 	teams_panel.custom_minimum_size = Vector2(210, 0)
 	_teams_box = VBoxContainer.new()
 	_teams_box.add_theme_constant_override("separation", 4)
@@ -69,7 +69,7 @@ func _ready() -> void:
 
 	# Wind gauge, top left.
 	var wind_panel := _panel(12)
-	wind_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 10)
+	_place(wind_panel, Control.PRESET_TOP_LEFT, 10)
 	_wind = WindGauge.new()
 	_wind.custom_minimum_size = Vector2(96, 96)
 	wind_panel.add_child(_wind)
@@ -77,7 +77,7 @@ func _ready() -> void:
 
 	# Minimap, bottom left.
 	var map_panel := _panel(8)
-	map_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 10)
+	_place(map_panel, Control.PRESET_BOTTOM_LEFT, 10)
 	_minimap = Minimap.new()
 	_minimap.custom_minimum_size = Vector2(150, 150)
 	map_panel.add_child(_minimap)
@@ -89,7 +89,7 @@ func _ready() -> void:
 	_cross.visible = false
 	root.add_child(_cross)
 	_power_panel = _panel(10)
-	_power_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 60)
+	_place(_power_panel, Control.PRESET_CENTER_BOTTOM, 60)
 	var pv := VBoxContainer.new()
 	_power_label = _label(15, true)
 	_power_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -107,7 +107,7 @@ func _ready() -> void:
 
 	# Weapon name and skip button, bottom right; hint, bottom centre.
 	var bottom := _panel(8)
-	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
+	_place(bottom, Control.PRESET_BOTTOM_RIGHT, 10)
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 10)
 	for i in range(_weapon_names.size()):
@@ -126,12 +126,13 @@ func _ready() -> void:
 	bottom.add_child(brow)
 	root.add_child(bottom)
 	_hint = _label(13, false)
-	_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 8)
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_place(_hint, Control.PRESET_CENTER_BOTTOM, 8)
 	root.add_child(_hint)
 
 	# End of match: winner banner, standings and the way out.
 	_end_panel = _panel(24)
-	_end_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	_place(_end_panel, Control.PRESET_CENTER, 0)
 	_end_panel.custom_minimum_size = Vector2(380, 0)
 	var ev := VBoxContainer.new()
 	ev.add_theme_constant_override("separation", 12)
@@ -283,6 +284,34 @@ func _rebuild_teams(sums: Array, order: Array) -> void:
 		dot.add_theme_stylebox_override("panel", sb)
 		_order_box.add_child(dot)
 		first = false
+
+
+## Margin kept between the HUD and the screen edge.
+const EDGE := 16
+
+
+## Put a control on the screen by preset and keep it inside the screen however its content grows:
+## panels on the right or bottom grow towards the middle, centred ones grow both ways. (The old
+## anchors fixed the offsets while the panel was still empty, so panels filled later ran off the edge.)
+static func _place(c: Control, preset: int, margin: int) -> void:
+	c.set_anchors_preset(preset)
+	var right := preset in [Control.PRESET_TOP_RIGHT, Control.PRESET_BOTTOM_RIGHT, Control.PRESET_CENTER_RIGHT]
+	var bottom := preset in [Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT, Control.PRESET_CENTER_BOTTOM]
+	var left := preset in [Control.PRESET_TOP_LEFT, Control.PRESET_BOTTOM_LEFT, Control.PRESET_CENTER_LEFT]
+	var top := preset in [Control.PRESET_TOP_LEFT, Control.PRESET_TOP_RIGHT, Control.PRESET_CENTER_TOP]
+	c.grow_horizontal = (
+		Control.GROW_DIRECTION_BEGIN if right else (Control.GROW_DIRECTION_END if left else Control.GROW_DIRECTION_BOTH)
+	)
+	c.grow_vertical = (
+		Control.GROW_DIRECTION_BEGIN if bottom else (Control.GROW_DIRECTION_END if top else Control.GROW_DIRECTION_BOTH)
+	)
+	# Offsets are the distance from the anchor towards the screen's middle.
+	var edge_x := float(EDGE if (left or right) else 0)
+	var edge_y := float((EDGE if (left or right) else margin) if (top or bottom) else 0)
+	c.offset_left = edge_x if left else (-edge_x if right else 0.0)
+	c.offset_right = c.offset_left
+	c.offset_top = edge_y if top else (-edge_y if bottom else 0.0)
+	c.offset_bottom = c.offset_top
 
 
 static func _flat(color: Color, radius: int, border: int) -> StyleBoxFlat:
