@@ -51,7 +51,7 @@ var _socket_started := false
 var _hello_sent := false
 var _seq := 0
 var _ping_timer := 0.0
-var _pending_mode := ""  # "create", "join" or "rejoin" while a room request is in flight
+var _pending_mode := ""  # "create", "join", "rejoin" or "resync" while a room request is in flight
 var _pending_code := ""
 var _pending_seq := -1
 var _token_nick := ""  # nickname the cached token was issued for
@@ -275,7 +275,9 @@ func _on_frame(text: String) -> void:
 			_resume_token = str(msg.get("resumeToken", _resume_token))
 			connected = true
 			if _room_code != "" and _reconnect_attempt > 0:
-				_pending_mode = "rejoin"
+				# The hello carried the resume token, so the seat should be back. Ask for the room
+				# state only. A room.join here would make the server send a second match.start.
+				_pending_mode = "resync"
 				_send_pending()
 			elif _pending_mode != "":
 				_send_pending()
@@ -294,6 +296,10 @@ func _on_frame(text: String) -> void:
 				room_changed.emit()
 		"room.update":
 			_apply_room(msg)
+			if _pending_mode == "resync":
+				_pending_mode = ""
+				_pending_seq = -1
+				_reconnect_attempt = 0
 			room_changed.emit()
 		"room.left":
 			lobby.clear()
@@ -306,7 +312,11 @@ func _on_frame(text: String) -> void:
 			var code := str(msg.get("code", "internal"))
 			var message := str(msg.get("message", ""))
 			var is_reply := not msg.has("re") or _is_reply_to_pending(msg)
-			if _pending_mode == "rejoin" and is_reply:
+			if _pending_mode == "resync" and is_reply:
+				# The seat did not come back with the resume token: join by code instead.
+				_pending_mode = "rejoin"
+				_send_pending()
+			elif _pending_mode == "rejoin" and is_reply:
 				_pending_mode = ""
 				_pending_seq = -1
 				_give_up("Could not get back into the room: " + message)
@@ -349,6 +359,8 @@ func _send_pending() -> void:
 		_pending_seq = _send("room.join", {"code": _pending_code})
 	elif _pending_mode == "rejoin":
 		_pending_seq = _send("room.join", {"code": _room_code})
+	elif _pending_mode == "resync":
+		_pending_seq = _send("room.sync")
 
 
 func _fail(message: String) -> void:
