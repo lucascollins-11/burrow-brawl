@@ -12,6 +12,7 @@ var _status: Label
 
 func _ready() -> void:
 	_build()
+	Audio.play_music("menu")
 	_nick_edit.text = Net.nickname
 	Net.entered_room.connect(_on_entered_room)
 	Net.enter_failed.connect(_on_enter_failed)

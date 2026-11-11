@@ -38,7 +38,7 @@ func _build_sky() -> void:
 	sky_mat.sky_horizon_color = Color("ffb27a")
 	sky_mat.ground_horizon_color = Color("ffb27a")
 	sky_mat.ground_bottom_color = Color("c46a5a")
-	sky_mat.sun_angle_max = 25.0
+	sky_mat.sun_angle_max = 9.0
 	sky_mat.sky_curve = 0.18
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
@@ -71,6 +71,7 @@ func _build_sun() -> void:
 	sun.name = "Sun"
 	sun.light_color = Color("ffd9a8")
 	sun.light_energy = 1.5
+	sun.light_specular = 0.25  # keeps the sun's mirror image on the sea from whiting out the view
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = maxf(_size_x, _size_z) * 1.4
 	sun.shadow_bias = 0.05
