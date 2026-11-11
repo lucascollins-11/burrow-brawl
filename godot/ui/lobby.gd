@@ -2,6 +2,7 @@
 extends Control
 
 const TITLE_SCENE := "res://ui/title.tscn"
+const MATCH_SCENE := "res://game/match_scene.tscn"
 
 var _code_label: Label
 var _phase_label: Label
@@ -223,4 +224,9 @@ func _on_server_error(code: String, message: String) -> void:
 
 
 func _on_match_started(_msg: Dictionary) -> void:
-	_status.text = "The match started on the server. The match view arrives in G1."
+	# The match scene reads Net.current_match_start() when it loads. Until it exists in this build,
+	# stay in the lobby and say so.
+	if ResourceLoader.exists(MATCH_SCENE):
+		get_tree().change_scene_to_file.call_deferred(MATCH_SCENE)
+	else:
+		_status.text = "The match started on the server, but the match scene is not in this build yet."
