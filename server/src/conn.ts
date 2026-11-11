@@ -10,6 +10,7 @@ import {
   type ClientMessage,
   type ErrorCode,
   type ServerMessage,
+  type ViewServerMessage,
 } from "@burrow-brawl/shared/src/net";
 import { verifyToken } from "./auth/jwt";
 import type { ServerConfig } from "./config";
@@ -30,6 +31,8 @@ export interface ConnContext {
 export class Connection implements Peer {
   sub: string | null = null;
   nickname = "";
+  /** Set by hello.view: this connection draws streamed state and never simulates. */
+  view = false;
   private lastSeen: number;
   private pingSentAt: number | null = null;
   private readonly helloTimer: NodeJS.Timeout;
@@ -56,7 +59,7 @@ export class Connection implements Peer {
 
   // ------------------------------------------------------------ Peer
 
-  send(msg: ServerMessage): void {
+  send(msg: ServerMessage | ViewServerMessage): void {
     if (this.ws.readyState === this.ws.OPEN) this.ws.send(encode(msg));
   }
 
@@ -193,6 +196,7 @@ export class Connection implements Peer {
     const sub = v.claims.sub;
     this.sub = sub;
     this.nickname = v.claims.nickname;
+    this.view = msg.view === true;
 
     const { registry, live } = this.ctx;
     const previous = live.get(sub);
