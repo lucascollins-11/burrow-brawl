@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { HASH_EVERY, hashMatch } from "@burrow-brawl/shared";
+import type { MatchSettings } from "@burrow-brawl/shared/src/net";
 import type { MatchRunner } from "./match/runner";
 import { startHarness, type Harness, type TestClient } from "./testing/harness";
 import { Player, yawTowardCenter } from "./testing/players";
@@ -15,7 +16,7 @@ afterEach(async () => {
 });
 
 /** Vee (view client) hosts and plays first; Alba (lockstep) joins. */
-async function mixedRoom(): Promise<{
+async function mixedRoom(settings: Partial<MatchSettings> = {}): Promise<{
   v: ViewPlayer;
   a: Player;
   runner: MatchRunner;
@@ -31,7 +32,7 @@ async function mixedRoom(): Promise<{
   await vc.room((s) => s.members.length === 2);
   await vc.request({
     t: "lobby.setSettings",
-    patch: { turnSeconds: 15, crittersPerTeam: 2, mapSeed: 99 },
+    patch: { turnSeconds: 15, crittersPerTeam: 2, mapSeed: 99, ...settings },
   });
   vc.send({ t: "lobby.ready", ready: true });
   ac.send({ t: "lobby.ready", ready: true });
@@ -176,6 +177,41 @@ describe("view protocol", () => {
     expect(v2.lockstepMessages).toBe(0);
     expectBatchOrder(v2);
     expect(hashMatch(a.mirror!.state)).toBe(hashMatch(runner.matchState));
+  });
+
+  it("plays a whole match to match.end with only the stream", async () => {
+    h = await startHarness();
+    // One critter each at 25 HP: Vee's point-blank acorn knocks out Vee, so Alba's team wins.
+    const { v, a, runner } = await mixedRoom({ crittersPerTeam: 1, startHealth: 25 });
+    runner.advance(30);
+    await v.syncTo(30);
+    expect(v.critters.size).toBe(2);
+    const fire = {
+      k: "fire" as const,
+      weaponId: "acorn-mortar" as const,
+      yaw: 0,
+      pitch: -89,
+      power: 0,
+    };
+    expect(await v.c.request({ t: "input", turn: 1, cmds: [fire] })).toMatchObject({ t: "ok" });
+    for (let i = 0; i < 2000 && !v.ended; i++) {
+      runner.advance(3);
+      await v.until((m) => m.t === "state" || m.t === "match.end");
+    }
+    await a.until((m) => m.t === "match.end");
+
+    expect(v.ended).toMatchObject({ t: "match.end", winnerTeamId: a.ended!.winnerTeamId });
+    expect(v.ended!.winnerTeamId).not.toBeNull();
+    expect(v.ended).not.toHaveProperty("reason");
+    // The last state before match.end already shows the knockout and the carved crater.
+    const mine = [...v.critters.values()].find((c) => c.team === 0)!;
+    expect(mine.status).not.toBe("alive");
+    expect(v.patches).toBe(runner.matchState.sim.terrain.edits.length);
+    expect(v.patches).toBeGreaterThanOrEqual(1);
+    expect(v.diff(runner)).toEqual([]);
+    expect(v.state?.turns.phase).toBe("over");
+    expect(v.lockstepMessages).toBe(0);
+    expectBatchOrder(v);
   });
 
   it("ignores desync reports from a view client", async () => {
