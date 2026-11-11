@@ -178,6 +178,44 @@ describe("view protocol", () => {
     expect(hashMatch(a.mirror!.state)).toBe(hashMatch(runner.matchState));
   });
 
+  it("a redundant room.join after a resumed hello does not resend match.start", async () => {
+    h = await startHarness();
+    const { v, runner, vc, code } = await mixedRoom();
+    runner.advance(30);
+    await v.syncTo(30);
+    const resume = { token: vc.token, id: vc.id, resumeToken: vc.resumeToken };
+    await vc.close();
+    const vc2 = await connectView(h, "Vee", resume);
+    const v2 = new ViewPlayer(vc2);
+    await v2.until((m) => m.t === "match.start"); // the resume reseated us
+    expect(await vc2.request({ t: "room.join", code })).toMatchObject({ t: "room.joined" });
+    runner.advance(6);
+    await v2.syncTo(runner.tick);
+    expect(v2.starts).toBe(1);
+    expect(v2.diff(runner)).toEqual([]);
+  });
+
+  it("room.sync after a failed resume says not_in_room, and room.join brings the seat back", async () => {
+    h = await startHarness();
+    const { v, runner, vc, code } = await mixedRoom();
+    runner.advance(30);
+    await v.syncTo(30);
+    await vc.close();
+    // A stale resume token: the hello is accepted but the seat is not reattached.
+    const vc2 = await connectView(h, "Vee", { token: vc.token, id: vc.id, resumeToken: "stale" });
+    expect(await vc2.request({ t: "room.sync" })).toMatchObject({
+      t: "error",
+      code: "not_in_room",
+    });
+    const v2 = new ViewPlayer(vc2);
+    expect(await vc2.request({ t: "room.join", code })).toMatchObject({ t: "room.joined" });
+    await v2.until((m) => m.t === "match.start");
+    runner.advance(3);
+    await v2.syncTo(runner.tick);
+    expect(v2.starts).toBe(1);
+    expect(v2.diff(runner)).toEqual([]);
+  });
+
   it("ignores desync reports from a view client", async () => {
     h = await startHarness();
     const { v, runner } = await mixedRoom();
