@@ -4,6 +4,15 @@ The Godot 4 game client. The Node game server (`server/`) stays the referee: it 
 physics, and this client draws the world, plays sound, shows menus, and sends the player's input.
 See `docs/view-protocol.md` for the match contract and `docs/protocol.md` for the lobby.
 
+## Play it on Windows (for playtesting)
+
+1. On the project's GitHub page, open **Releases** and pick the `godot-pr-<number>` release for the build you were given.
+2. Download `BurrowBrawl-windows.zip`, right-click it, and choose **Extract All**.
+3. Open the folder and double-click `BurrowBrawl.exe`. If Windows warns about an unknown app, click **More info**, then **Run anyway**.
+4. Type a nickname and click **Create room**, or type a room code and click **Join by code**.
+
+The game opens in its own window; the release build has no console. Logs are in `%APPDATA%\Godot\app_userdata\Burrow Brawl\logs`. Steps for reporting problems are in [docs/playtest.md](../docs/playtest.md).
+
 ## Pinned version
 
 **Godot 4.4.1-stable** (Forward+, GDScript only). Use exactly this version. The CI workflow in
