@@ -178,7 +178,7 @@ export type ServerMessage =
     }
   | ({ t: "tick" } & TickBatch)
   | { t: "snapshot"; snapshot: MatchSnapshot }
-  | { t: "match.end"; winnerTeamId: string | null; tick: number }
+  | { t: "match.end"; winnerTeamId: string | null; tick: number; reason?: "error" }
   | { t: "error"; re?: number; code: ErrorCode; message: string };
 
 export type ClientMessageType = ClientMessage["t"];

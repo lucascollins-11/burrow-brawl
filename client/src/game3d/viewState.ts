@@ -33,6 +33,8 @@ export interface TeamView {
   readonly index: number;
   readonly name: string;
   readonly hat: HatStyle;
+  /** Hat and HUD colour; defaults to the stock colour for the team index. */
+  readonly color?: number;
 }
 
 export type HatStyle =
@@ -66,4 +68,6 @@ export interface ViewState {
   /** Sea surface height in voxels. */
   readonly seaY: number;
   readonly winnerTeam: number | null;
+  /** True when the active team is played from this screen (always true in hot-seat). */
+  readonly myTurn?: boolean;
 }

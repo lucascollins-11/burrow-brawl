@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { windStreamer } from "./hudModel";
-import { WORLD } from "./fakeWorld";
 
 /** Sky, sun and shadows, the soda sea, a paper-cutout diorama ring and wind streamers. */
 export class Environment {
@@ -11,7 +10,16 @@ export class Environment {
   private readonly streamers: { pole: THREE.Group; ribbon: THREE.Mesh; phase: number }[] = [];
   private time = 0;
 
-  constructor(scene: THREE.Scene, seaY: number) {
+  private readonly WORLD: { w: number; d: number };
+
+  /** `size` is the map footprint in voxels (x and z); everything is centred on it. */
+  constructor(
+    private readonly scene: THREE.Scene,
+    seaY: number,
+    size: { w: number; d: number } = { w: 256, d: 256 },
+  ) {
+    this.WORLD = size;
+    const WORLD = size;
     scene.background = new THREE.Color(0xbfe3f5);
     scene.fog = new THREE.Fog(0xcfe9f5, 420, 1100);
 
@@ -35,7 +43,7 @@ export class Environment {
     sky.name = "sky";
     this.group.add(sky);
 
-    scene.add(new THREE.HemisphereLight(0xdff1ff, 0xd9b48a, 1.0));
+    this.group.add(new THREE.HemisphereLight(0xdff1ff, 0xd9b48a, 1.0));
     const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
     sun.position.set(WORLD.w / 2 + 120, 220, WORLD.d / 2 + 80);
     sun.target.position.set(WORLD.w / 2, 0, WORLD.d / 2);
@@ -105,6 +113,7 @@ export class Environment {
 
   /** Layered paper-cutout hills in a ring around the island, each layer a flat coloured slab. */
   private buildDiorama(seaY: number): void {
+    const WORLD = this.WORLD;
     const layers = [
       { r: 760, color: 0xc9b3e8, h: 150 },
       { r: 620, color: 0xa9d9c4, h: 110 },
@@ -144,6 +153,7 @@ export class Environment {
 
   /** Four poles at the island's edge with paper streamers that point and flutter with the wind. */
   private buildStreamers(seaY: number): void {
+    const WORLD = this.WORLD;
     const spots: [number, number][] = [
       [30, 30],
       [WORLD.w - 30, 30],
@@ -181,6 +191,22 @@ export class Environment {
   placeStreamers(heightAt: (x: number, z: number) => number): void {
     for (const s of this.streamers)
       s.pole.position.y = heightAt(s.pole.position.x, s.pole.position.z);
+  }
+
+  /** Sudden death raises the soda. */
+  setSeaY(y: number): void {
+    this.sea.position.y = y;
+  }
+
+  dispose(): void {
+    this.scene.remove(this.group);
+    this.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+      else mat?.dispose();
+    });
   }
 
   /** Move the sea, bubbles and streamers. Wind is each axis -100..100. */

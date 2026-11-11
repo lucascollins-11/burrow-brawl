@@ -1,12 +1,12 @@
-// Turn flow contract between the match runner (server O3, client mirror) and
-// the turn manager (S5). Turn state is plain JSON data so it can be hashed
-// and snapshotted with the rest of the match. Everything here is
-// deterministic: it runs identically on the server and every client.
-//
-// `basicTurns` is a minimal stand-in so online play works before S5 lands.
-// S5 may replace it with a richer TurnController that keeps this shape.
+// Turn flow for every match (server, client mirrors and hot-seat run this same code). Turn state
+// is plain JSON data so it is hashed and snapshotted with the rest of the match. Deterministic:
+// the only randomness is the injected match rng.
 
-import type { Rng, SimEvent, SimState } from "./types";
+import { FIXED_ONE } from "../fixed";
+import type { Rng, SimEvent, SimState } from "../sim3d/api";
+import { YAW_STEPS } from "../sim3d/api";
+import { isSettled } from "../sim3d/world";
+import { cosYaw, mulDiv, sinYaw } from "../sim3d/vec3";
 
 export type TurnPhase =
   /** The active player controls their critter until the timer ends. */
@@ -40,11 +40,12 @@ export interface TurnState {
   /** Set when phase is "over": winning team index, or null for a draw. */
   winnerTeam: number | null;
   /**
-   * Wind for the current turn, integer in [-windMax, windMax] (negative blows
-   * left). Rolled from the match rng when each turn starts. The match copies
-   * it into the sim each tick for wind-affected projectiles (S4).
+   * Wind for the current turn as a horizontal vector, each component in
+   * [-windMax, windMax]. Rolled from the match rng when each turn starts as a
+   * heading and a strength; the match copies it into the sim every tick.
    */
-  wind: number;
+  windX: number;
+  windZ: number;
 }
 
 export interface TurnRules {
@@ -88,12 +89,15 @@ function aliveTeams(sim: SimState, teams: number): number[] {
   return out;
 }
 
-export function isSettled(sim: SimState): boolean {
-  // Shots still in the air (or a grenade waiting on its fuse) keep the turn from ending.
-  if (sim.projectiles.length > 0) return false;
-  return sim.critters.every(
-    (c) => c.status !== "alive" || (c.grounded && c.vx === 0 && c.vy === 0),
-  );
+/** Roll this turn's wind: a heading and a strength, stored as integer components. */
+function rollWind(rules: TurnRules, rng: Rng): { windX: number; windZ: number } {
+  if (rules.windMax <= 0) return { windX: 0, windZ: 0 };
+  const heading = rng.nextInt(YAW_STEPS);
+  const strength = rng.nextInt(rules.windMax + 1);
+  return {
+    windX: mulDiv(cosYaw(heading), strength, FIXED_ONE),
+    windZ: mulDiv(sinYaw(heading), strength, FIXED_ONE),
+  };
 }
 
 /** Start the turn after the team in ts.activeTeam, or end the match. */
@@ -148,7 +152,7 @@ function startNext(
     phaseEndTick: tick + rules.turnTicks,
     nextCritter,
     winnerTeam: null,
-    wind: rules.windMax > 0 ? rng.nextInt(2 * rules.windMax + 1) - rules.windMax : 0,
+    ...rollWind(rules, rng),
   };
 }
 
@@ -163,7 +167,8 @@ export const basicTurns: TurnController = {
       phaseEndTick: tick,
       nextCritter: new Array<number>(rules.teams).fill(0),
       winnerTeam: null,
-      wind: 0,
+      windX: 0,
+      windZ: 0,
     };
     return startNext(blank, rules, sim, tick, rng);
   },

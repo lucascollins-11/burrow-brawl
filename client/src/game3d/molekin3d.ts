@@ -110,7 +110,7 @@ export function buildHat(style: HatStyle, hex: number): THREE.Group {
 }
 
 /** One Molekin, feet at the origin, facing +z, 6 voxels tall. */
-export function createMolekin3D(team: number, style: HatStyle): THREE.Group {
+export function createMolekin3D(team: number, style: HatStyle, hex = teamColor(team)): THREE.Group {
   const root = new THREE.Group();
   root.name = `molekin-team-${team}`;
   const model = new THREE.Group();
@@ -131,7 +131,7 @@ export function createMolekin3D(team: number, style: HatStyle): THREE.Group {
   }
   model.add(mesh(G.nose, M.nose, 0, 0.0, 1.0));
 
-  const hat = buildHat(style, teamColor(team));
+  const hat = buildHat(style, hex);
   hat.position.y = 0.72;
   hat.name = "hat";
   model.add(hat);

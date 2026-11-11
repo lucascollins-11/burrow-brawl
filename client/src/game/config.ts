@@ -1,9 +1,9 @@
 import type { MatchConfig } from "@burrow-brawl/shared";
-import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
+import { mapRecipeFor, TICKS_PER_SECOND } from "@burrow-brawl/shared";
 
 /**
  * Hot-seat match settings, overridable from the URL for quick tests:
- * ?teams=2..4&size=1..4&seed=123&turn=45
+ * ?teams=2..8&size=1..4&seed=123&turn=45
  */
 export function matchConfigFromUrl(search = window.location.search): MatchConfig {
   const q = new URLSearchParams(search);
@@ -25,9 +25,8 @@ export function matchConfigFromUrl(search = window.location.search): MatchConfig
     settleCapTicks: 10 * TICKS_PER_SECOND,
     startHealth: 100,
     windMax: 60,
-    mapWidth: 2048,
-    mapHeight: 1024,
+    map: mapRecipeFor(seed, teams),
     suddenDeathRound: 8,
-    waterRisePerTurn: 8,
+    seaRisePerTurn: 2,
   };
 }

@@ -1,7 +1,13 @@
 // Test players for match tests: a TestClient plus the MatchMirror it keeps
 // from server messages, and a helper that takes two of them into a match.
 
-import { MatchMirror, hashMatch, type SimEvent } from "@burrow-brawl/shared";
+import {
+  MatchMirror,
+  YAW_STEPS,
+  hashMatch,
+  type MatchState,
+  type SimEvent,
+} from "@burrow-brawl/shared";
 import type { MatchSettings, ServerMessage } from "@burrow-brawl/shared/src/net";
 import type { MatchRunner } from "../match/runner";
 import type { Harness, TestClient } from "./harness";
@@ -86,4 +92,13 @@ export async function startTwoPlayerMatch(
   await b.until((m) => m.t === "match.start");
   const runner = h.server.registry.get(code)!.match!;
   return { a, b, runner, code };
+}
+
+/** Heading (0..YAW_STEPS-1) from the active critter toward the middle of the map. */
+export function yawTowardCenter(st: MatchState): number {
+  const me = st.sim.critters.find((c) => c.id === st.turns.activeCritter)!;
+  const dx = st.sim.terrain.sizeX / 2 - me.pos.x / 65536;
+  const dz = st.sim.terrain.sizeZ / 2 - me.pos.z / 65536;
+  const steps = Math.round((Math.atan2(dz, dx) / (2 * Math.PI)) * YAW_STEPS);
+  return ((steps % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
 }

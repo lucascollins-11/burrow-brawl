@@ -59,7 +59,7 @@ export class Hud3D {
     this.root = el("div", "h3", parent);
     this.banner = el("div", "h3-banner", this.root);
     this.timer = el("span", "h3-timer", this.banner);
-    this.bannerText = el("span", "", this.banner);
+    this.bannerText = el("span", "bb-turn", this.banner);
     this.order = el("div", "h3-order", this.root);
     this.teams = el("div", "h3-teams", this.root);
     const wind = el("div", "h3-wind", this.root);
@@ -68,13 +68,13 @@ export class Hud3D {
     this.windText = el("div", "", wind);
     this.cross = el("div", "h3-cross", this.root);
     this.power = el("div", "h3-power", this.root);
-    this.powerText = el("div", "", this.power);
+    this.powerText = el("div", "bb-power", this.power);
     this.powerFill = el("div", "", el("div", "h3-bar", this.power));
     this.powerFill.style.background = "#e85d4a";
     this.hint = el("div", "h3-hint", this.root);
   }
 
-  update(v: ViewState, aim: AimState | null, hint: string): void {
+  update(v: ViewState, aim: AimState | null, hint: string, weapon = ""): void {
     this.timer.textContent = v.phase === "control" ? String(Math.ceil(v.timeLeft)) : "";
     this.bannerText.textContent = turnBanner(v);
 
@@ -90,12 +90,12 @@ export class Hud3D {
         el("span", "", row, `${t.alive}/${t.total}`);
         const fill = el("div", "", el("div", "h3-bar", row));
         fill.style.width = `${t.fraction * 100}%`;
-        fill.style.background = cssHex(teamColor(t.index));
+        fill.style.background = cssHex(v.teams[t.index]?.color ?? teamColor(t.index));
       }
       this.order.replaceChildren();
       turnOrder(v).forEach((i, n) => {
         const d = el("div", `h3-dot${n === 0 ? " act" : ""}`, this.order);
-        d.style.background = cssHex(teamColor(i));
+        d.style.background = cssHex(v.teams[i]?.color ?? teamColor(i));
         d.title = v.teams[i]?.name ?? "";
       });
     }
@@ -108,7 +108,7 @@ export class Hud3D {
     this.cross.style.display = aim ? "block" : "none";
     this.power.style.display = aim ? "block" : "none";
     if (aim) {
-      this.powerText.textContent = `Power ${Math.round(aim.power)} · aim ${aim.pitchDeg}°`;
+      this.powerText.textContent = `${weapon ? `${weapon} · ` : ""}Power ${Math.round(aim.power)} · aim ${aim.pitchDeg}°`;
       this.powerFill.style.width = `${aim.power}%`;
     }
     this.hint.textContent = hint;

@@ -77,7 +77,8 @@ export function turnBanner(v: ViewState): string {
   const team = v.teams[v.activeTeam ?? -1]?.name ?? "";
   if (v.phase === "retreat") return `${team}: run for cover!`;
   if (v.phase === "settling") return "Waiting for things to settle…";
-  return c ? `${team}'s turn: ${c.name}` : `${team}'s turn`;
+  const who = v.myTurn ? "YOUR TURN" : `${team}'s turn`;
+  return `Round ${v.round} · ${c ? `${who}: ${c.name}` : who}`;
 }
 
 export const hatFor = (teamIndex: number) => HAT_STYLES[teamIndex % HAT_STYLES.length]!;

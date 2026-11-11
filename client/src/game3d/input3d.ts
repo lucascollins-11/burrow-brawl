@@ -6,6 +6,8 @@ export class Input3D {
   wheel = 0;
   private readonly actions: string[] = [];
   aiming = false;
+  /** False while a menu is on screen: keys are left alone (Tab, typing) and nothing is queued. */
+  active = true;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
@@ -21,9 +23,11 @@ export class Input3D {
       this.off.push(() => target.removeEventListener(t, f as EventListener));
     };
     on("keydown", (e) => {
-      if ((e.target as HTMLElement | null)?.tagName === "INPUT") return;
+      if (!this.active || (e.target as HTMLElement | null)?.tagName === "INPUT") return;
       const k = e.key.toLowerCase();
       if (!e.repeat) {
+        if (k === "z") this.actions.push("fuseDown");
+        if (k === "x") this.actions.push("fuseUp");
         if (k === "tab") {
           e.preventDefault();
           this.actions.push("toggleAim");
@@ -35,13 +39,13 @@ export class Input3D {
         if (k >= "1" && k <= "9") this.actions.push(`weapon${k}`);
         if (k === "f") this.actions.push("fireDown");
       }
-      if (k === " " || k.startsWith("arrow")) e.preventDefault();
+      if (k === " " || k === "backspace" || k.startsWith("arrow")) e.preventDefault();
       this.down.add(k);
     });
     on("keyup", (e) => {
       const k = e.key.toLowerCase();
       this.down.delete(k);
-      if (k === "f") this.actions.push("fireUp");
+      if (k === "f" && this.active) this.actions.push("fireUp");
     });
     on("blur", () => this.down.clear());
     on(
@@ -107,8 +111,10 @@ export class Input3D {
   setAiming(on: boolean): void {
     this.aiming = on;
     try {
-      if (on) void this.canvas.requestPointerLock?.();
-      else if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+      if (on) {
+        const p = this.canvas.requestPointerLock?.() as unknown as Promise<void> | undefined;
+        p?.catch?.(() => {});
+      } else if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     } catch {
       // Pointer lock can be refused (iframes, headless); dragging still works.
     }

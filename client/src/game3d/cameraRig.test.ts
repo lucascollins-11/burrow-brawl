@@ -150,7 +150,7 @@ describe("hud model", () => {
     close(w.headingDeg, 90);
     expect(w.strength).toBe(1);
     expect(compass(90)).toBe("E");
-    expect(turnBanner(view())).toBe("T1's turn: b");
+    expect(turnBanner(view())).toBe("Round 1 · T1's turn: b");
     expect(turnBanner(view({ phase: "over", winnerTeam: 0 }))).toBe("T0 wins!");
   });
 });
