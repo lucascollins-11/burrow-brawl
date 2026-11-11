@@ -15,7 +15,7 @@ Burrow Brawl ships no third-party art, audio or fonts so far. Everything below i
 ## Visuals
 
 - Characters, terrain, effects and HUD are drawn from code and primitive meshes in `godot/`. The
-  Squirmling concept sheet is our own placeholder art (`art/squirmlings-concept.png`).
+  Squirmling concept sheet is our own placeholder art.
 
 When a real asset is added (a font, a texture, a recording), list it here with its author, source
 URL, licence and the file that uses it, in the same PR.
