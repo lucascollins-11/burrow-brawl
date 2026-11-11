@@ -47,8 +47,10 @@ export function isSolid(t: VoxelTerrain, x: number, y: number, z: number): boole
 
 export function topSolidY(t: VoxelTerrain, x: number, z: number): number {
   if (x < 0 || z < 0 || x >= t.sizeX || z >= t.sizeZ) return -1;
-  for (let y = t.sizeY - 1; y >= 0; y--) {
-    if (t.density[(y * t.sizeZ + z) * t.sizeX + x]! >= SOLID) return y;
+  const stride = t.sizeZ * t.sizeX;
+  let i = (t.sizeY - 1) * stride + z * t.sizeX + x;
+  for (let y = t.sizeY - 1; y >= 0; y--, i -= stride) {
+    if (t.density[i]! >= SOLID) return y;
   }
   return -1;
 }

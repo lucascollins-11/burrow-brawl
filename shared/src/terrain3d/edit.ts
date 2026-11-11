@@ -1,20 +1,10 @@
 import { CHUNK, SOLID, type EditResult, type TerrainEdit, type VoxelTerrain } from "./api.js";
-import { isqrt } from "../fixed.js";
 
 export const MAX_EDIT_RADIUS = 64;
 
 function checkInt(...vals: number[]): void {
   for (const v of vals)
     if (!Number.isInteger(v)) throw new RangeError(`terrain3d: edit needs integers, got ${v}`);
-}
-
-/**
- * Sphere falloff, in sixteenths of a voxel: `level` is 128 at the rim, rising by 4 per 1/16 voxel
- * inward (so +-2 voxels from the rim spans the full 0..255 range).
- */
-function sphereLevel(d2: number, r16: number): number {
-  const dist16 = isqrt(d2 * 256);
-  return 128 + (r16 - dist16) * 4;
 }
 
 export function applyEdit(t: VoxelTerrain, edit: TerrainEdit): EditResult {
@@ -49,22 +39,35 @@ export function applyEdit(t: VoxelTerrain, edit: TerrainEdit): EditResult {
     const reach = edit.r + 2;
     const y0 = Math.max(carve ? t.bedrockY : 0, edit.y - reach);
     const y1 = Math.min(t.sizeY - 1, edit.y + reach);
-    for (let y = y0; y <= y1; y++)
-      for (let z = Math.max(0, edit.z - reach); z <= Math.min(t.sizeZ - 1, edit.z + reach); z++)
-        for (let x = Math.max(0, edit.x - reach); x <= Math.min(t.sizeX - 1, edit.x + reach); x++) {
-          const d2 = (x - edit.x) ** 2 + (y - edit.y) ** 2 + (z - edit.z) ** 2;
-          if (d2 > reach * reach) continue;
-          const level = sphereLevel(d2, r16);
-          const old = d[(y * t.sizeZ + z) * t.sizeX + x]!;
+    const zLo = Math.max(0, edit.z - reach);
+    const zHi = Math.min(t.sizeZ - 1, edit.z + reach);
+    const xLo = Math.max(0, edit.x - reach);
+    const xHi = Math.min(t.sizeX - 1, edit.x + reach);
+    const reach2 = reach * reach;
+    for (let y = y0; y <= y1; y++) {
+      const dy2 = (y - edit.y) ** 2;
+      for (let z = zLo; z <= zHi; z++) {
+        const dyz2 = dy2 + (z - edit.z) ** 2;
+        if (dyz2 > reach2) continue;
+        const row = (y * t.sizeZ + z) * t.sizeX;
+        for (let x = xLo; x <= xHi; x++) {
+          const dx = x - edit.x;
+          const d2 = dx * dx + dyz2;
+          if (d2 > reach2) continue;
+          // Same as sphereLevel: floor(sqrt(d2 * 256)) is exact for these small integers.
+          const level = 128 + (r16 - Math.floor(Math.sqrt(d2 * 256))) * 4;
+          const old = d[row + x]!;
           if (carve) {
             // Cap the density: 255 - level is 127 at the rim and falls to 0 two voxels inside.
-            const cap = Math.max(0, Math.min(255, 255 - level));
+            const cap = level >= 255 ? 0 : level <= 0 ? 255 : 255 - level;
             if (old > cap) set(x, y, z, cap);
           } else {
-            const val = Math.max(0, Math.min(255, level));
+            const val = level < 0 ? 0 : level > 255 ? 255 : level;
             if (old < val) set(x, y, z, val);
           }
         }
+      }
+    }
   }
 
   t.edits.push(edit);

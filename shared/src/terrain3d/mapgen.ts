@@ -1,17 +1,16 @@
 import { type GeneratedMap, type MapRecipe } from "./api.js";
 import { applyEdit } from "./edit.js";
 import { createTerrain, topSolidY } from "./grid.js";
-import { findSpawns, hashInt } from "./spawns.js";
+import { findSpawns, hashInt, mix32 } from "./spawns.js";
 import { BEDROCK_Y, SEA_Y } from "./generate.js";
 
 // Generator v2: a 2D integer heightfield (island bump + two octaves of value noise) plus sculpt
 // ops (blobs, arches, tunnels) applied through the same sphere edits the game uses. Pure integer.
 
-function mix(a: number, b: number, c: number): number {
-  return hashInt(a, b, c, 0x1_0000_0000);
-}
-
-/** Value noise on a lattice of `cell` voxels, result in [0, 65536). */
+/**
+ * Reference value noise on a lattice of `cell` voxels, result in [0, 65536). The generator uses the
+ * table version below; this one stays as the readable definition the tests compare against.
+ */
 function noise2(seed: number, salt: number, x: number, z: number, cell: number): number {
   const gx = Math.floor(x / cell);
   const gz = Math.floor(z / cell);
@@ -20,14 +19,14 @@ function noise2(seed: number, salt: number, x: number, z: number, cell: number):
   const sx = (fx * fx * (768 - 2 * fx)) >> 16;
   const sz = (fz * fz * (768 - 2 * fz)) >> 16;
   const v = (a: number, b: number): number =>
-    mix(seed, salt, (a & 0xffff) * 65536 + (b & 0xffff)) & 0xff;
+    mix32(seed, salt, (a & 0xffff) * 65536 + (b & 0xffff)) & 0xff;
   const top = v(gx, gz) * (256 - sx) + v(gx + 1, gz) * sx;
   const bot = v(gx, gz + 1) * (256 - sx) + v(gx + 1, gz + 1) * sx;
   return (top * (256 - sz) + bot * sz) >> 8;
 }
 
-/** Surface height in 1/256 voxel units. */
-function heightAt(seed: number, w: number, d: number, x: number, z: number): number {
+/** Surface height in 1/256 voxel units (reference definition; `heightField` computes the same). */
+export function heightAt(seed: number, w: number, d: number, x: number, z: number): number {
   const cx = w >> 1;
   const cz = d >> 1;
   const r2 = ((x - cx) ** 2 + (z - cz) ** 2) * 256;
@@ -38,18 +37,102 @@ function heightAt(seed: number, w: number, d: number, x: number, z: number): num
   return 9 * 256 + bump * 30 + (n1 >> 3) + (n2 >> 5) + (bump > 40 ? 0 : -((40 - bump) << 2));
 }
 
+/** One noise octave on a `cell`-voxel lattice, with everything that depends on one axis tabulated. */
+interface Octave {
+  lat: Uint8Array;
+  stride: number;
+  gx: Int32Array;
+  sx: Int32Array;
+  gz: Int32Array;
+  sz: Int32Array;
+}
+
+function axisTable(n: number, cell: number): { g: Int32Array; s: Int32Array } {
+  const g = new Int32Array(n);
+  const s = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const gi = Math.floor(i / cell);
+    const f = Math.floor(((i - gi * cell) * 256) / cell);
+    g[i] = gi;
+    s[i] = (f * f * (768 - 2 * f)) >> 16;
+  }
+  return { g, s };
+}
+
+function octave(seed: number, salt: number, w: number, d: number, cell: number): Octave {
+  const ax = axisTable(w, cell);
+  const az = axisTable(d, cell);
+  const stride = Math.floor((w - 1) / cell) + 2;
+  const rows = Math.floor((d - 1) / cell) + 2;
+  const lat = new Uint8Array(stride * rows);
+  for (let b = 0; b < rows; b++)
+    for (let a = 0; a < stride; a++)
+      lat[b * stride + a] = mix32(seed, salt, (a & 0xffff) * 65536 + (b & 0xffff)) & 0xff;
+  return { lat, stride, gx: ax.g, sx: ax.s, gz: az.g, sz: az.s };
+}
+
+/** Same value as `noise2` at (x, z). */
+function sample(o: Octave, x: number, z: number): number {
+  const i = o.gz[z]! * o.stride + o.gx[x]!;
+  const sx = o.sx[x]!;
+  const sz = o.sz[z]!;
+  const top = o.lat[i]! * (256 - sx) + o.lat[i + 1]! * sx;
+  const bot = o.lat[i + o.stride]! * (256 - sx) + o.lat[i + o.stride + 1]! * sx;
+  return (top * (256 - sz) + bot * sz) >> 8;
+}
+
+/** `heightAt` for every column, z-major: result[z * w + x]. */
+export function heightField(seed: number, w: number, d: number): Int32Array {
+  const cx = w >> 1;
+  const cz = d >> 1;
+  const R = Math.min(cx, cz);
+  const o1 = octave(seed, 1, w, d, 32);
+  const o2 = octave(seed, 2, w, d, 12);
+  const out = new Int32Array(w * d);
+  for (let z = 0; z < d; z++) {
+    const dz2 = (z - cz) ** 2;
+    for (let x = 0; x < w; x++) {
+      const r2 = ((x - cx) ** 2 + dz2) * 256;
+      const bump = Math.max(0, 256 - Math.floor(r2 / (R * R)));
+      const n1 = sample(o1, x, z) - 32768;
+      const n2 = sample(o2, x, z) - 32768;
+      out[z * w + x] =
+        9 * 256 + bump * 30 + (n1 >> 3) + (n2 >> 5) + (bump > 40 ? 0 : -((40 - bump) << 2));
+    }
+  }
+  return out;
+}
+
 export function generateV2(recipe: MapRecipe): GeneratedMap {
   const seed = recipe.seed >>> 0;
   const t = createTerrain(recipe.sizeX, recipe.sizeY, recipe.sizeZ, BEDROCK_Y, SEA_Y);
   const { sizeX: w, sizeY: h, sizeZ: d, density } = t;
-  for (let z = 0; z < d; z++)
-    for (let x = 0; x < w; x++) {
-      const hf = heightAt(seed, w, d, x, z);
-      for (let y = 0; y < h; y++) {
-        const v = y < BEDROCK_Y ? 255 : 128 + ((hf - y * 256) >> 2);
-        density[(y * d + z) * w + x] = v < 0 ? 0 : v > 255 ? 255 : v;
-      }
+  // Heightfield once per column, then fill layer by layer (rows are contiguous in memory).
+  // v = 128 + ((hf - y * 256) >> 2), clamped to 0..255: bedrock and everything well below the
+  // lowest surface is solid, everything well above the highest is air, so only the layers in
+  // between need a per-voxel pass. Same bytes as evaluating every voxel.
+  const hfs = heightField(seed, w, d);
+  let minHf = Infinity;
+  let maxHf = -Infinity;
+  for (let i = 0; i < hfs.length; i++) {
+    const hf = hfs[i]!;
+    if (hf < minHf) minHf = hf;
+    if (hf > maxHf) maxHf = hf;
+  }
+  const layer = w * d;
+  for (let y = 0; y < h; y++) {
+    const base = y * layer;
+    if (y < BEDROCK_Y || y * 256 <= minHf - 508) {
+      density.fill(255, base, base + layer);
+      continue;
     }
+    if (y * 256 > maxHf + 508) break; // this layer and every layer above is already 0
+    const yy = y * 256;
+    for (let i = 0; i < layer; i++) {
+      const v = 128 + ((hfs[i]! - yy) >> 2);
+      density[base + i] = v < 0 ? 0 : v > 255 ? 255 : v;
+    }
+  }
 
   const rnd = (salt: number, i: number, n: number): number => hashInt(seed, salt, i, n);
   const fill = (x: number, y: number, z: number, r: number): void => {
