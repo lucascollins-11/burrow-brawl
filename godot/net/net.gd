@@ -23,6 +23,8 @@ const PING_INTERVAL := 2.0
 const GUEST_TIMEOUT := 90.0
 
 var lobby := LobbyState.new()
+## Last match.start payload, kept so a scene that loads late (or after a reconnect) can start from it.
+var _match_start: Dictionary = {}
 var nickname: String = ""
 var my_id: String = ""
 var token: String = ""
@@ -93,6 +95,17 @@ func remove_team(team_id: String) -> void:
 
 func start_match() -> void:
 	_send("lobby.start")
+
+
+## Last match.start received in this room, or {} when there is no match. Survives a reconnect
+## (the server sends match.start again), and is cleared when the room is left or the match ends.
+func current_match_start() -> Dictionary:
+	return _match_start
+
+
+## Send the active player's commands for one turn: {turn, cmds} as in docs/view-protocol.md section 6.
+func send_input(turn: int, cmds: Array) -> int:
+	return _send("input", {"turn": turn, "cmds": cmds})
 
 
 func _request_guest(nick: String) -> void:
@@ -220,6 +233,7 @@ func _on_frame(text: String) -> void:
 			room_changed.emit()
 		"room.left":
 			lobby.clear()
+			_match_start = {}
 			room_left.emit(str(msg.get("reason", "left")))
 		"chat":
 			chat_received.emit(str(msg.get("from", "")), str(msg.get("text", "")))
@@ -231,6 +245,7 @@ func _on_frame(text: String) -> void:
 			else:
 				server_error.emit(code, message)
 		"match.start":
+			_match_start = msg.duplicate()
 			match_started.emit(msg)
 		"state":
 			view_state.emit(msg)
@@ -240,6 +255,7 @@ func _on_frame(text: String) -> void:
 			terrain_patch.emit(msg)
 		"match.end":
 			match_ended.emit(msg)
+			_match_start = {}
 		_:
 			pass  # ok, pong and anything unknown
 
