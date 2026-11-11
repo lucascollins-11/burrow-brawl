@@ -15,6 +15,10 @@ func _init() -> void:
 	var failed := 0
 	for path in SUITES:
 		var suite_script: Script = load(path)
+		if suite_script == null:
+			failed += 1
+			print("FAIL cannot load " + path)
+			continue
 		var suite: TestCase = suite_script.new()
 		for method in suite.get_method_list():
 			var method_name: String = method["name"]
@@ -30,5 +34,8 @@ func _init() -> void:
 				print("FAIL %s::%s" % [path.get_file(), method_name])
 				for message in suite.failures:
 					print("     " + message)
+	if total == 0:
+		failed += 1
+		print("FAIL no tests ran")
 	print("%d tests, %d failed" % [total, failed])
 	quit(1 if failed > 0 else 0)
