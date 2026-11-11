@@ -1,0 +1,35 @@
+name: Godot release cleanup
+
+# Deletes the godot-pr-<n> pre-release and its tag when the pull request closes (merged or not),
+# so the Windows builds do not pile up.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  delete-release:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # needed to delete the release and its tag
+    steps:
+      - name: Delete the PR's Godot release and tag
+        # No checkout in this job, so gh needs the repository named explicitly.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: godot-pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Errors from `gh release view` other than "not found" stay visible in the log and fail the job.
+          if gh release view "$TAG" --json tagName >/dev/null; then
+            gh release delete "$TAG" --yes --cleanup-tag
+            echo "Deleted release and tag $TAG."
+          else
+            echo "No release named $TAG; nothing to delete."
+          fi
