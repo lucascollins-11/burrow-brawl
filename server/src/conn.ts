@@ -28,6 +28,21 @@ export interface ConnContext {
   joinLimiter: RateLimiter;
 }
 
+/**
+ * Encoded frames by message object. A broadcast hands the same object to every peer, so a big
+ * message (a view match.start is up to 2 MB) is serialised once, not once per connection.
+ */
+const frames = new WeakMap<object, string>();
+
+function frameFor(msg: object): string {
+  let f = frames.get(msg);
+  if (f === undefined) {
+    f = encode(msg);
+    frames.set(msg, f);
+  }
+  return f;
+}
+
 export class Connection implements Peer {
   sub: string | null = null;
   nickname = "";
@@ -60,7 +75,7 @@ export class Connection implements Peer {
   // ------------------------------------------------------------ Peer
 
   send(msg: ServerMessage | ViewServerMessage): void {
-    if (this.ws.readyState === this.ws.OPEN) this.ws.send(encode(msg));
+    if (this.ws.readyState === this.ws.OPEN) this.ws.send(frameFor(msg));
   }
 
   close(code: number, reason: string): void {
