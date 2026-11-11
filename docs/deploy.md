@@ -2,7 +2,7 @@
 
 Two pieces are deployed separately:
 
-- **Server** (`server/`): a Docker image on Render, from `render.yaml` and `server/Dockerfile`. It serves WebSockets and `GET /healthz`.
+- **Server** (`server/`): a Docker image on Render, from `render.yaml` and the `Dockerfile` at the repo root (so a manually created Render Web Service finds it with default settings). It serves WebSockets and `GET /healthz`.
 - **Client** (`client/`): a static Vite build on Vercel, from `vercel.json` at the repo root. Routes under `/r/:code` (room links) serve `index.html`.
 
 ## Environment variables
