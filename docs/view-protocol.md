@@ -1,0 +1,131 @@
+# View protocol
+
+Contract between the game server and a **view client**: a client that draws the match but does
+not simulate it. The Godot client is a view client. Owner: the architect. Changes to this file and
+to `shared/src/net/view.ts` go through the architect.
+
+The server is the only referee. It runs `sim3d` and `terrain3d` and tells view clients what the
+world looks like. A view client never computes physics, damage or terrain edits, so it cannot
+drift from the server and needs no hashes or resync logic.
+
+Everything in `docs/protocol.md` about transport, sessions, rooms, the lobby, chat, ping and errors
+applies unchanged. Only the match messages differ.
+
+## 1. Becoming a view client
+
+`hello` gains one optional field:
+
+```
+{ t: "hello", token, protocolVersion, resumeToken?, view?: true }
+```
+
+With `view: true` the connection receives the messages in this document instead of `tick`
+batches and `snapshot`. Lockstep clients (the three.js client) and view clients can share a room.
+`desync` from a view client is ignored.
+
+## 2. Units
+
+- Positions are the sim's integers: Q16.16 voxels, +y up. Divide by 65536 for world units.
+  One voxel is one Godot unit.
+- Headings are sim yaw: 0..1023, 0 = +x, 256 = +z. Pitch is whole degrees, positive up.
+- `tick` is the sim tick (60 per second).
+
+## 3. Server to view client
+
+### `match.start`
+
+Sent when the match starts and again whenever the client (re)connects during a match. It is always
+complete: a client that receives it throws away what it had.
+
+```
+{
+  t: "match.start",
+  view: true,
+  matchId: string,
+  config: MatchConfig,          // turn lengths, start health, team sizes, wind max
+  teamIds: string[],            // room team id for each sim team index
+  terrain: {
+    sizeX: number, sizeY: number, sizeZ: number,
+    seaY: number, bedrockY: number,
+    density: string             // section 5
+  },
+  state: ViewState              // full: every critter
+}
+```
+
+### `state`
+
+Sent every 3 ticks (20 per second) while the match runs.
+
+```
+ViewState = {
+  tick: number,
+  turns: TurnState,             // turn, round, phase, activeTeam, activeCritter, phaseEndTick, winnerTeam, windX, windZ
+  seaY: number,                 // rises in sudden death
+  critters: ViewCritter[],      // only critters that changed since the previous state message
+  projectiles: ViewProjectile[] // always the full list; a missing id is gone
+}
+ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean }
+ViewProjectile = { id, ownerId, weaponId, x, y, z, fuseTicks }
+```
+
+`{ t: "state", ...ViewState }` on the wire. A client keeps the last two states and draws
+between them (about 50 ms behind the server). Seconds left on the timer are
+`max(0, turns.phaseEndTick - tick) / 60`.
+
+### `events`
+
+```
+{ t: "events", tick: number, events: SimEvent[] }
+```
+
+The sim's events in order, sent in the same 3-tick batch as the `state` that covers them and
+before it: `jumped`, `landed`, `damage`, `died`, `fired`, `bounced`, `explosion`,
+`projectileLost`. They drive sound, effects and damage numbers. They never change what the client
+believes about positions, health or terrain; `state` and `terrain.patch` do that.
+
+### `terrain.patch`
+
+```
+{ t: "terrain.patch", tick: number, x0, y0, z0, sx, sy, sz, density: string }
+```
+
+Sent after every terrain edit, before the `state` for that batch. It carries the new bytes of the
+box `[x0, x0+sx) x [y0, y0+sy) x [z0, z0+sz)`, encoded as in section 5. The client overwrites
+those voxels and remeshes the chunks the box touches plus their neighbours (a chunk mesh reads a
+1-voxel border).
+
+### `match.end`
+
+Unchanged: `{ t: "match.end", winnerTeamId, tick, reason? }`.
+
+## 4. View client to server
+
+Unchanged: `{ t: "input", turn, cmds }` with the commands in `shared/src/match/match.ts`:
+
+```
+{ k: "move", yaw }              // 0..1023, or -1 to stop; held until changed
+{ k: "jump" } { k: "backflip" } { k: "skip" }
+{ k: "fire", weaponId, yaw, pitch, power, fuseSeconds?, target? }
+```
+
+The client turns camera-relative keys into an absolute heading before sending. Send `move` only
+when the heading changes. The server answers `not_your_turn` or `input_rejected` as today.
+
+## 5. Voxel encoding
+
+Voxels are one byte each (density 0..255, solid at 128 or more). Order is x fastest, then z, then
+y: `index = (y * sizeZ + z) * sizeX + x` for the whole grid, and the same nesting inside a patch
+box (`((y - y0) * sz + (z - z0)) * sx + (x - x0)`).
+
+The bytes are run-length encoded as pairs `[count - 1, value]` (so one pair covers 1 to 256 equal
+bytes), and the result is base64 (standard alphabet, with padding). Decoding: read pairs, write
+`value` `count` times, stop at the end; the total must equal the box volume or the message is
+invalid.
+
+Outside the grid: below y = 0 is solid, everything else is air.
+
+## 6. What a view client does not need
+
+Map generation, the sim, hashes, snapshots, the edit log. If a view client thinks it needs one of
+these, the protocol is missing something: ask the architect.
