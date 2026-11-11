@@ -70,6 +70,41 @@ func is_solid(x: int, y: int, z: int) -> bool:
 	return density_at(x, y, z) >= SOLID
 
 
+## Height of the highest surface in the column (ix, iz), in voxel units, where the density
+## crosses 128 between sample points; -1.0 if the column is empty or outside the grid.
+func column_height(ix: int, iz: int) -> float:
+	if ix < 0 or iz < 0 or ix >= size_x or iz >= size_z:
+		return -1.0
+	for y in range(size_y - 1, -1, -1):
+		var d0: int = density[(y * size_z + iz) * size_x + ix]
+		if d0 < SOLID:
+			continue
+		var d1 := 0 if y + 1 >= size_y else int(density[((y + 1) * size_z + iz) * size_x + ix])
+		return float(y) + float(d0 - SOLID) / float(maxi(1, d0 - d1))
+	return -1.0
+
+
+## Surface height at a world position (bilinear over the four nearest columns). Columns with no
+## ground are skipped; returns 0.0 when none of them has any.
+func ground_height(x: float, z: float) -> float:
+	var ix := floori(x)
+	var iz := floori(z)
+	var fx := x - float(ix)
+	var fz := z - float(iz)
+	var total := 0.0
+	var weight := 0.0
+	for k in range(4):
+		var cx := ix + (k & 1)
+		var cz := iz + (k >> 1)
+		var h := column_height(cx, cz)
+		if h < 0.0:
+			continue
+		var w := (fx if (k & 1) == 1 else 1.0 - fx) * (fz if (k >> 1) == 1 else 1.0 - fz)
+		total += h * w
+		weight += w
+	return total / weight if weight > 0.0 else 0.0
+
+
 ## Apply a `terrain.patch` message. Returns the chunk indices that need a remesh: every chunk the
 ## box touches plus its neighbours (a chunk mesh reads a 1-voxel border). Empty on a bad patch.
 func apply_patch(msg: Dictionary) -> PackedInt32Array:

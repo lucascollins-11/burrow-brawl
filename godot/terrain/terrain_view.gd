@@ -40,6 +40,22 @@ func set_store(new_store: Store) -> void:
 	_busy = true
 
 
+## Decode the `terrain` object of match.start and show it. Returns false if it is invalid.
+func load_terrain(match_start_terrain: Dictionary) -> bool:
+	var new_store := Store.new()
+	if not new_store.load_full(match_start_terrain):
+		return false
+	set_store(new_store)
+	return true
+
+
+## Surface height (world units) at world x, z: where the density crosses the solid threshold.
+func ground_y(x: float, z: float) -> float:
+	if store == null:
+		return 0.0
+	return store.ground_height(x, z)
+
+
 ## Apply a terrain.patch message and remesh what it touches.
 func apply_patch(msg: Dictionary) -> void:
 	if store == null:

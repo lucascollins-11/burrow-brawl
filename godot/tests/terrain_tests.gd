@@ -6,6 +6,7 @@ extends SceneTree
 const Codec := preload("res://terrain/voxel_codec.gd")
 const Store := preload("res://terrain/voxel_store.gd")
 const Mesher := preload("res://terrain/surface_mesher.gd")
+const View := preload("res://terrain/terrain_view.gd")
 
 var failures := 0
 var checks := 0
@@ -17,6 +18,7 @@ func _init() -> void:
 	test_store_rules()
 	test_padded_copy()
 	test_patch()
+	test_ground_height()
 	test_mesher_empty_and_full()
 	test_mesher_sphere()
 	test_mesher_seams()
@@ -180,6 +182,41 @@ func test_patch() -> void:
 		"density": Codec.encode(PackedByteArray([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
 	}
 	check(st.apply_patch(outside).is_empty(), "patch outside the grid is rejected")
+
+
+func test_ground_height() -> void:
+	var flat := func(_x: int, y: int, _z: int) -> int: return 255 if y < 20 else 0
+	var st := make_store(64, 64, 64, flat)
+	check(absf(st.column_height(10, 10) - 19.498) < 0.01, "column height at the density crossing")
+	check(st.column_height(-1, 5) < 0.0, "outside the grid has no column")
+	check(absf(st.ground_height(10.5, 20.25) - 19.498) < 0.01, "ground height on flat ground")
+	# A slope: height rises 1 voxel per x.
+	var slope := make_store(
+		64, 64, 64, func(x: int, y: int, _z: int) -> int: return 255 if y < x else 0
+	)
+	check(
+		absf(slope.ground_height(20.5, 5.0) - slope.ground_height(20.0, 5.0) - 0.5) < 0.01,
+		"interpolates"
+	)
+	var view := View.new()
+	var bytes := PackedByteArray()
+	bytes.resize(32 * 32 * 32)
+	for i in range(bytes.size()):
+		bytes[i] = 255 if i < 32 * 32 * 8 else 0
+	var ok: bool = view.load_terrain(
+		{
+			"sizeX": 32,
+			"sizeY": 32,
+			"sizeZ": 32,
+			"seaY": 5,
+			"bedrockY": 1,
+			"density": Codec.encode(bytes)
+		}
+	)
+	check(ok, "load_terrain accepts a match.start terrain")
+	check(absf(view.ground_y(10.0, 10.0) - 7.498) < 0.01, "ground_y from the view")
+	check(not view.load_terrain({"sizeX": 5}), "load_terrain rejects a bad terrain")
+	view.free()
 
 
 func test_mesher_empty_and_full() -> void:

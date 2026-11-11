@@ -11,9 +11,9 @@ func test_encode_puts_type_and_fields_in_one_object() -> void:
 func test_decode_rejects_non_objects_and_bad_type() -> void:
 	check_eq(Proto.decode("[1,2]").is_empty(), true, "array is not a message")
 	check_eq(Proto.decode("not json").is_empty(), true, "garbage is not a message")
-	check_eq(Proto.decode("{\"x\":1}").is_empty(), true, "missing t")
-	check_eq(Proto.decode("{\"t\":5}").is_empty(), true, "t must be a string")
-	check_eq(Proto.decode("{\"t\":\"ok\"}").get("t"), "ok", "valid frame")
+	check_eq(Proto.decode('{"x":1}').is_empty(), true, "missing t")
+	check_eq(Proto.decode('{"t":5}').is_empty(), true, "t must be a string")
+	check_eq(Proto.decode('{"t":"ok"}').get("t"), "ok", "valid frame")
 
 
 func test_normalize_code_uses_the_room_alphabet() -> void:
