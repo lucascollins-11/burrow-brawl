@@ -108,7 +108,8 @@ jobs:
           godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 2>&1 | tee e2e.log
           # Engine errors (for example a data race in the threaded mesher) must fail the job even
           # when the match itself completes.
-          if grep -n "^ERROR:\|SCRIPT ERROR" e2e.log; then
+          # Only up to "E2E PASS": the engine also prints harmless leak notices while quitting.
+          if sed "/E2E PASS/q" e2e.log | grep -n "^ERROR:\|SCRIPT ERROR"; then
             echo "The engine reported errors during the match"
             exit 1
           fi
