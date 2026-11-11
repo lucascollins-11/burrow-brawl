@@ -43,6 +43,7 @@ var _blast_left := 0.0
 var _marker: MeshInstance3D
 var _time := 0.0
 var _last_turn := -1
+var _last_tick_second := -1
 var _prev_pos: Dictionary = {}  # id -> Vector3, to tell walking from standing
 var _built := false
 var _world := Vector2(256, 256)
@@ -127,6 +128,9 @@ func handle_match_start(msg: Dictionary) -> void:
 	_rig.dist = 90.0
 	_built = true
 	_last_turn = -1
+	_last_tick_second = -1
+	Audio.preload_all()
+	Audio.play_music("match")
 
 
 func handle_state(msg: Dictionary) -> void:
@@ -168,6 +172,13 @@ func _process(dt: float) -> void:
 	if int(v["turn"]) != _last_turn:
 		_last_turn = int(v["turn"])
 		controls.new_turn()
+		if v["phase"] != "over":
+			Audio.on_turn_start()
+	var secs := int(ceil(float(v["time_left"])))
+	if secs != _last_tick_second:
+		_last_tick_second = secs
+		if v["phase"] == "control":
+			Audio.on_timer(float(secs))
 	controls.camera_yaw_deg = _rig.yaw_deg
 	var active := _find(v["critters"], v["active_critter_id"])
 	if not active.is_empty():
@@ -201,6 +212,7 @@ func _send_input(turn: int, cmds: Array) -> void:
 
 
 func _handle_events(events: Array, v: Dictionary) -> void:
+	Audio.on_events(events)
 	for e in events:
 		var kind := str(e.get("type", ""))
 		if kind == "explosion":
