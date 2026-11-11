@@ -11,7 +11,7 @@ See `docs/view-protocol.md` for the match contract and `docs/protocol.md` for th
 3. Open the folder and double-click `BurrowBrawl.exe`. If Windows warns about an unknown app, click **More info**, then **Run anyway**.
 4. Type a nickname and click **Create room**, or type a room code and click **Join by code**.
 
-A console window opens with the game. Leave it open. Steps for reporting problems are in [docs/playtest.md](../docs/playtest.md).
+The game opens in its own window; the release build has no console. Logs are in `%APPDATA%\Godot\app_userdata\Burrow Brawl\logs`. Steps for reporting problems are in [docs/playtest.md](../docs/playtest.md).
 
 ## Pinned version
 

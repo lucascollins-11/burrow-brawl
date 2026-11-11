@@ -14,8 +14,12 @@ by CI. The browser client is kept for reference, so this guide does not cover it
 Windows may say it does not recognise the app. Click **More info**, then **Run anyway**. This is
 expected for a test build that is not code-signed.
 
-A console window opens with the game. Leave it open. If something breaks, its red text is the
-most useful thing to report.
+The game opens in its own window. There is no console window in this build. If something breaks,
+the log file is the most useful thing to report. It is in this folder:
+
+`%APPDATA%\Godot\app_userdata\Burrow Brawl\logs`
+
+To open it, press Windows+R, paste the path, and press Enter.
 
 ## 2. Title screen
 
@@ -55,7 +59,7 @@ Post the report in the project thread, or send it to whoever shared the build. I
 3. The exact steps: what you clicked or typed, in order.
 4. What you expected, and what happened instead.
 5. The room code, if you were in a room.
-6. The red or white text from the console window. Copy it, or take a photo of it.
+6. The newest file in the logs folder (see section 1). Attach it, or copy the text from the end of it.
 7. A screenshot if you can.
 
 Do not send passwords or personal details.
