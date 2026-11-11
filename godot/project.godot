@@ -11,6 +11,7 @@ run/main_scene="res://ui/title.tscn"
 [autoload]
 
 Net="*res://net/net.gd"
+Audio="*res://audio/audio.gd"
 
 [display]
 
