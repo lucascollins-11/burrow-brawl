@@ -105,6 +105,12 @@ jobs:
       - name: Online match, headless
         run: godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080
 
+      - name: Same match against the live server (probe, best effort)
+        continue-on-error: true
+        run: |
+          timeout 240 godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=https://burrow-brawl.onrender.com 2>&1 | tee live.log || true
+          tail -n 40 live.log
+
       - name: Online match with screenshots (software renderer, best effort)
         continue-on-error: true
         run: |
