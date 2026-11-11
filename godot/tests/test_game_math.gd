@@ -124,3 +124,21 @@ func test_squirmling_is_five_rings_with_a_head_and_tail_tuft() -> void:
 	check(s.find_child("Hat", true, false) != null, "hat")
 	Squirmling.animate(s, 1.0, true, true)
 	s.free()
+
+
+func test_standings_put_the_winner_first_then_survivors_by_health() -> void:
+	var teams: Array = []
+	for i in range(3):
+		teams.append({"index": i, "name": "T%d" % i, "color": Color.WHITE})
+	var crit: Array = [
+		{"id": 1, "team": 0, "hp": 0, "max_hp": 100, "alive": false},
+		{"id": 2, "team": 1, "hp": 30, "max_hp": 100, "alive": true},
+		{"id": 3, "team": 2, "hp": 80, "max_hp": 100, "alive": true},
+	]
+	var v := {"teams": teams, "critters": crit, "active_team": null, "phase": "over", "winner_team": 1}
+	var rows := HudModel.standings(v)
+	check_eq(rows[0]["index"], 1, "the winner is first")
+	check_eq(rows[1]["index"], 2, "then the healthier survivor")
+	check_eq(rows[2]["index"], 0, "the eliminated team is last")
+	check_eq(rows[0]["rank"], 1, "rank starts at 1")
+	check(rows[0]["winner"] and not rows[1]["winner"], "only one winner")

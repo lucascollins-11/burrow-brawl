@@ -5,6 +5,7 @@ extends CanvasLayer
 ## file stays tiny. Data comes from ViewModel.snapshot(); the numbers are worked out in HudModel.
 
 signal skip_pressed
+signal weapon_picked(index: int)
 signal leave_pressed
 signal again_pressed
 
@@ -22,7 +23,9 @@ var _power_panel: PanelContainer
 var _power_label: Label
 var _power_bar: ProgressBar
 var _hint: Label
-var _weapon: Label
+var _weapon_buttons: Array[Button] = []
+var _weapon_names: Array[String] = ["Acorn Mortar", "Fizz Grenade"]
+var _end_rows: VBoxContainer
 var _skip: Button
 var _end_panel: PanelContainer
 var _end_label: Label
@@ -107,11 +110,18 @@ func _ready() -> void:
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 10)
-	_weapon = _label(16, true)
+	for i in range(_weapon_names.size()):
+		var wb := Button.new()
+		wb.toggle_mode = true
+		wb.text = "%d  %s" % [i + 1, _weapon_names[i]]
+		wb.focus_mode = Control.FOCUS_NONE
+		wb.pressed.connect(func() -> void: weapon_picked.emit(i))
+		_weapon_buttons.append(wb)
+		brow.add_child(wb)
 	_skip = Button.new()
 	_skip.text = "Skip turn"
 	_skip.pressed.connect(func() -> void: skip_pressed.emit())
-	brow.add_child(_weapon)
+	_skip.focus_mode = Control.FOCUS_NONE
 	brow.add_child(_skip)
 	bottom.add_child(brow)
 	root.add_child(bottom)
@@ -119,20 +129,26 @@ func _ready() -> void:
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 8)
 	root.add_child(_hint)
 
-	# End of match.
-	_end_panel = _panel(22)
+	# End of match: winner banner, standings and the way out.
+	_end_panel = _panel(24)
 	_end_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	_end_panel.custom_minimum_size = Vector2(380, 0)
 	var ev := VBoxContainer.new()
 	ev.add_theme_constant_override("separation", 12)
-	_end_label = _label(34, true)
+	_end_label = _label(36, true)
 	_end_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_end_rows = VBoxContainer.new()
+	_end_rows.add_theme_constant_override("separation", 6)
 	_again = Button.new()
 	_again.text = "Back to lobby"
+	_again.custom_minimum_size = Vector2(0, 44)
+	_again.add_theme_font_size_override("font_size", 20)
 	_again.pressed.connect(func() -> void: again_pressed.emit())
 	var leave := Button.new()
 	leave.text = "Leave"
 	leave.pressed.connect(func() -> void: leave_pressed.emit())
 	ev.add_child(_end_label)
+	ev.add_child(_end_rows)
 	ev.add_child(_again)
 	ev.add_child(leave)
 	_end_panel.add_child(ev)
@@ -145,7 +161,12 @@ func update(
 	v: Dictionary, aim: CameraMath.AimState, hint: String, weapon_name: String, world: Vector2
 ) -> void:
 	var over: bool = v["phase"] == "over"
-	_timer_label.text = str(ceili(float(v["time_left"]))) if v["phase"] == "control" else ""
+	var left := float(v["time_left"])
+	_timer_label.text = str(ceili(left)) if v["phase"] == "control" else ""
+	var urgent: bool = v["phase"] == "control" and left <= 5.0
+	_timer_label.add_theme_color_override("font_color", Color("d93b2b") if urgent else INK)
+	_timer_label.pivot_offset = _timer_label.size * 0.5
+	_timer_label.scale = Vector2.ONE * (1.0 + (0.18 * (1.0 - fposmod(left, 1.0)) if urgent else 0.0))
 	_banner_label.text = HudModel.turn_banner(v)
 
 	var sums := HudModel.summarize_teams(v)
@@ -172,12 +193,47 @@ func update(
 	if aim != null:
 		_power_label.text = "Power %d - aim %d deg" % [int(roundf(aim.power)), aim.pitch_deg]
 		_power_bar.value = aim.power
-	_weapon.text = weapon_name
+	for i in range(_weapon_buttons.size()):
+		_weapon_buttons[i].set_pressed_no_signal(_weapon_names[i] == weapon_name)
 	_skip.disabled = not (v["my_turn"] and (v["phase"] == "control" or v["phase"] == "retreat"))
 	_hint.text = "" if over else hint
 	_end_panel.visible = over
 	if over:
 		_end_label.text = HudModel.turn_banner(v)
+		_fill_standings(v)
+
+
+var _standings_key: String = ""
+
+
+func _fill_standings(v: Dictionary) -> void:
+	var rows := HudModel.standings(v)
+	var key := JSON.stringify(rows.map(func(r: Dictionary) -> Array: return [r["index"], r["alive"], r["hp"]]))
+	if key == _standings_key:
+		return
+	_standings_key = key
+	for c in _end_rows.get_children():
+		c.queue_free()
+	for r in rows:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var swatch := Panel.new()
+		swatch.custom_minimum_size = Vector2(22, 22)
+		var sb := _flat(r["color"], 11, 3)
+		swatch.add_theme_stylebox_override("panel", sb)
+		var rank := _label(18, bool(r["winner"]))
+		rank.text = "%d." % int(r["rank"])
+		var nm := _label(18, bool(r["winner"]))
+		nm.text = ("%s  (winner)" % r["name"]) if r["winner"] else str(r["name"])
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var left := _label(16, false)
+		left.text = "%d/%d left" % [r["alive"], r["total"]]
+		row.add_child(rank)
+		row.add_child(swatch)
+		row.add_child(nm)
+		row.add_child(left)
+		row.modulate = Color(1, 1, 1, 0.55 if r["out"] else 1.0)
+		_end_rows.add_child(row)
 
 
 static func _sum_key(s: Dictionary) -> Array:
@@ -194,7 +250,7 @@ func _rebuild_teams(sums: Array, order: Array) -> void:
 		name_label.text = str(s["name"])
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var count := _label(13, false)
-		count.text = "%d/%d" % [s["alive"], s["total"]]
+		count.text = "x" if s["out"] else "%d/%d  %d hp" % [s["alive"], s["total"], s["hp"]]
 		top.add_child(name_label)
 		top.add_child(count)
 		var bar := ProgressBar.new()
