@@ -28,7 +28,9 @@ func test_hello_carries_a_resume_token_only_when_there_is_one() -> void:
 	check_eq(first.has("resumeToken"), false, "no resume token on a first hello")
 	check_eq(first.get("view"), true, "view client flag")
 	check_eq(first.get("protocolVersion"), Proto.PROTOCOL_VERSION, "protocol version")
-	check_eq(Proto.hello_fields("tok", "res").get("resumeToken"), "res", "resume token sent on reconnect")
+	check_eq(
+		Proto.hello_fields("tok", "res").get("resumeToken"), "res", "resume token sent on reconnect"
+	)
 
 
 func test_valid_nickname_length_limits() -> void:

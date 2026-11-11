@@ -1,23 +1,8 @@
 class_name MatchEnvironment
 extends Node3D
-## Sunset sky, sun with shadows, glow, a fizzy pink soda sea out to the horizon, clouds and four poles
+## Sunset sky, sun with shadows, glow, a fizzy soda sea out to the horizon, clouds and four poles
 ## with paper wind streamers (port of client/src/game3d/environment.ts, in Godot's renderer).
 
-const SEA_SHADER := """
-shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back;
-uniform vec4 tint : source_color = vec4(1.0, 0.55, 0.72, 0.86);
-void vertex() {
-	VERTEX.y += sin(VERTEX.x * 0.05 + TIME * 1.1) * 0.7 + cos(VERTEX.z * 0.06 + TIME * 0.9) * 0.6;
-}
-void fragment() {
-	ALBEDO = tint.rgb;
-	ALPHA = tint.a;
-	ROUGHNESS = 0.2;
-	METALLIC = 0.1;
-	SPECULAR = 0.8;
-}
-"""
 const POLE_COLORS: Array[Color] = [Color("e85d4a"), Color("f2b544"), Color("5cc49b"), Color("4aa3df")]
 const SEG_COUNT := 7
 const SEG_LEN := 2.0
@@ -61,14 +46,21 @@ func _build_sky() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.7
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_white = 5.0
+	# Glow only for things brighter than white (explosions, the sun), never the whole picture.
 	env.glow_enabled = true
-	env.glow_intensity = 0.6
-	env.glow_bloom = 0.1
+	env.glow_intensity = 0.5
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.2
+	# A light warm haze far away. It must not paint over the sky or the near island.
 	env.fog_enabled = true
 	env.fog_light_color = Color("ffc79a")
-	env.fog_density = 0.0008
+	env.fog_density = 0.0003
+	env.fog_sky_affect = 0.0
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.15
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
 	add_child(_world_env)
@@ -78,7 +70,7 @@ func _build_sun() -> void:
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.light_color = Color("ffd9a8")
-	sun.light_energy = 1.7
+	sun.light_energy = 1.5
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = maxf(_size_x, _size_z) * 1.4
 	sun.shadow_bias = 0.05
@@ -93,14 +85,10 @@ func _build_sea(sea_y: float) -> void:
 	plane.size = Vector2(4000.0, 4000.0)
 	plane.subdivide_width = 160
 	plane.subdivide_depth = 160
-	var shader := Shader.new()
-	shader.code = SEA_SHADER
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
 	sea = MeshInstance3D.new()
 	sea.name = "Sea"
 	sea.mesh = plane
-	sea.material_override = mat
+	sea.material_override = preload("res://terrain/sea_material.gd").make()
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	sea.position = Vector3(_size_x * 0.5, sea_y, _size_z * 0.5)
 	add_child(sea)
