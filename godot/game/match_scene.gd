@@ -74,6 +74,8 @@ func _ready() -> void:
 	hud.skip_pressed.connect(controls.skip)
 	hud.leave_pressed.connect(_leave)
 	hud.again_pressed.connect(_back_to_lobby)
+	if hud.has_signal("weapon_picked"):
+		hud.connect("weapon_picked", func(i: int) -> void: controls.weapon = i)
 	_make_marker()
 	_connect_net()
 
