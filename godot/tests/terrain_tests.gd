@@ -7,6 +7,8 @@ const Codec := preload("res://terrain/voxel_codec.gd")
 const Store := preload("res://terrain/voxel_store.gd")
 const Mesher := preload("res://terrain/surface_mesher.gd")
 const View := preload("res://terrain/terrain_view.gd")
+const TerrainMaterial := preload("res://terrain/terrain_material.gd")
+const SeaMaterial := preload("res://terrain/sea_material.gd")
 
 var failures := 0
 var checks := 0
@@ -19,6 +21,7 @@ func _init() -> void:
 	test_padded_copy()
 	test_patch()
 	test_ground_height()
+	test_materials()
 	test_mesher_empty_and_full()
 	test_mesher_sphere()
 	test_mesher_seams()
@@ -217,6 +220,21 @@ func test_ground_height() -> void:
 	check(absf(view.ground_y(10.0, 10.0) - 7.498) < 0.01, "ground_y from the view")
 	check(not view.load_terrain({"sizeX": 5}), "load_terrain rejects a bad terrain")
 	view.free()
+
+
+func test_materials() -> void:
+	var terrain := TerrainMaterial.make(30.0, 4.0)
+	check(terrain.shader != null, "terrain shader loads")
+	check(terrain.get_shader_parameter("sea_y") == 30.0, "terrain material sea_y")
+	check(terrain.get_shader_parameter("bedrock_y") == 4.0, "terrain material bedrock_y")
+	var sea := SeaMaterial.make(Color.RED)
+	check(sea.shader != null, "sea shader loads")
+	check(sea.get_shader_parameter("shallow_color") == Color.RED, "sea material colours")
+	# Guard against GLSL pitfalls the headless run cannot compile-check.
+	for path in ["res://terrain/terrain.gdshader", "res://terrain/sea.gdshader"]:
+		var code: String = load(path).code
+		check(code.begins_with("//") or code.begins_with("shader_type"), path + " has source")
+		check(not code.contains(" patch "), path + " avoids the reserved word patch")
 
 
 func test_mesher_empty_and_full() -> void:

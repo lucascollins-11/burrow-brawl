@@ -39,30 +39,58 @@ func test_step_rig_converges_toward_the_goal() -> void:
 func test_view_model_interpolates_between_two_states_in_voxels() -> void:
 	var vm := ViewModel.new()
 	var one := 65536
-	vm.apply_match_start(
-		{
-			"matchId": "m",
-			"config": {"startHealth": 100},
-			"teamIds": ["a", "b"],
-			"terrain": {},
-			"state":
+	(
+		vm
+		. apply_match_start(
 			{
-				"tick": 0,
+				"matchId": "m",
+				"config": {"startHealth": 100},
+				"teamIds": ["a", "b"],
+				"terrain": {},
+				"state":
+				{
+					"tick": 0,
+					"turns": {"phase": "control", "activeTeam": 0, "activeCritter": 1},
+					"seaY": 5,
+					"critters":
+					[
+						{
+							"id": 1,
+							"team": 0,
+							"x": 10 * one,
+							"y": 20 * one,
+							"z": 30 * one,
+							"yaw": 0,
+							"hp": 100
+						}
+					],
+					"projectiles": [],
+				},
+			}
+		)
+	)
+	(
+		vm
+		. apply_state(
+			{
+				"tick": 12,
 				"turns": {"phase": "control", "activeTeam": 0, "activeCritter": 1},
 				"seaY": 5,
-				"critters": [{"id": 1, "team": 0, "x": 10 * one, "y": 20 * one, "z": 30 * one, "yaw": 0, "hp": 100}],
+				"critters":
+				[
+					{
+						"id": 1,
+						"team": 0,
+						"x": 14 * one,
+						"y": 20 * one,
+						"z": 30 * one,
+						"yaw": 0,
+						"hp": 90
+					}
+				],
 				"projectiles": [],
-			},
-		}
-	)
-	vm.apply_state(
-		{
-			"tick": 12,
-			"turns": {"phase": "control", "activeTeam": 0, "activeCritter": 1},
-			"seaY": 5,
-			"critters": [{"id": 1, "team": 0, "x": 14 * one, "y": 20 * one, "z": 30 * one, "yaw": 0, "hp": 90}],
-			"projectiles": [],
-		}
+			}
+		)
 	)
 	vm.advance(0.0)
 	var s := vm.snapshot()
@@ -78,7 +106,9 @@ func test_view_model_interpolates_between_two_states_in_voxels() -> void:
 
 func test_view_model_drops_projectiles_missing_from_a_state() -> void:
 	var vm := ViewModel.new()
-	vm.apply_state({"tick": 3, "projectiles": [{"id": 7, "x": 0, "y": 0, "z": 0, "weaponId": "acorn-mortar"}]})
+	vm.apply_state(
+		{"tick": 3, "projectiles": [{"id": 7, "x": 0, "y": 0, "z": 0, "weaponId": "acorn-mortar"}]}
+	)
 	check_eq(vm.snapshot()["projectiles"].size(), 1, "one shot")
 	vm.apply_state({"tick": 6, "projectiles": []})
 	check_eq(vm.snapshot()["projectiles"].size(), 0, "shot removed")
