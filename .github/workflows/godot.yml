@@ -1,0 +1,111 @@
+name: Godot
+
+# Headless GDScript tests, plus a Windows export zip attached to a GitHub Release per pull request.
+# Nobody can run Godot in the agent workspaces, so this workflow is the build and test loop.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned Godot 4 stable. Keep in sync with godot/README.md.
+  GODOT_VERSION: 4.4.1-stable
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/godot-bin"
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q godot.zip -d "$HOME/godot-bin"
+          mv "$HOME/godot-bin/Godot_v${GODOT_VERSION}_linux.x86_64" "$HOME/godot-bin/godot"
+          chmod +x "$HOME/godot-bin/godot"
+          echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Import project
+        run: godot --headless --path godot --import
+
+      - name: Headless tests
+        run: godot --headless --path godot -s res://tests/run_tests.gd
+
+  export-windows:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write # needed only to attach the build to a release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/godot-bin"
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q godot.zip -d "$HOME/godot-bin"
+          mv "$HOME/godot-bin/Godot_v${GODOT_VERSION}_linux.x86_64" "$HOME/godot-bin/godot"
+          chmod +x "$HOME/godot-bin/godot"
+          echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Install export templates
+        run: |
+          set -euo pipefail
+          curl -fsSL -o templates.tpz \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          mkdir -p templates-tmp
+          unzip -q templates.tpz -d templates-tmp
+          # Godot looks for templates in a folder named like the version: 4.4.1.stable
+          TDIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
+          mkdir -p "$TDIR"
+          mv templates-tmp/templates/* "$TDIR/"
+
+      - name: Import project
+        run: godot --headless --path godot --import
+
+      - name: Export Windows build
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          godot --headless --path godot --export-release "Windows Desktop" "$GITHUB_WORKSPACE/build/BurrowBrawl.exe"
+          test -s build/BurrowBrawl.exe
+          (cd build && zip -q BurrowBrawl-windows.zip BurrowBrawl.exe)
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BurrowBrawl-windows
+          path: build/BurrowBrawl-windows.zip
+          if-no-files-found: error
+
+      - name: Attach build to the pull request's release
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          TAG="godot-pr-${PR_NUMBER}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "$HEAD_SHA" \
+              --title "Godot build for PR #${PR_NUMBER}" \
+              --notes "Windows build from pull request #${PR_NUMBER}. Replaced on every push to the PR."
+          fi
+          gh release upload "$TAG" build/BurrowBrawl-windows.zip --clobber
