@@ -3,15 +3,15 @@
 // events happened and every client's state hash equals the server's.
 //
 // To cover a new weapon, add one line:
-//   { weapon: "pepper-shotgun", angleDeg: 20, power: 100, expect: ["fired", "damage"] },
-// angleDeg is mirrored automatically so the shot heads toward the map center.
+//   { weapon: "pepper-shotgun", pitch: 20, power: 100, expect: ["fired", "damage"] },
+// The shot is always aimed toward the map center; the case only picks the pitch.
 
 import type { Cmd, SimEvent, WeaponId } from "@burrow-brawl/shared";
 
 export interface WeaponCase {
   weapon: WeaponId;
-  /** Whole degrees, 0 = right, 90 = up, aimed as if the shooter were left of center. */
-  angleDeg: number;
+  /** Whole degrees above level. */
+  pitch: number;
   power: number;
   fuseSeconds?: number;
   /** Event types that must appear in the turn (in any order). */
@@ -23,18 +23,18 @@ export interface WeaponCase {
 }
 
 export const WEAPON_CASES: WeaponCase[] = [
-  { weapon: "acorn-mortar", angleDeg: 55, power: 35, expect: ["fired", "explosion"] },
-  { weapon: "acorn-mortar", angleDeg: 80, power: 100, expect: ["fired"], label: "high lob" },
+  { weapon: "acorn-mortar", pitch: 55, power: 35, expect: ["fired", "explosion"] },
+  { weapon: "acorn-mortar", pitch: 80, power: 100, expect: ["fired"], label: "high lob" },
   {
     weapon: "fizz-grenade",
-    angleDeg: 60,
+    pitch: 60,
     power: 30,
     fuseSeconds: 3,
     expect: ["fired", "explosion"],
   },
   {
     weapon: "fizz-grenade",
-    angleDeg: 45,
+    pitch: 45,
     power: 60,
     fuseSeconds: 5,
     expect: ["fired", "explosion"],

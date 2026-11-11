@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MatchConfig } from "@burrow-brawl/shared";
+import { mapRecipeFor, type MatchConfig } from "@burrow-brawl/shared";
 import { MatchRunner, type MatchEndInfo } from "./matchRunner";
 
 const cfg: MatchConfig = {
@@ -10,8 +10,7 @@ const cfg: MatchConfig = {
   settleCapTicks: 300,
   startHealth: 100,
   windMax: 0,
-  mapWidth: 512,
-  mapHeight: 256,
+  map: mapRecipeFor(7, 2),
 };
 
 describe("MatchRunner", () => {

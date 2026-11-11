@@ -13,7 +13,7 @@ import {
   type MatchSnapshot,
   type MatchState,
 } from "./match";
-import type { SimEvent } from "../sim";
+import type { SimEvent } from "../sim3d/api";
 
 const HASH_HISTORY = 8; // hashed ticks to remember
 
@@ -49,7 +49,7 @@ export class MatchMirror {
     readonly config: MatchConfig,
     snapshot: MatchSnapshot,
   ) {
-    this.state = loadMatch(snapshot);
+    this.state = loadMatch(this.config, snapshot);
     this.confirmed = snapshot.sim.tick;
   }
 
@@ -91,7 +91,7 @@ export class MatchMirror {
 
   /** Replace local state with the server's (join, reconnect, desync repair). */
   onSnapshot(snapshot: MatchSnapshot): void {
-    this.state = loadMatch(snapshot);
+    this.state = loadMatch(this.config, snapshot);
     this.confirmed = Math.max(this.confirmed, snapshot.sim.tick);
     for (const t of [...this.pending.keys()]) if (t <= snapshot.sim.tick) this.pending.delete(t);
     this.hashes.clear();

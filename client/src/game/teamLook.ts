@@ -1,5 +1,5 @@
 import type { RoomState } from "@burrow-brawl/shared/src/net";
-import { TEAM_COLORS } from "../art/molekin";
+import { TEAM_COLORS_3D as TEAM_COLORS } from "../game3d/teamColors";
 
 /** How a sim team index is shown: name in the HUD, hat colour on the critters and HUD cards. */
 export interface TeamLook {

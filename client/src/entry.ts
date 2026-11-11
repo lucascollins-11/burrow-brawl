@@ -1,0 +1,2 @@
+void import("./main");
+export {};

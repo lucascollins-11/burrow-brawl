@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { hashMatch } from "@burrow-brawl/shared";
 import { GameClient, NetError } from "@burrow-brawl/client/src/net";
 import { startHarness, type Harness } from "./testing/harness";
+import { yawTowardCenter } from "./testing/players";
 
 let h: Harness;
 const clients: GameClient[] = [];
@@ -84,19 +85,17 @@ describe("GameClient end to end", () => {
 
     // Turn 1, Alba: aim toward the middle and fire an acorn mortar.
     expect(alba.match.state!.turns).toMatchObject({ turn: 1, activeTeam: 0 });
-    const me = alba.match.state!.sim.critters.find(
-      (c) => c.id === alba.match.state!.turns.activeCritter,
-    )!;
-    const angleDeg = me.x >> 16 < runner.config.mapWidth / 2 ? 55 : 125;
-    await send(alba, [{ k: "fire", weaponId: "acorn-mortar", angleDeg, power: 35 }]);
+    const yaw = yawTowardCenter(alba.match.state!);
+    await send(alba, [{ k: "fire", weaponId: "acorn-mortar", yaw, pitch: 55, power: 35 }]);
     await toTurn(2);
     expect(events).toContain("fired");
     expect(events).toContain("explosion");
 
-    // Turn 2, Bram: hop in place, then end the turn.
+    // Turn 2, Bram: walk a few steps inland, then end the turn.
     expect(bram.match.state!.turns).toMatchObject({ turn: 2, activeTeam: 1 });
-    await send(bram, [{ k: "jump" }]);
+    await send(bram, [{ k: "move", yaw: yawTowardCenter(bram.match.state!) }]);
     runner.advance(30);
+    await send(bram, [{ k: "move", yaw: -1 }]);
     await sync();
     expect(bram.match.state!.turns).toMatchObject({ turn: 2, phase: "control" });
     await send(bram, [{ k: "skip" }]);

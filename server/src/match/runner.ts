@@ -12,6 +12,7 @@ import {
   MATCH_TURNS,
   createMatch,
   hashMatch,
+  mapRecipeFor,
   saveMatch,
   stepMatch,
   type Cmd,
@@ -76,17 +77,17 @@ export class MatchRunner {
     },
     teams: number,
   ): MatchConfig {
+    // mapSeed 0 means "random each match".
+    const seed = settings.mapSeed !== 0 ? settings.mapSeed : randomInt(1, 0xffffffff);
     return {
-      // mapSeed 0 means "random each match".
-      seed: settings.mapSeed !== 0 ? settings.mapSeed : randomInt(1, 0xffffffff),
+      seed,
       teamSizes: new Array<number>(teams).fill(settings.crittersPerTeam),
       turnTicks: settings.turnSeconds * TICKS_PER_SECOND,
       retreatTicks: settings.retreatSeconds * TICKS_PER_SECOND,
       settleCapTicks: 15 * TICKS_PER_SECOND,
       startHealth: settings.startHealth,
       windMax: settings.windMax,
-      mapWidth: 2048,
-      mapHeight: 1024,
+      map: mapRecipeFor(seed, teams),
     };
   }
 
@@ -200,7 +201,18 @@ export class MatchRunner {
     const next = this.tick + 1;
     const cmds = this.pending.get(next) ?? [];
     this.pending.delete(next);
-    const r = stepMatch(this.config, this.state, cmds);
+    let r: ReturnType<typeof stepMatch>;
+    try {
+      r = stepMatch(this.config, this.state, cmds);
+    } catch (err) {
+      // A sim bug must end this match only, never the process or other rooms.
+      console.error(`[match ${this.id}] step failed at tick ${next}`, err);
+      this.ended = true;
+      this.host.broadcast({ t: "match.end", winnerTeamId: null, tick: this.tick, reason: "error" });
+      this.stop();
+      this.host.onEnd(null);
+      return;
+    }
     this.state = r.state;
     const t = this.tick;
 

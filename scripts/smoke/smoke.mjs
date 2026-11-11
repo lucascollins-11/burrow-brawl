@@ -180,9 +180,8 @@ async function main() {
   await waitFor(async () => !(await turnText(bram))?.includes("YOUR TURN"), "Bram watching");
   log("match started, Alba to play");
 
-  // One shot: acorn mortar, charge with F for a moment, release.
-  // Charge is sampled on game ticks, so hold F until the HUD shows some power (slow CI
-  // machines render few frames), then release.
+  // One shot: acorn mortar. Holding F enters aim mode and charges; hold until the HUD shows
+  // some power (slow CI machines render few frames), then release to fire.
   await alba.bringToFront(); // keep Alba's page foregrounded so its frames aren't throttled
   await alba.keyboard.press("1");
   await alba.keyboard.down("f");
@@ -192,7 +191,7 @@ async function main() {
   await alba.keyboard.up("f");
   // Firing ends control at once (retreat, then settling), long before the turn timer would.
   await waitFor(
-    async () => /retreat|waiting/.test((await turnText(alba)) ?? ""),
+    async () => /run for cover|settle/.test((await turnText(alba)) ?? ""),
     "the shot to end Alba's control",
     20_000,
   );
