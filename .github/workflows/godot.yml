@@ -114,8 +114,17 @@ jobs:
           mkdir -p shots
           timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" \
             godot --path godot --rendering-driver vulkan --resolution 1280x720 \
-            res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots"
+            res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots" 2>&1 | tee render.log
           ls -la shots
+
+      - name: Shaders compiled in the rendered run
+        run: |
+          if [ ! -f render.log ]; then echo "no rendered run"; exit 0; fi
+          if grep -n "SHADER ERROR\|Shader compilation failed" render.log; then
+            grep -n -A12 "SHADER ERROR" render.log | head -80
+            exit 1
+          fi
+          echo "no shader errors"
 
       - name: Server log
         if: always()
