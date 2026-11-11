@@ -4,7 +4,8 @@ import { topSolidY } from "./grid.js";
 const HEADROOM = 8;
 const MAX_SPAWNS = 64;
 
-function mix(a: number, b: number, c: number): number {
+/** The 32-bit hash behind `hashInt`, as an unsigned integer. */
+export function mix32(a: number, b: number, c: number): number {
   let h =
     Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^
     Math.imul(b + 0x7f4a7c15, 0xc2b2ae35) ^
@@ -19,7 +20,7 @@ function mix(a: number, b: number, c: number): number {
 
 /** Deterministic integer in [0, n) from (seed, salt, i). Shared by the generators. */
 export function hashInt(seed: number, salt: number, i: number, n: number): number {
-  return mix(seed, salt, i) % n;
+  return mix32(seed, salt, i) % n;
 }
 
 /**
