@@ -178,13 +178,7 @@ export type ServerMessage =
     }
   | ({ t: "tick" } & TickBatch)
   | { t: "snapshot"; snapshot: MatchSnapshot }
-  | {
-      t: "match.end";
-      winnerTeamId: string | null;
-      tick: number;
-      /** Set when the server ended the match because its sim step threw (no winner). */
-      reason?: "error";
-    }
+  | { t: "match.end"; winnerTeamId: string | null; tick: number; reason?: "error" }
   | { t: "error"; re?: number; code: ErrorCode; message: string };
 
 export type ClientMessageType = ClientMessage["t"];

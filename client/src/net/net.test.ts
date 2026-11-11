@@ -5,6 +5,7 @@ import {
   saveMatch,
   stepMatch,
   type MatchConfig,
+  mapRecipeFor,
 } from "@burrow-brawl/shared";
 import { CloseCodes, PROTOCOL_VERSION, type ServerMessage } from "@burrow-brawl/shared/src/net";
 import { GameConnection, type WebSocketLike } from "./connection";
@@ -226,8 +227,7 @@ describe("NetMatch", () => {
     settleCapTicks: 600,
     startHealth: 100,
     windMax: 50,
-    mapWidth: 1024,
-    mapHeight: 512,
+    map: mapRecipeFor(3, 2),
   };
 
   it("mirrors the server, fast-forwards to the watermark, and sends commands for the current turn", () => {
@@ -241,16 +241,16 @@ describe("NetMatch", () => {
       teamIds: ["t1", "t2"],
       snapshot: saveMatch(server),
     });
-    nm.sendCmds([{ k: "move", dir: 1 }]);
-    expect(sent.at(-1)).toEqual({ t: "input", turn: 1, cmds: [{ k: "move", dir: 1 }] });
+    nm.sendCmds([{ k: "move", yaw: 0 }]);
+    expect(sent.at(-1)).toEqual({ t: "input", turn: 1, cmds: [{ k: "move", yaw: 0 }] });
 
     for (let t = 1; t <= 60; t++) {
-      server = stepMatch(cfg, server, t === 5 ? [{ k: "move", dir: 1 }] : []).state;
+      server = stepMatch(cfg, server, t === 5 ? [{ k: "move", yaw: 0 }] : []).state;
       if (t % 3 !== 0) continue;
       nm.handle({
         t: "tick",
         upTo: t,
-        ...(t === 6 ? { cmds: [{ applyTick: 5, cmds: [{ k: "move", dir: 1 }] }] } : {}),
+        ...(t === 6 ? { cmds: [{ applyTick: 5, cmds: [{ k: "move", yaw: 0 }] }] } : {}),
         ...(t % 30 === 0 ? { h: hashMatch(server) } : {}),
       });
     }
@@ -336,8 +336,7 @@ describe("NetMatch playback pacing", () => {
     settleCapTicks: 600,
     startHealth: 100,
     windMax: 50,
-    mapWidth: 1024,
-    mapHeight: 512,
+    map: mapRecipeFor(3, 2),
   };
   const start = () => {
     const nm = new NetMatch({ send: () => undefined });

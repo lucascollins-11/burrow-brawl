@@ -2,7 +2,7 @@ import type { Cmd, MatchConfig, MatchMirror, MatchState, SimEvent } from "@burro
 import { TICKS_PER_SECOND } from "@burrow-brawl/shared";
 import type { RoomState } from "@burrow-brawl/shared/src/net";
 import type { NetMatch } from "../net";
-import type { GameInput } from "./input";
+import type { CmdInput } from "../game3d/controls";
 import type { MatchSource } from "./source";
 
 const STEP_MS = 1000 / TICKS_PER_SECOND;
@@ -29,7 +29,7 @@ export class OnlineSource implements MatchSource {
   constructor(
     private readonly client: OnlineClient,
     private readonly net: NetMatch,
-    private readonly input: GameInput,
+    private readonly input: CmdInput,
   ) {
     if (!net.mirror)
       throw new Error("OnlineSource: no match yet (create it from the matchStart event)");

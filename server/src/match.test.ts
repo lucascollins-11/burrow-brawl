@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { hashMatch } from "@burrow-brawl/shared";
+import { createMatch, hashMatch } from "@burrow-brawl/shared";
 import { PROTOCOL_VERSION } from "@burrow-brawl/shared/src/net";
 import type { MatchRunner } from "./match/runner";
 import { startHarness, type Harness } from "./testing/harness";
@@ -39,7 +39,7 @@ describe("authoritative match", () => {
     expect(await a.c.request({ t: "input", turn: 7, cmds: [{ k: "jump" }] })).toMatchObject({
       code: "input_rejected",
     });
-    expect(await a.c.request({ t: "input", turn: 1, cmds: [{ k: "move", dir: 1 }] })).toMatchObject(
+    expect(await a.c.request({ t: "input", turn: 1, cmds: [{ k: "move", yaw: 0 }] })).toMatchObject(
       {
         t: "ok",
       },
@@ -47,7 +47,7 @@ describe("authoritative match", () => {
     runner.advance(30);
     await a.c.request({ t: "input", turn: 1, cmds: [{ k: "jump" }] });
     runner.advance(48);
-    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "move", dir: 0 }] });
+    await a.c.request({ t: "input", turn: 1, cmds: [{ k: "move", yaw: -1 }] });
     runner.advance(60); // through tick 180, a hash tick
 
     await a.syncTo(180);
@@ -57,8 +57,9 @@ describe("authoritative match", () => {
     expect(hashMatch(b.mirror!.state)).toBe(want);
     expect(a.desyncs + b.desyncs).toBe(0);
     // The commands actually moved the critter.
-    const start = a.mirror!.state.sim.critters.find((c) => c.id === 1)!;
-    expect(start.x).not.toBe(b.mirror!.state.sim.critters.find((c) => c.id === 2)!.x);
+    const id = runner.matchState.turns.activeCritter;
+    const fresh = createMatch(runner.config).sim.critters.find((c) => c.id === id)!;
+    expect(b.mirror!.state.sim.critters.find((c) => c.id === id)!.pos).not.toEqual(fresh.pos);
   });
 
   it("skip passes the turn and clients see the same turn state", async () => {
@@ -85,7 +86,7 @@ describe("authoritative match", () => {
     runner.advance(10);
     await a.syncTo(9);
     // Corrupt the local mirror: a command the server never stamped.
-    a.mirror!.onInputs(10, [{ k: "move", dir: -1 }]);
+    a.mirror!.onInputs(10, [{ k: "jump" }]);
     runner.advance(20); // hash at 30
     await a.until((m) => m.t === "tick" && m.upTo === 30);
     expect(a.desyncs).toBe(1);

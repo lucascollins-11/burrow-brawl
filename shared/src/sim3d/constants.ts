@@ -7,7 +7,8 @@
 
 import { FIXED_ONE } from "../fixed";
 
-export { TICK_RATE } from "../sim/constants";
+/** Fixed step: the whole sim advances in 1/60 s ticks. */
+export const TICK_RATE = 60;
 
 /** 2D cell -> 3D voxel scale for the weapon JSON (which is still in 2D units). */
 export const LENGTH_NUM = 3;

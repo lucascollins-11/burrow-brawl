@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { HASH_EVERY, hashMatch } from "@burrow-brawl/shared";
 import { startHarness, type Harness } from "./testing/harness";
-import { startTwoPlayerMatch } from "./testing/players";
+import { startTwoPlayerMatch, yawTowardCenter } from "./testing/players";
 import { WEAPON_CASES } from "./testing/weaponCases";
 
 let h: Harness;
@@ -33,14 +33,11 @@ describe("weapon determinism over the network", () => {
       }
 
       // Aim toward the middle of the map, whichever side the shooter is on.
-      const st = runner.matchState;
-      const me = st.sim.critters.find((x) => x.id === st.turns.activeCritter)!;
-      const leftOfCenter = me.x >> 16 < runner.config.mapWidth / 2;
-      const angleDeg = leftOfCenter ? c.angleDeg : (180 - c.angleDeg + 360) % 360;
       const fire = {
         k: "fire" as const,
         weaponId: c.weapon,
-        angleDeg,
+        yaw: yawTowardCenter(runner.matchState),
+        pitch: c.pitch,
         power: c.power,
         ...(c.fuseSeconds === undefined ? {} : { fuseSeconds: c.fuseSeconds }),
       };

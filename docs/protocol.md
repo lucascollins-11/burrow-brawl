@@ -277,12 +277,10 @@ ships. Where they differ, this subsection is what the code does.
   server stamps a `skip` for it. A mid-turn drop doesn't skip: the timer runs
   and a reconnect gets control back (section 8).
 - **End:** the final batch is flushed, then `match.end { winnerTeamId, tick }`
+  (`reason: "error"` and a null winner when the server had to stop a broken match)
   and the room moves to phase `results` with everyone unready. The host sends
   `match.rematch` to go back to `lobby` with the same teams and settings
   (`GameClient.rematch()`); anyone else gets `not_host`.
-- **Sim error:** if a server step throws (a sim bug), only that match ends:
-  `match.end { winnerTeamId: null, tick, reason: "error" }`, then `results` as
-  above. Other rooms and the process are unaffected.
 - **Desync:** client sends `desync { tick, h }`. The server replies with
   `snapshot { snapshot }` at its current tick; later commands arrive in the
   following `tick` batches.
