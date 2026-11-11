@@ -55,6 +55,7 @@ func _ready() -> void:
 
 func _run() -> bool:
 	print("E2E server: ", NetConfig.server_base())
+	await _preview("res://ui/title.tscn", "0a-title")
 	a.enter_room("create", "Alba")
 	if not await _until(func() -> bool: return a.lobby.code() != "", "A to create a room"):
 		return false
@@ -71,6 +72,7 @@ func _run() -> bool:
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
 		return false
+	await _preview("res://ui/lobby.tscn", "0b-lobby")
 	a.start_match()
 	if not await _until(
 		func() -> bool: return not a.current_match_start().is_empty() and not b.current_match_start().is_empty(),
@@ -189,6 +191,20 @@ func _fail(why: String) -> bool:
 
 
 ## Save a screenshot when --shots was given and there is a real renderer.
+## Build a menu screen on top of the test for a few frames (and a screenshot), then remove it
+## before the next step, so its own scene changes never fire.
+func _preview(scene_path: String, shot_name: String) -> void:
+	var screen: Node = (load(scene_path) as PackedScene).instantiate()
+	add_child(screen)
+	for i in 5:
+		await get_tree().process_frame
+	await _shot(shot_name)
+	remove_child(screen)
+	screen.queue_free()
+	await get_tree().process_frame
+	print("E2E ok: built ", scene_path)
+
+
 func _shot(shot_name: String) -> void:
 	if shots_dir == "" or DisplayServer.get_name() == "headless":
 		return

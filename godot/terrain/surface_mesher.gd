@@ -10,30 +10,10 @@ const CELLS := CHUNK + 1  # cells -1 .. CHUNK-1
 const ISO := 128
 
 # Corner i is at offset (i & 1, (i >> 1) & 1, (i >> 2) & 1); mask bit i is set when it is solid.
-const CORNER := [
-	Vector3i(0, 0, 0),
-	Vector3i(1, 0, 0),
-	Vector3i(0, 1, 0),
-	Vector3i(1, 1, 0),
-	Vector3i(0, 0, 1),
-	Vector3i(1, 0, 1),
-	Vector3i(0, 1, 1),
-	Vector3i(1, 1, 1),
-]
-const EDGES := [
-	[0, 1],
-	[2, 3],
-	[4, 5],
-	[6, 7],
-	[0, 2],
-	[1, 3],
-	[4, 6],
-	[5, 7],
-	[0, 4],
-	[1, 5],
-	[2, 6],
-	[3, 7],
-]
+# The 12 cell edges as corner pairs (EDGE_A[i], EDGE_B[i]) are built per call inside mesh_block.
+# They must not be shared constants: mesh_block runs on several worker threads at once, and
+# reading a shared Array of Arrays from many threads corrupts its reference counts (this crashed
+# the first Windows playtest).
 
 
 ## Returns { positions: PackedVector3Array, normals: PackedVector3Array,
@@ -78,6 +58,8 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 	var oy := S * S
 	var oz := S
 	var offs := PackedInt32Array([0, 1, oy, oy + 1, oz, oz + 1, oz + oy, oz + oy + 1])
+	var edge_a := PackedInt32Array([0, 2, 4, 6, 0, 1, 4, 5, 0, 1, 2, 3])
+	var edge_b := PackedInt32Array([1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7])
 
 	# Pass 2: one vertex per cell that straddles the surface.
 	for cy in range(CELLS):
@@ -101,16 +83,16 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 					continue
 				var sum := Vector3.ZERO
 				var n := 0
-				for e in EDGES:
-					var ia: int = e[0]
-					var ib: int = e[1]
+				for ei in range(12):
+					var ia: int = edge_a[ei]
+					var ib: int = edge_b[ei]
 					if ((mask >> ia) & 1) == ((mask >> ib) & 1):
 						continue
 					var da: float = block[b + offs[ia]]
 					var db: float = block[b + offs[ib]]
 					var t := (float(ISO) - da) / (db - da)
-					var pa: Vector3i = CORNER[ia]
-					var pb: Vector3i = CORNER[ib]
+					var pa := Vector3i(ia & 1, (ia >> 1) & 1, (ia >> 2) & 1)
+					var pb := Vector3i(ib & 1, (ib >> 1) & 1, (ib >> 2) & 1)
 					sum += Vector3(pa) + Vector3(pb - pa) * t
 					n += 1
 				var d0 := float(block[b])
