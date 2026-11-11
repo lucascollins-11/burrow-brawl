@@ -16,7 +16,7 @@ const COLORS: Array[Color] = [
 	Color("5b6b7a"),
 ]
 const HATS: Array[String] = [
-	"miner", "chef", "cone", "pirate", "propeller", "crown", "pot", "party"
+	"miner", "chef", "cone", "propeller", "crown", "pirate", "flowerpot", "bucket"
 ]
 
 

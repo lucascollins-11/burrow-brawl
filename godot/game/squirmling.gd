@@ -66,52 +66,9 @@ static func _box(size: Vector3) -> BoxMesh:
 	return b
 
 
+## Hats live in their own module (godot/game/hats/hats.gd); this keeps the old entry point.
 static func build_hat(style: String, color: Color) -> Node3D:
-	var hat := Node3D.new()
-	hat.name = "Hat"
-	var white := Color("fff6e6")
-	var gold := Color("f6c945")
-	var dark := Color("3b2a1a")
-	match style:
-		"miner":
-			hat.add_child(_part(_sphere(0.66, true), color))
-			hat.add_child(_part(_cyl(0.8, 0.8, 0.06, 20), color, Vector3(0, 0, 0.1)))
-			hat.add_child(_part(_sphere(0.16), gold, Vector3(0, 0.3, 0.62)))  # headlamp
-		"chef":
-			hat.add_child(_part(_cyl(0.46, 0.5, 0.7), white, Vector3(0, 0.3, 0)))
-			var puff := _part(_sphere(0.34), white, Vector3(0, 0.78, 0))
-			puff.scale = Vector3(1.5, 1.0, 1.5)
-			hat.add_child(puff)
-			hat.add_child(_part(_cyl(0.8, 0.8, 0.06, 20), color))
-		"cone":
-			hat.add_child(_part(_cyl(0.0, 0.5, 0.95), color, Vector3(0, 0.45, 0)))
-			hat.add_child(_part(_cyl(0.8, 0.8, 0.06, 20), color))
-		"pirate":
-			var tri := PrismMesh.new()
-			tri.size = Vector3(1.7, 0.6, 0.9)
-			hat.add_child(_part(tri, color, Vector3(0, 0.25, 0)))
-			hat.add_child(_part(_cyl(0.8, 0.8, 0.06, 20), dark))
-		"propeller":
-			hat.add_child(_part(_sphere(0.66, true), color))
-			var blade := _part(_box(Vector3(1.1, 0.04, 0.16)), white, Vector3(0, 0.7, 0))
-			blade.name = "Propeller"
-			hat.add_child(blade)
-		"crown":
-			hat.add_child(_part(_cyl(0.52, 0.46, 0.38, 5), gold, Vector3(0, 0.15, 0)))
-			for i in range(5):
-				var a := float(i) / 5.0 * TAU
-				hat.add_child(
-					_part(_cyl(0.0, 0.12, 0.3, 6), color, Vector3(sin(a) * 0.46, 0.5, cos(a) * 0.46))
-				)
-		"pot":
-			hat.add_child(_part(_cyl(0.58, 0.4, 0.5), color, Vector3(0, 0.2, 0)))
-			hat.add_child(_part(_sphere(0.34), dark, Vector3(0, 0.5, 0)))
-		_:  # party
-			var k := _part(_cyl(0.0, 0.5, 0.95), color, Vector3(0, 0.5, 0))
-			k.scale = Vector3(0.8, 1.2, 0.8)
-			hat.add_child(k)
-			hat.add_child(_part(_sphere(0.34), white, Vector3(0, 1.08, 0)))
-	return hat
+	return Hats.make(style, color)
 
 
 ## Centre of ring i (0 = tail, 4 = head) when standing still: a gentle S-curve up the body.
