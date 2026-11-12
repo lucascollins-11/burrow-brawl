@@ -1,0 +1,25 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "pinecone-popper",
+  "name": "Pinecone Popper",
+  "description": "A lobbed pinecone. Press trigger mid-flight to pop it into five seed bombs, or let it pop on impact.",
+  "category": "projectile",
+  "behavior": "cluster-burst",
+  "targeting": "aim-angle-power",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": true,
+  "damage": 20,
+  "blastRadius": 20,
+  "knockback": 180,
+  "params": {
+    "maxSpeed": 800,
+    "gravity": 600,
+    "subMunition": "pinecone-seed",
+    "subCount": 5,
+    "subSpeed": 300,
+    "subPitch": 50,
+    "damageFalloff": "linear"
+  }
+}

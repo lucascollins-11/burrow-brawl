@@ -4,6 +4,7 @@
 import type { MatchConfig } from "../match/match";
 import type { TurnState } from "../match/turns";
 import type { CritterStatus, SimEvent } from "../sim3d/api";
+import type { WeaponInfo } from "../weapons/catalog";
 import type { WeaponId } from "../weapons/load";
 
 export interface ViewCritter {
@@ -60,6 +61,8 @@ export type ViewServerMessage =
       teamIds: string[];
       terrain: ViewTerrain;
       state: ViewState;
+      /** Weapons to offer, in menu order, then sub-munitions (`fireable: false`). */
+      weapons: readonly WeaponInfo[];
     }
   | ({ t: "state" } & ViewState)
   | { t: "events"; tick: number; events: SimEvent[] }

@@ -15,7 +15,7 @@
   "knockback": 240,
   "params": {
     "bombCount": 5,
-    "spreadWidth": 300,
+    "spreadWidth": 160,
     "dropHeight": 600,
     "dropIntervalSeconds": 0.35,
     "damageFalloff": "linear"

@@ -81,6 +81,10 @@
       "type": "object",
       "description": "Behavior-specific tuning. Keys are defined by the behavior script named in 'behavior'.",
       "additionalProperties": true
+    },
+    "fireable": {
+      "type": "boolean",
+      "description": "False for sub-munitions (seeds, bombs) that only other weapons spawn. Absent means true."
     }
   }
 }

@@ -6,7 +6,7 @@ export {
   blastRadius,
   explode,
   isProjectileWeapon,
-  spawnProjectile,
+  spawnShots,
   stepProjectiles,
 } from "./projectile";
 export type { ProjectileWeaponId } from "./projectile";

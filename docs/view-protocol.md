@@ -49,9 +49,22 @@ complete: a client that receives it throws away what it had.
     seaY: number, bedrockY: number,
     density: string             // section 5
   },
-  state: ViewState              // full: every critter
+  state: ViewState,             // full: every critter
+  weapons: WeaponInfo[]         // the weapon menu, then sub-munitions (see below)
+}
+WeaponInfo = {
+  id, name, description,        // our own names and text, from shared/weapons/*.json
+  needs: ("target" | "trigger" | "fuse" | "charge")[],
+  ammo: number | null,          // per team per match; null = unlimited
+  fireable: boolean             // false for sub-munitions (seeds, bombs): name and draw only
 }
 ```
+
+`needs` says what the client collects for `fire`: `target` a voxel picked on the map
+(`fire.target`), `fuse` 1..5 seconds (`fire.fuseSeconds`), `charge` a power held on the fire key
+(`fire.power`); `trigger` means the shot can be popped in flight by sending `{ k: "trigger" }`.
+Clients build the weapon menu from this list and never hardcode it. Projectiles and events may
+name any id in the list, sub-munitions included.
 
 ### `state`
 
@@ -106,6 +119,7 @@ Unchanged: `{ t: "input", turn, cmds }` with the commands in `shared/src/match/m
 ```
 { k: "move", yaw }              // 0..1023, or -1 to stop; held until changed
 { k: "jump" } { k: "backflip" } { k: "skip" }
+{ k: "trigger" }                // pop your shot in flight (weapons whose needs include "trigger")
 { k: "fire", weaponId, yaw, pitch, power, fuseSeconds?, target? }
 ```
 

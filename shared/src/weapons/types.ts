@@ -50,4 +50,6 @@ export interface WeaponData {
   readonly knockback: number;
   /** Behavior-specific tuning, defined by the behavior script. */
   readonly params: Readonly<Record<string, unknown>>;
+  /** False for sub-munitions that only other weapons spawn. Absent means true. */
+  readonly fireable?: boolean;
 }

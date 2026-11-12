@@ -20,6 +20,10 @@ export interface WeaponCase {
   before?: Cmd[][];
   /** Test name suffix when one weapon has several cases. */
   label?: string;
+  /** Aim at a target voxel: the map centre on the surface (for strikes). */
+  target?: "center";
+  /** Send `trigger` this many ticks after the shot (cluster weapons). */
+  triggerAfter?: number;
 }
 
 export const WEAPON_CASES: WeaponCase[] = [
@@ -40,5 +44,22 @@ export const WEAPON_CASES: WeaponCase[] = [
     expect: ["fired", "explosion"],
     before: [[{ k: "jump" }]],
     label: "5 s fuse after a jump",
+  },
+  { weapon: "pinecone-popper", pitch: 55, power: 35, expect: ["fired", "explosion"] },
+  {
+    weapon: "pinecone-popper",
+    pitch: 70,
+    power: 50,
+    triggerAfter: 24,
+    expect: ["fired", "explosion"],
+    label: "popped mid-air",
+  },
+  { weapon: "hopper-ball", pitch: 50, power: 30, expect: ["fired", "bounced", "explosion"] },
+  {
+    weapon: "beehive-strike",
+    pitch: 0,
+    power: 0,
+    target: "center",
+    expect: ["fired", "explosion"],
   },
 ];
