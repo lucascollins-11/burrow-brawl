@@ -256,12 +256,15 @@ func _closeup(v: Dictionary) -> void:
 	twin.drive(0.016, false, Vector3.ZERO, true)
 	twin.set_alive(false)
 	# Timed by the clock, not by frames: headless frames take almost no time.
-	var deadline := Time.get_ticks_msec() + 8000
+	var deadline := Time.get_ticks_msec() + 20000
+	var last_ms := Time.get_ticks_msec()
 	var pictured := false
 	while twin.pop_time >= 0.0 and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
 		# The rig takes steps of at most 0.05 s; a software-rendered frame can last much longer.
-		var left := get_process_delta_time()
+		var now_ms := Time.get_ticks_msec()
+		var left := float(now_ms - last_ms) / 1000.0
+		last_ms = now_ms
 		while left > 0.0 and twin.pop_time >= 0.0:
 			twin.drive(minf(left, 0.05), false, Vector3.ZERO, true)
 			left -= 0.05
