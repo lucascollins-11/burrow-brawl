@@ -13,7 +13,7 @@ uniform float depth_fade = 7.0;
 uniform float foam_width = 1.6;
 uniform float wave_height = 0.35;
 uniform float fizz_density = 0.9;
-uniform float ripple_strength = 0.16;
+uniform float ripple_strength = 0.1;
 
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 
@@ -97,8 +97,8 @@ void fragment() {
 	ALBEDO = col;
 	ALPHA = alpha;
 	// Rougher far away: the sun becomes a wide soft sheen there instead of a hard white patch.
-	ROUGHNESS = mix(0.3, 0.55, smoothstep(25.0, 200.0, cam_dist));
+	ROUGHNESS = mix(0.5, 0.75, smoothstep(25.0, 200.0, cam_dist));
 	METALLIC = 0.0;
-	SPECULAR = 0.35;
+	SPECULAR = 0.2;
 	EMISSION = foam_color * (bubble * 0.25 + foam * 0.05);
 }

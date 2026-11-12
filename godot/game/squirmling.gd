@@ -216,6 +216,9 @@ static func create(_team: int, hat_style: String, team_color: Color) -> Squirmli
 	tag.font_size = 48
 	tag.outline_size = 14
 	tag.modulate = Color.WHITE
+	# Drawn after the see-through sea, so a name is never washed out by water behind it.
+	tag.render_priority = 10
+	tag.outline_render_priority = 9
 	tag.position = Vector3(0, HEIGHT + 1.6, 0)
 	root.add_child(tag)
 	root.bind()
