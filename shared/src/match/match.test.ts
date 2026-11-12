@@ -271,6 +271,25 @@ describe("match model", () => {
     expect(isCmd({ ...fire, pitch: 90 })).toBe(false);
     expect(isCmd({ ...fire, power: 1.5 })).toBe(false);
     expect(isCmd(null)).toBe(false);
+    expect(isCmd({ k: "trigger" })).toBe(true);
+    expect(isCmd({ k: "trigger", now: true })).toBe(false);
+    expect(isCmd({ ...fire, weaponId: "pinecone-popper" })).toBe(true);
+    expect(isCmd({ ...fire, weaponId: "pinecone-seed" })).toBe(false); // sub-munitions can't be fired
+  });
+
+  it("passes trigger to the sim during retreat: the popper pops in the air", () => {
+    let s = run(createMatch(cfg), 30); // spawns land
+    const me = active(s);
+    s = stepMatch(cfg, s, [
+      { k: "fire", weaponId: "pinecone-popper", yaw: 0, pitch: 80, power: 70 },
+    ]).state;
+    expect(s.turns.phase).toBe("retreat");
+    s = run(s, 20);
+    const r = stepMatch(cfg, s, [{ k: "trigger" }]);
+    const pop = r.events.find((e) => e.type === "explosion");
+    expect(pop).toMatchObject({ weaponId: "pinecone-popper" });
+    expect(r.state.sim.projectiles.filter((p) => p.weaponId === "pinecone-seed")).toHaveLength(5);
+    expect(r.state.sim.projectiles.every((p) => p.ownerId === me.id)).toBe(true);
   });
 });
 

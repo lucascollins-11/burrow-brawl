@@ -1,0 +1,26 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "hopper-ball",
+  "name": "Hopper Ball",
+  "description": "A super-bouncy rubber ball bomb. Every bounce winds it up, and its blast grows a little each time it hops.",
+  "category": "projectile",
+  "behavior": "super-bounce",
+  "targeting": "aim-angle-power",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 30,
+  "blastRadius": 25,
+  "knockback": 240,
+  "params": {
+    "fuseSeconds": { "min": 4, "max": 4, "default": 4 },
+    "maxBounces": 40,
+    "bounciness": 0.8,
+    "growPerBounce": 1,
+    "maxGrowth": 4,
+    "maxSpeed": 700,
+    "gravity": 600,
+    "damageFalloff": "linear"
+  }
+}

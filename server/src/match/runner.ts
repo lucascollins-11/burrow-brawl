@@ -10,6 +10,7 @@ import {
   HASH_EVERY,
   TICKS_PER_SECOND,
   MATCH_TURNS,
+  weaponCatalog,
   createMatch,
   hashMatch,
   mapRecipeFor,
@@ -159,6 +160,7 @@ export class MatchRunner {
       teamIds: this.teamIds,
       terrain: this.view.terrain(this.state.sim.terrain),
       state: this.view.fullState(this.state),
+      weapons: weaponCatalog(),
     };
   }
 

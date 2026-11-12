@@ -22,6 +22,7 @@ import { basicTurns, type TurnRules, type TurnState } from "./turns";
  * - jump / backflip: one-shot, applied on the tick they're stamped for
  * - fire: one-shot; passed to the sim as CritterInput.fire. If the sim reports a "fired" event
  *   for the active critter, control ends and retreat starts. Unsupported weapons do nothing.
+ * - trigger: one-shot; pops the active critter's triggerable shots in flight (also in retreat)
  * - skip: end the turn now
  */
 export type Cmd =
@@ -29,6 +30,7 @@ export type Cmd =
   | { k: "jump" }
   | { k: "backflip" }
   | ({ k: "fire" } & FireCommand)
+  | { k: "trigger" }
   | { k: "skip" };
 
 const WEAPON_IDS = [
@@ -44,6 +46,8 @@ const WEAPON_IDS = [
   "boulder-of-doom",
   "teleport-burrow",
   "skip-turn",
+  "pinecone-popper",
+  "hopper-ball",
 ] as const satisfies readonly WeaponId[];
 
 const isIntIn = (v: unknown, min: number, max: number): v is number =>
@@ -73,6 +77,7 @@ export function isCmd(v: unknown): v is Cmd {
       return keys.length === 2 && isIntIn(o.yaw, -1, YAW_STEPS - 1);
     case "jump":
     case "backflip":
+    case "trigger":
     case "skip":
       return keys.length === 1;
     case "fire":
@@ -208,10 +213,12 @@ export function createMatch(cfg: MatchConfig): MatchState {
 function inputFor(critterId: number, moveYaw: number, cmds: readonly Cmd[]): CritterInput {
   let jump = false;
   let backflip = false;
+  let trigger = false;
   let fire: FireCommand | undefined;
   for (const c of cmds) {
     if (c.k === "jump") jump = true;
     if (c.k === "backflip") backflip = true;
+    if (c.k === "trigger") trigger = true;
     if (c.k === "fire" && !fire) {
       fire = {
         weaponId: c.weaponId,
@@ -223,9 +230,11 @@ function inputFor(critterId: number, moveYaw: number, cmds: readonly Cmd[]): Cri
       };
     }
   }
-  return fire
+  const input: CritterInput = fire
     ? { critterId, moveYaw, jump, backflip, fire }
     : { critterId, moveYaw, jump, backflip };
+  // Only set when sent, so inputs (and hashes) without a trigger are unchanged.
+  return trigger ? { ...input, trigger } : input;
 }
 
 /**

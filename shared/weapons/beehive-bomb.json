@@ -1,0 +1,18 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "beehive-bomb",
+  "name": "Beehive Bomb",
+  "description": "One of the hives a Beehive Strike drops. Not fired directly.",
+  "category": "projectile",
+  "behavior": "bomblet",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 25,
+  "blastRadius": 30,
+  "knockback": 240,
+  "params": { "gravity": 600, "damageFalloff": "linear" }
+}

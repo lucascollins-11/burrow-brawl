@@ -1,10 +1,14 @@
 import acornMortar from "../../weapons/acorn-mortar.json";
+import beehiveBomb from "../../weapons/beehive-bomb.json";
 import beehiveStrike from "../../weapons/beehive-strike.json";
 import boulderOfDoom from "../../weapons/boulder-of-doom.json";
 import drillHat from "../../weapons/drill-hat.json";
 import fizzGrenade from "../../weapons/fizz-grenade.json";
+import hopperBall from "../../weapons/hopper-ball.json";
 import jellyMine from "../../weapons/jelly-mine.json";
 import pepperShotgun from "../../weapons/pepper-shotgun.json";
+import pineconePopper from "../../weapons/pinecone-popper.json";
+import pineconeSeed from "../../weapons/pinecone-seed.json";
 import ropeClaw from "../../weapons/rope-claw.json";
 import rootPunch from "../../weapons/root-punch.json";
 import skipTurn from "../../weapons/skip-turn.json";
@@ -12,7 +16,7 @@ import springBoots from "../../weapons/spring-boots.json";
 import teleportBurrow from "../../weapons/teleport-burrow.json";
 import type { WeaponData } from "./types";
 
-/** Ids of the starting arsenal. The keys of the registry are exactly these. */
+/** Every weapon id, sub-munitions included. The keys of the registry are exactly these. */
 export type WeaponId =
   | "acorn-mortar"
   | "fizz-grenade"
@@ -25,7 +29,11 @@ export type WeaponId =
   | "jelly-mine"
   | "boulder-of-doom"
   | "teleport-burrow"
-  | "skip-turn";
+  | "skip-turn"
+  | "pinecone-popper"
+  | "pinecone-seed"
+  | "hopper-ball"
+  | "beehive-bomb";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -47,6 +55,10 @@ const registry: WeaponRegistry = Object.freeze({
   "boulder-of-doom": toWeaponData(boulderOfDoom),
   "teleport-burrow": toWeaponData(teleportBurrow),
   "skip-turn": toWeaponData(skipTurn),
+  "pinecone-popper": toWeaponData(pineconePopper),
+  "pinecone-seed": toWeaponData(pineconeSeed),
+  "hopper-ball": toWeaponData(hopperBall),
+  "beehive-bomb": toWeaponData(beehiveBomb),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

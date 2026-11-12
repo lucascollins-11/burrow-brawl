@@ -89,6 +89,8 @@ export interface CritterInput {
   readonly jump?: boolean;
   readonly backflip?: boolean;
   readonly fire?: FireCommand;
+  /** Pop this critter's triggerable shots in flight (the Pinecone Popper's mid-air burst). */
+  readonly trigger?: boolean;
 }
 
 export interface SimState {

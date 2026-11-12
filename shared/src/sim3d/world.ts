@@ -16,7 +16,7 @@ import type {
 import { YAW_STEPS } from "./api";
 import { FALL_DAMAGE_DEN, FALL_DAMAGE_NUM, FALL_SAFE_DISTANCE } from "./constants";
 import { bodyBlocked, cell, createCritter, stepCritter } from "./critter";
-import { spawnProjectile, stepProjectiles } from "./projectile";
+import { spawnShots, stepProjectiles } from "./projectile";
 
 export function createWorld(terrain: VoxelTerrain, critters: readonly Critter[]): SimState {
   return {
@@ -86,13 +86,22 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
   critters = critters.map((c) => {
     const cmd = inputFor(inputs, c.id)?.fire;
     if (!cmd || c.status !== "alive") return c;
-    const p = spawnProjectile(c, cmd, nextId);
+    const shots = spawnShots(t, c, cmd, nextId);
+    const p = shots[0];
     if (!p) return c;
-    nextId++;
-    spawned.push(p);
-    fireEvents.push({ type: "fired", critterId: c.id, projectileId: p.id, weaponId: p.weaponId });
+    nextId += shots.length;
+    spawned.push(...shots);
+    // One "fired" per command, naming the fired weapon and its first projectile.
+    fireEvents.push({ type: "fired", critterId: c.id, projectileId: p.id, weaponId: cmd.weaponId });
     return { ...c, yaw: ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS };
   });
+
+  const triggers = new Set<number>();
+  for (const i of inputs) {
+    if (!i.trigger) continue;
+    const c = critters.find((k) => k.id === i.critterId);
+    if (c && c.status === "alive") triggers.add(c.id);
+  }
 
   const blastEvents: SimEvent[] = [];
   const flown = stepProjectiles(
@@ -102,6 +111,8 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
     state.windX,
     state.windZ,
     blastEvents,
+    triggers,
+    nextId,
   );
 
   const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
@@ -112,7 +123,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
       tick: state.tick + 1,
       critters,
       projectiles: flown.projectiles,
-      nextProjectileId: nextId,
+      nextProjectileId: flown.nextId,
     },
     events,
   };
