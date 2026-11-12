@@ -64,7 +64,7 @@ const THEME_CASES = [
   },
   {
     id: "toybox-harbor",
-    golden: { 256: 256779419, 384: 4237372040, 512: 685627790 } as Record<number, number>,
+    golden: { 256: 2733504448, 384: 3997548330, 512: 3958702342 } as Record<number, number>,
   },
 ];
 
@@ -81,7 +81,7 @@ describe.each(THEME_CASES)("$id", ({ id, golden }) => {
     expect(hash(a.terrain)).toBe(golden[size]);
 
     const t = a.terrain;
-    expect(a.spawns.length).toBeGreaterThanOrEqual(16);
+    expect(a.spawns.length).toBeGreaterThanOrEqual(32);
     for (const s of a.spawns) {
       expect(solid(t, s.x, s.y - 1, s.z)).toBe(true);
       expect(s.y - 1).toBeGreaterThanOrEqual(t.seaY + 2);
@@ -109,7 +109,7 @@ describe.each(THEME_CASES)("$id", ({ id, golden }) => {
   it("stays roomy and connected across seeds", () => {
     for (let seed = 1; seed <= 12; seed++) {
       const a = generate(themedRecipe(id, seed, 256));
-      expect(a.spawns.length).toBeGreaterThanOrEqual(16);
+      expect(a.spawns.length).toBeGreaterThanOrEqual(32);
       expect(a.objects!.length).toBeGreaterThan(8);
       const reach = walkable(a.terrain, a.spawns[0]!.x, a.spawns[0]!.z);
       for (const sp of a.spawns) expect(reach.has(sp.z * 256 + sp.x)).toBe(true);

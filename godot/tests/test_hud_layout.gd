@@ -23,3 +23,13 @@ func test_centred_panels_grow_both_ways_and_use_their_own_margin() -> void:
 	check_eq(c.offset_bottom, -60.0, "own bottom margin")
 	check_eq(c.offset_left, 0.0, "no sideways offset")
 	c.free()
+
+
+func test_sample_results_make_a_finished_match_with_a_winner_on_top() -> void:
+	var v := Hud.sample_results(2, 8)
+	check_eq(v["phase"], "over", "the match is over")
+	check_eq(v["teams"].size(), 8, "eight teams")
+	var rows := HudModel.standings(v)
+	check_eq(rows[0]["index"], 2, "the winner is first")
+	check(rows[0]["alive"] >= 1, "the winner has a survivor")
+	check_eq(HudModel.turn_banner(v).is_empty(), false, "there is a banner to show")

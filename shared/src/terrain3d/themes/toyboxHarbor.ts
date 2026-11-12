@@ -34,8 +34,8 @@ function layout(ctx: ThemeCtx): Platform[] {
   const along = rnd(100, 0, 2) === 0; // true: long in x
   const longSide = along ? w : d;
   const shortSide = along ? d : w;
-  const len = Math.floor((longSide * 6) / 10);
-  const depth = 26 + rnd(101, 0, 9);
+  const len = Math.floor((longSide * 7) / 10);
+  const depth = 34 + rnd(101, 0, 9);
   const start = 20 + rnd(102, 0, longSide - 40 - len + 1);
   const off = rnd(103, 0, 2) === 0 ? 18 : shortSide - 18 - depth;
   out.push(
@@ -43,10 +43,10 @@ function layout(ctx: ThemeCtx): Platform[] {
       ? { x0: start, x1: start + len, z0: off, z1: off + depth, top: 33, quay: true }
       : { z0: start, z1: start + len, x0: off, x1: off + depth, top: 33, quay: true },
   );
-  const count = 3 + ((w * d) >> 15);
+  const count = 4 + ((w * d) >> 15);
   for (let i = 0; i < count; i++) {
-    const sx = 28 + rnd(110, i, 17);
-    const sz = 28 + rnd(111, i, 17);
+    const sx = 36 + rnd(110, i, 17);
+    const sz = 36 + rnd(111, i, 17);
     let best: Platform | undefined;
     let bestD = Infinity;
     for (let tryN = 0; tryN < 40; tryN++) {
