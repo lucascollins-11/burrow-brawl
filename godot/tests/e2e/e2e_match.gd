@@ -116,7 +116,6 @@ func _run() -> bool:
 	if not v["my_turn"]:
 		return _fail("turn 1 should be A's (team 0); local teams are %s" % [scene.vm.local_teams])
 	await _shot("1-start")
-	await _closeup(v)
 
 	# A fires an acorn mortar toward the middle of the island.
 	var me: Dictionary = {}
@@ -152,6 +151,8 @@ func _run() -> bool:
 	if not await _until(func() -> bool: return _turn(_snap_turns()) == 3 and _turn(b_state.get("turns", {})) == 3, "turn 3"):
 		return false
 	await _shot("4-turn3")
+	# The close look comes last: under the software renderer it can outlast a turn.
+	await _closeup(_snap())
 	scene.pause.open()
 	await _shot("7-pause")
 	scene.pause._open_settings()
@@ -238,9 +239,7 @@ func _closeup(v: Dictionary) -> void:
 	# Stand the camera in front of the face, a little to one side.
 	var face: Vector3 = rig.global_transform.basis.z
 	scene._rig.yaw_deg = CameraMath.wrap_deg(rad_to_deg(atan2(face.x, face.z)) + 25.0)
-	for i in 12:
-		await get_tree().process_frame
-	await _shot("1b-squirmling", 4)
+	await _shot("1b-squirmling", 5)
 	rig.hurt()
 	await _shot("1c-hurt", 3)
 	rig.fire()
@@ -255,25 +254,15 @@ func _closeup(v: Dictionary) -> void:
 	scene.add_child(twin)
 	twin.drive(0.016, false, Vector3.ZERO, true)
 	twin.set_alive(false)
-	# Timed by the clock, not by frames: headless frames take almost no time.
-	var deadline := Time.get_ticks_msec() + 20000
-	var last_ms := Time.get_ticks_msec()
-	var pictured := false
-	while twin.pop_time >= 0.0 and Time.get_ticks_msec() < deadline:
-		await get_tree().process_frame
-		# The rig takes steps of at most 0.05 s; a software-rendered frame can last much longer.
-		var now_ms := Time.get_ticks_msec()
-		var left := float(now_ms - last_ms) / 1000.0
-		last_ms = now_ms
-		while left > 0.0 and twin.pop_time >= 0.0:
-			twin.drive(minf(left, 0.05), false, Vector3.ZERO, true)
-			left -= 0.05
-		if not pictured and twin.pop_time > 0.3:
-			pictured = true
-			await _shot("1e-pop", 0)
+	# Stepped by hand, not by the clock: headless frames take no time and software ones seconds.
+	for i in 8:
+		twin.drive(0.05, false, Vector3.ZERO, true)
+	await _shot("1e-pop", 1)
+	for i in 60:
+		twin.drive(0.05, false, Vector3.ZERO, true)
 	if twin.pop_time >= 0.0:
 		errors.append("the knocked-out Squirmling never finished popping")
-	await _shot("1f-marker", 6)
+	await _shot("1f-marker", 2)
 	scene.remove_child(twin)
 	twin.queue_free()
 	scene._rig.dist = old_dist
@@ -282,7 +271,7 @@ func _closeup(v: Dictionary) -> void:
 	print("E2E ok: Squirmling close-up")
 
 
-func _shot(shot_name: String, frames := 20) -> void:
+func _shot(shot_name: String, frames := 5) -> void:
 	if shots_dir == "" or DisplayServer.get_name() == "headless":
 		return
 	for i in frames:
