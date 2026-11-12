@@ -91,7 +91,12 @@ func _run() -> bool:
 	if tv == null:
 		return _fail("the match scene has no terrain view")
 	var t0 := Time.get_ticks_msec()
-	if not await _until(func() -> bool: return tv.pending() == 0, "the island to finish meshing", 120.0):
+	# The software renderer in CI takes seconds per frame once terrain is on screen, and chunks are
+	# handed out per frame. Keep the world hidden while it builds so the turn timer is not used up.
+	scene.visible = false
+	var meshed: bool = await _until(func() -> bool: return tv.pending() == 0, "the island to finish meshing", 120.0)
+	scene.visible = true
+	if not meshed:
 		return false
 	print("E2E island meshed in %d ms, %d chunk nodes" % [Time.get_ticks_msec() - t0, tv.get_child_count()])
 	if tv.get_child_count() == 0:
