@@ -53,6 +53,10 @@ export interface Critter {
   readonly grounded: boolean;
   /** Highest voxel y reached since leaving the ground; drives fall damage. */
   readonly peakY: number;
+  /** Ticks of Drill Hat tunnelling left. Absent (not 0) when the critter is not drilling. */
+  readonly drillTicks?: number;
+  /** Drill velocity per tick (Q16.16 voxels) while drilling. */
+  readonly drillDir?: Vec3;
 }
 
 export interface Projectile {
@@ -125,10 +129,22 @@ export type SimEvent =
   | {
       readonly type: "fired";
       readonly critterId: number;
+      /** The first projectile launched, or -1 for weapons that launch none (hitscan, drill). */
       readonly projectileId: number;
       readonly weaponId: WeaponId;
     }
   | { readonly type: "bounced"; readonly projectileId: number }
+  /**
+   * A hitscan shot's line, from the muzzle to where it stopped (Q16.16 voxels). Sent after its
+   * `fired` (whose projectileId is -1) and before the `explosion` at the hit voxel, if any.
+   */
+  | {
+      readonly type: "tracer";
+      readonly critterId: number;
+      readonly weaponId: WeaponId;
+      readonly from: Vec3;
+      readonly to: Vec3;
+    }
   /** A blast at a voxel. The terrain change itself is `edit`, already applied. */
   | {
       readonly type: "explosion";

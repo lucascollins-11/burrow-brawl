@@ -29,7 +29,18 @@ import {
 } from "./constants";
 import { cell } from "./critter";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
-import { aimDir, cosYaw, dot, length, mulDiv, mulQ, reflect, sinYaw, withLength } from "./vec3";
+import {
+  aimDir,
+  cosYaw,
+  dot,
+  length,
+  mulDiv,
+  mulQ,
+  reflect,
+  sinYaw,
+  withLength,
+  yawDir,
+} from "./vec3";
 
 /** How a shot flies: "impact" detonates on terrain or a critter, "bounce" waits for its fuse. */
 type Flight = "impact" | "bounce";
@@ -42,6 +53,7 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "beehive-bomb": "impact",
   "fizz-grenade": "bounce",
   "hopper-ball": "bounce",
+  "firecracker-bundle": "bounce",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -112,6 +124,7 @@ export function spawnShots(
   const w = loadWeapons()[cmd.weaponId];
   const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
   if (cmd.weaponId === "beehive-strike") return dropStrike(t, c, w, yaw, cmd.target, firstId);
+  if (cmd.weaponId === "firecracker-bundle") return [dropCharge(c, w, yaw, firstId)];
 
   const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
   const power = clampInt(cmd.power, 0, 100);
@@ -141,6 +154,31 @@ export function spawnShots(
       resting: false,
     },
   ];
+}
+
+/** Charges are dropped this far in front of the feet, and this far up (Q16.16 voxels). */
+const DROP_REACH = 2 * FIXED_ONE;
+const DROP_HEIGHT = FIXED_ONE;
+
+/** A dropped charge (the Firecracker Bundle): set down just ahead with a nudge, fuse lit. */
+function dropCharge(c: Critter, w: WeaponData, yaw: number, id: number): Projectile {
+  const dir = yawDir(yaw);
+  const nudge = speedPerTick(num(w, "dropSpeed", 30));
+  return {
+    id,
+    ownerId: c.id,
+    weaponId: w.id as WeaponId,
+    pos: {
+      x: c.pos.x + mulQ(dir.x, DROP_REACH),
+      y: c.pos.y + DROP_HEIGHT,
+      z: c.pos.z + mulQ(dir.z, DROP_REACH),
+    },
+    vel: { x: mulQ(dir.x, nudge), y: 0, z: mulQ(dir.z, nudge) },
+    age: 0,
+    fuseTicks: fuseRange(w).def * TICK_RATE,
+    bounces: 0,
+    resting: false,
+  };
 }
 
 /** Bombs start falling at this speed (Q16.16 voxels per tick). */
@@ -469,5 +507,28 @@ export function stepProjectiles(
       resting,
     });
   }
-  return { projectiles: [...next, ...spawned], critters: cs, nextId: id };
+  return { projectiles: chain([...next, ...spawned], events), critters: cs, nextId: id };
+}
+
+/**
+ * Charges that chain (a `chainFuseTicks` param, like the Firecracker Bundle) caught inside a
+ * blast this tick have their fuse cut to that many ticks.
+ */
+function chain(ps: Projectile[], events: readonly SimEvent[]): Projectile[] {
+  const blasts: { x: number; y: number; z: number; r: number }[] = [];
+  for (const e of events)
+    if (e.type === "explosion" && e.edit.op !== "box")
+      blasts.push({ x: e.edit.x, y: e.edit.y, z: e.edit.z, r: e.edit.r });
+  if (blasts.length === 0) return ps;
+  return ps.map((p) => {
+    const cut = num(loadWeapons()[p.weaponId], "chainFuseTicks", 0);
+    if (cut <= 0 || p.fuseTicks <= cut) return p;
+    const px = cell(p.pos.x);
+    const py = cell(p.pos.y);
+    const pz = cell(p.pos.z);
+    const hit = blasts.some(
+      (b) => (px - b.x) ** 2 + (py - b.y) ** 2 + (pz - b.z) ** 2 <= (b.r + 1) ** 2,
+    );
+    return hit ? { ...p, fuseTicks: cut } : p;
+  });
 }
