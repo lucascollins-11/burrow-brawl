@@ -145,6 +145,11 @@ func _run() -> bool:
 	if not await _until(func() -> bool: return _turn(_snap_turns()) == 3 and _turn(b_state.get("turns", {})) == 3, "turn 3"):
 		return false
 	await _shot("4-turn3")
+	scene.pause.open()
+	await _shot("7-pause")
+	scene.pause._open_settings()
+	await _shot("8-settings")
+	scene.pause.close()
 	if a_patches != b_patches:
 		return _fail("clients saw different patch counts: %d and %d" % [a_patches, b_patches])
 	if not errors.is_empty():

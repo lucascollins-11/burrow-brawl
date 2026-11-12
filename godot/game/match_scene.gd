@@ -24,8 +24,6 @@ const LOBBY_SCENE := "res://ui/lobby.tscn"
 const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
 const HINT_WATCH := "Watching. Hold tight."
-const HINT_WALK := "WASD walk - Space jump - Enter backflip - F or Tab aim - Backspace skip"
-const HINT_AIM := "Move the mouse to aim - hold F to charge - release to fire - Esc cancel"
 
 var vm := ViewModel.new()
 var controls := Controls.new()
@@ -34,6 +32,7 @@ var camera: Camera3D
 var env: MatchEnvironment
 var fx: MatchEffects
 var shots: ShotViews
+var pause: PauseMenu
 var terrain_view: Node3D = null
 
 var _critters: Dictionary = {}  # id -> Node3D
@@ -72,6 +71,10 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.name = "Hud"
 	add_child(hud)
+	pause = PauseMenu.new()
+	pause.name = "Pause"
+	add_child(pause)
+	pause.leave_pressed.connect(_leave)
 	hud.skip_pressed.connect(controls.skip)
 	hud.leave_pressed.connect(_leave)
 	hud.again_pressed.connect(_back_to_lobby)
@@ -124,6 +127,9 @@ func handle_match_start(msg: Dictionary) -> void:
 	if terrain_view != null and terrain_view.has_method("load_terrain"):
 		terrain_view.call("load_terrain", t)
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"))
+	var world_env := env.get("_world_env") as WorldEnvironment
+	if world_env != null and world_env.environment != null:
+		world_env.environment.glow_enabled = GameSettings.glow_enabled()
 	_rig.target = Vector3(_world.x * 0.5, vm.sea_y + 25.0, _world.y * 0.5)
 	_rig.dist = 90.0
 	_built = true
@@ -157,7 +163,26 @@ func ground_y(x: float, z: float) -> float:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
-	controls.handle_event(ev)
+	if ev.is_action_pressed("pause") and controls.aim == null:
+		pause.toggle()
+		return
+	if not pause.is_open():
+		controls.handle_event(ev)
+
+
+## "Walk" and "aim" hints use whatever keys the player has bound.
+func _hint_walk() -> String:
+	return "%s walk - %s jump - %s backflip - %s aim - %s skip" % [
+		"WASD", _key("jump"), _key("backflip"), _key("toggle_aim"), _key("skip")
+	]
+
+
+func _hint_aim() -> String:
+	return "Move the mouse to aim - hold %s to charge - release to fire - %s cancel" % [_key("fire"), _key("cancel_aim")]
+
+
+func _key(action: String) -> String:
+	return GameSettings.key_label(int(GameSettings.keys.get(action, 0)))
 
 
 func _process(dt: float) -> void:
@@ -199,7 +224,7 @@ func _process(dt: float) -> void:
 	env.update(dt, v["wind"])
 	var hint := HINT_WATCH
 	if v["my_turn"] and v["phase"] != "settling":
-		hint = HINT_AIM if aim != null else HINT_WALK
+		hint = _hint_aim() if aim != null else _hint_walk()
 	hud.update(v, aim, "" if v["phase"] == "over" else hint, controls.weapon_name(), _world)
 
 
