@@ -37,6 +37,15 @@ var _end_label: Label
 var _again: Button
 var _shown_key: String = ""
 
+## Screenshot and test hooks, for the e2e screenshot scene only: nothing in the live game sets them,
+## so do not build features on them. While `preview_aim` is set, the HUD draws that aim (crosshair and
+## power bar) whatever the controls say. While `preview_view` is set (see sample_results), the HUD
+## draws that snapshot instead of the live one, which is how the results screen is shown without
+## finishing a match. The e2e scene must reset them (null and {}) right after each shot; while one is
+## left set the live HUD never comes back.
+var preview_aim: CameraMath.AimState = null
+var preview_view: Dictionary = {}
+
 
 func _ready() -> void:
 	layer = 10
@@ -208,6 +217,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 func update(
 	v: Dictionary, aim: CameraMath.AimState, hint: String, weapon_name: String, world: Vector2
 ) -> void:
+	if not preview_view.is_empty():
+		v = preview_view
+	if preview_aim != null:
+		aim = preview_aim
 	var over: bool = v["phase"] == "over"
 	var left := float(v["time_left"])
 	_timer_label.text = str(ceili(left)) if v["phase"] == "control" else ""
@@ -285,6 +298,47 @@ func _fill_standings(v: Dictionary) -> void:
 		row.add_child(left)
 		row.modulate = Color(1, 1, 1, 0.55 if r["out"] else 1.0)
 		_end_rows.add_child(row)
+
+
+## A finished-match snapshot with made-up standings, for the results screen: `team_count` teams
+## of two critters each, team `winner` has one survivor, the others are dead or hurt in team order.
+static func sample_results(winner: int = 0, team_count: int = 4) -> Dictionary:
+	var teams: Array = []
+	var critters: Array = []
+	var id := 1
+	for t in range(team_count):
+		teams.append(TeamStyle.default_look(t))
+		for k in range(2):
+			var alive: bool = (t == winner and k == 0) or (t != winner and k == 0 and t % 2 == 1)
+			critters.append(
+				{
+					"id": id,
+					"team": t,
+					"name": "Squirmling %d" % id,
+					"pos": Vector3.ZERO,
+					"heading_deg": 0.0,
+					"hp": (100 - t * 15) if alive else 0,
+					"max_hp": 100,
+					"alive": alive,
+					"grounded": true,
+				}
+			)
+			id += 1
+	return {
+		"teams": teams,
+		"critters": critters,
+		"projectiles": [],
+		"active_critter_id": null,
+		"active_team": null,
+		"phase": "over",
+		"round": 7,
+		"turn": 23,
+		"time_left": 0.0,
+		"wind": Vector2.ZERO,
+		"sea_y": 5.0,
+		"winner_team": winner,
+		"my_turn": false,
+	}
 
 
 static func _sum_key(s: Dictionary) -> Array:

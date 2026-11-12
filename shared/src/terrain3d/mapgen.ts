@@ -38,7 +38,7 @@ export function heightAt(seed: number, w: number, d: number, x: number, z: numbe
 }
 
 /** One noise octave on a `cell`-voxel lattice, with everything that depends on one axis tabulated. */
-interface Octave {
+export interface Octave {
   lat: Uint8Array;
   stride: number;
   gx: Int32Array;
@@ -59,7 +59,7 @@ function axisTable(n: number, cell: number): { g: Int32Array; s: Int32Array } {
   return { g, s };
 }
 
-function octave(seed: number, salt: number, w: number, d: number, cell: number): Octave {
+export function octave(seed: number, salt: number, w: number, d: number, cell: number): Octave {
   const ax = axisTable(w, cell);
   const az = axisTable(d, cell);
   const stride = Math.floor((w - 1) / cell) + 2;
@@ -72,7 +72,7 @@ function octave(seed: number, salt: number, w: number, d: number, cell: number):
 }
 
 /** Same value as `noise2` at (x, z). */
-function sample(o: Octave, x: number, z: number): number {
+export function sample(o: Octave, x: number, z: number): number {
   const i = o.gz[z]! * o.stride + o.gx[x]!;
   const sx = o.sx[x]!;
   const sz = o.sz[z]!;
