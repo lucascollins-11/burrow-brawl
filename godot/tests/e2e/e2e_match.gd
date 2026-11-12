@@ -150,6 +150,9 @@ func _run() -> bool:
 	scene.pause._open_settings()
 	await _shot("8-settings")
 	scene.pause.close()
+	scene.hud._weapon_grid.open()
+	await _shot("9-weapons")
+	scene.hud._weapon_grid.close()
 	if a_patches != b_patches:
 		return _fail("clients saw different patch counts: %d and %d" % [a_patches, b_patches])
 	if not errors.is_empty():
