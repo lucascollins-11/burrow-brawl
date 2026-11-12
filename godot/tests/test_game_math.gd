@@ -264,3 +264,31 @@ func test_view_model_lists_crates_and_the_views_follow() -> void:
 	views.sync([], 0.016)
 	check_eq(views.count(), 0, "a missing id is removed")
 	views.free()
+
+
+func test_practice_guide_walks_through_every_control() -> void:
+	var g := PracticeGuide.new()
+	var me := {"id": 1, "team": 0, "pos": Vector3(10, 30, 10)}
+	var dummy := {"id": 2, "team": 1, "pos": Vector3(40, 30, 10)}
+	var v := {"my_turn": true, "active_critter_id": 1, "critters": [me, dummy], "local_teams": [0]}
+	g.feed(v, false, [], "acorn-mortar")
+	check_eq(g.step, 0, "standing still is not walking")
+	check(g.text({"walk": "WASD"}).contains("WASD"), "the prompt names the bound keys")
+	me["pos"] = Vector3(14, 30, 10)
+	g.feed(v, false, [], "acorn-mortar")
+	check_eq(g.step, 1, "walked")
+	g.feed(v, false, [{"type": "jumped", "critterId": 2}], "acorn-mortar")
+	check_eq(g.step, 1, "someone else's jump does not count")
+	g.feed(v, false, [{"type": "jumped", "critterId": 1}], "acorn-mortar")
+	check_eq(g.step, 2, "jumped")
+	g.feed(v, true, [], "acorn-mortar")
+	check_eq(g.step, 3, "aimed")
+	g.feed(v, true, [{"type": "fired", "critterId": 1}], "acorn-mortar")
+	check_eq(g.step, 4, "fired")
+	g.feed(v, false, [{"type": "damage", "critterId": 1, "amount": 5}], "acorn-mortar")
+	check_eq(g.step, 4, "hurting yourself is not a hit")
+	g.feed(v, false, [{"type": "damage", "critterId": 2, "amount": 20}], "acorn-mortar")
+	check_eq(g.step, 5, "hit a dummy")
+	g.feed(v, false, [], "fizz-grenade")
+	check(g.finished(), "picked another weapon: done")
+	check_eq(g.text(), PracticeGuide.DONE, "the last line says so")
