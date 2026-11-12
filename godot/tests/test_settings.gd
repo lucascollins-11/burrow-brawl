@@ -104,3 +104,19 @@ func test_menu_builds_with_a_button_for_every_action() -> void:
 	check_eq(menu._key_buttons.size(), GameSettings.ACTIONS.size(), "one key button per action")
 	check_eq((menu._key_buttons["jump"] as Button).text, "Space", "shows the bound key")
 	menu.free()
+
+
+func test_pause_menu_opens_toggles_and_leaves() -> void:
+	var pause := PauseMenu.new()
+	pause._ready()
+	check(not pause.is_open(), "starts closed")
+	pause.toggle()
+	check(pause.is_open(), "toggle opens")
+	pause.toggle()
+	check(not pause.is_open(), "toggle closes")
+	pause.open()
+	pause._open_settings()
+	check(not pause._menu_column.visible, "settings replace the pause buttons")
+	pause.toggle()
+	check(pause.is_open() and pause._menu_column.visible, "toggle backs out of settings first")
+	pause.free()
