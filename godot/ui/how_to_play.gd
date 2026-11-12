@@ -20,7 +20,7 @@ const PAGES: Array[Dictionary] = [
 	{
 		"art": "move",
 		"title": "Move and jump",
-		"text": "W, A, S and D walk your squirmling around, relative to the camera. Space jumps. Enter does a backflip. Drag the mouse to turn the camera, and use the wheel to zoom.",
+		"text": "By default, W, A, S and D walk your squirmling, relative to the camera. Space jumps. Enter does a backflip. Drag to turn the camera and use the wheel to zoom. Keys can be changed in Settings.",
 	},
 	{
 		"art": "aim",
