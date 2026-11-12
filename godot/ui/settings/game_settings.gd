@@ -20,6 +20,7 @@ const ACTIONS: Array[Dictionary] = [
 	{"id": "backflip", "label": "Backflip", "key": KEY_ENTER, "alt": KEY_KP_ENTER, "group": "Move"},
 	{"id": "toggle_aim", "label": "Aim mode", "key": KEY_TAB, "alt": 0, "group": "Fight"},
 	{"id": "fire", "label": "Hold to charge, release to fire", "key": KEY_F, "alt": 0, "group": "Fight"},
+	{"id": "weapon_menu", "label": "Open weapon menu", "key": KEY_Q, "alt": 0, "group": "Fight"},
 	{"id": "cancel_aim", "label": "Cancel aim", "key": KEY_ESCAPE, "alt": 0, "group": "Fight"},
 	{"id": "weapon_1", "label": "Weapon 1", "key": KEY_1, "alt": 0, "group": "Fight"},
 	{"id": "weapon_2", "label": "Weapon 2", "key": KEY_2, "alt": 0, "group": "Fight"},
