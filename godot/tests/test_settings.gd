@@ -24,17 +24,17 @@ func test_every_action_is_in_the_input_map_with_its_default_key() -> void:
 
 func test_rebinding_moves_the_key_and_swaps_with_a_clash() -> void:
 	_reset()
-	var swapped := GameSettings.rebind("jump", KEY_Q)
-	check_eq(swapped, "", "Q was free")
+	var swapped := GameSettings.rebind("jump", KEY_G)
+	check_eq(swapped, "", "G was free")
 	var ev := InputEventKey.new()
-	ev.physical_keycode = KEY_Q
-	check(ev.is_action("jump"), "Q jumps now")
+	ev.physical_keycode = KEY_G
+	check(ev.is_action("jump"), "G jumps now")
 	ev.physical_keycode = KEY_SPACE
 	check(not ev.is_action("jump"), "Space no longer jumps")
-	# Take W for jump: forward gets jump's old key, Q.
+	# Take W for jump: forward gets jump's old key, G.
 	swapped = GameSettings.rebind("jump", KEY_W)
 	check_eq(swapped, "move_forward", "clash swaps")
-	check_eq(GameSettings.keys["move_forward"], KEY_Q, "forward got the old key")
+	check_eq(GameSettings.keys["move_forward"], KEY_G, "forward got the old key")
 	_reset()
 
 
