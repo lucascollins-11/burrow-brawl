@@ -13,6 +13,7 @@ uniform float depth_fade = 7.0;
 uniform float foam_width = 1.6;
 uniform float wave_height = 0.35;
 uniform float fizz_density = 0.9;
+uniform float ripple_strength = 0.16;
 
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 
@@ -20,6 +21,21 @@ varying vec3 w_pos;
 
 float hash21(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// Slope of the small ripples at a point, as (d/dx, d/dz). Tilting the surface normal by this breaks
+// the sun's reflection into a path of moving glints instead of one white patch.
+vec2 ripple_slope(vec2 p, float t) {
+	vec2 s = vec2(0.0);
+	vec2 d1 = vec2(0.80, 0.60);
+	vec2 d2 = vec2(-0.45, 0.89);
+	vec2 d3 = vec2(0.28, -0.96);
+	vec2 d4 = vec2(-0.93, -0.37);
+	s += d1 * cos(dot(p, d1) * 0.55 + t * 1.3) * 0.9;
+	s += d2 * cos(dot(p, d2) * 0.90 - t * 1.7) * 0.7;
+	s += d3 * cos(dot(p, d3) * 1.70 + t * 2.3) * 0.5;
+	s += d4 * cos(dot(p, d4) * 2.90 - t * 2.9) * 0.35;
+	return s;
 }
 
 float swell(vec2 p, float t) {
@@ -57,6 +73,9 @@ void fragment() {
 	vec2 centre = vec2(0.5) + (vec2(hash21(cell + 3.1), hash21(cell + 7.7)) - 0.5) * 0.5;
 	float bubble = 1.0 - smoothstep(0.0, 0.14, length(fract(g) - centre));
 	bubble *= step(1.0 - fizz_density * 0.2, r) * sin(phase * 3.14159);
+	// Bubbles are a close-up detail; from far away they only read as speckle.
+	float cam_dist = length(w_pos - CAMERA_POSITION_WORLD);
+	bubble *= 1.0 - smoothstep(40.0, 110.0, cam_dist);
 
 	col = mix(col, foam_color, clamp(foam + bubble * 0.8, 0.0, 1.0));
 
@@ -69,10 +88,18 @@ void fragment() {
 	alpha = clamp(alpha + foam * 0.4 + bubble * 0.3, 0.0, 1.0);
 	alpha = mix(alpha, 1.0, haze);
 
+	// Ripples flatten out with distance so the horizon stays calm.
+	vec2 slope = ripple_slope(w_pos.xz, TIME) * ripple_strength * (1.0 - smoothstep(150.0, 500.0, cam_dist));
+	vec3 n_world = normalize(vec3(-slope.x, 1.0, -slope.y));
+	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
+	// Lighter streaks on the ripple crests, cartoon style.
+	float crest = smoothstep(0.55, 0.9, slope.x * 2.2 + slope.y * 1.4 + 0.25);
+	col = mix(col, mix(col, foam_color, 0.35), crest * (1.0 - haze) * 0.5);
+
 	ALBEDO = col;
 	ALPHA = alpha;
-	ROUGHNESS = 0.12;
+	ROUGHNESS = 0.32;
 	METALLIC = 0.0;
-	SPECULAR = 0.7;
+	SPECULAR = 0.35;
 	EMISSION = foam_color * (bubble * 0.25 + foam * 0.05);
 }
