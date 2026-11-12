@@ -96,6 +96,12 @@ func _build() -> void:
 	_status.custom_minimum_size = Vector2(0, 52)
 	box.add_child(_status)
 
+	var help_button := Button.new()
+	help_button.text = "How to play"
+	MenuStyle.paint(help_button, MenuStyle.GREEN, 20)
+	help_button.pressed.connect(_on_help_pressed)
+	box.add_child(help_button)
+
 	var server_label := Label.new()
 	server_label.text = "Server: " + NetConfig.server_base()
 	server_label.add_theme_font_size_override("font_size", 13)
@@ -109,6 +115,12 @@ func _open_settings() -> void:
 	var menu := SettingsMenu.new()
 	menu.closed.connect(menu.queue_free)
 	add_child(menu)
+
+
+
+func _on_help_pressed() -> void:
+	# The tutorial sits over the title. It frees itself when closed.
+	add_child(HowToPlay.new())
 
 
 func _on_create_pressed() -> void:
