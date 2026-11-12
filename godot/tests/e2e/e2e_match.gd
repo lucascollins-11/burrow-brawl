@@ -110,6 +110,7 @@ func _run() -> bool:
 	if not v["my_turn"]:
 		return _fail("turn 1 should be A's (team 0); local teams are %s" % [scene.vm.local_teams])
 	await _shot("1-start")
+	await _closeup(v)
 
 	# A fires an acorn mortar toward the middle of the island.
 	var me: Dictionary = {}
@@ -205,10 +206,61 @@ func _preview(scene_path: String, shot_name: String) -> void:
 	print("E2E ok: built ", scene_path)
 
 
-func _shot(shot_name: String) -> void:
+## A close look at the active Squirmling: standing, hit, and a stand-in next to it popping apart
+## and leaving its marker. Runs headless too (without pictures) so the animation code is exercised.
+func _closeup(v: Dictionary) -> void:
+	var me: Dictionary = {}
+	for c: Dictionary in v["critters"]:
+		if int(c["id"]) == int(v["active_critter_id"]):
+			me = c
+	var rig: SquirmlingRig = scene._critters.get(int(me.get("id", -1)), null)
+	if rig == null:
+		return
+	var old_dist: float = scene._rig.dist
+	var old_pitch: float = scene._rig.pitch_deg
+	var old_yaw: float = scene._rig.yaw_deg
+	scene._rig.dist = 13.0
+	scene._rig.pitch_deg = 10.0
+	scene._rig.yaw_deg = CameraMath.wrap_deg(float(me["heading_deg"]) + 30.0)
+	for i in 40:
+		await get_tree().process_frame
+	await _shot("1b-squirmling")
+	rig.hurt()
+	await _shot("1c-hurt", 3)
+	rig.fire()
+	await _shot("1d-fire", 2)
+
+	var twin := Squirmling.create(1, "chef", Color("4aa3df"))
+	var right := Vector3.RIGHT.rotated(Vector3.UP, deg_to_rad(float(me["heading_deg"])))
+	var at: Vector3 = (me["pos"] as Vector3) + right * 5.0
+	at.y = scene.ground_y(at.x, at.z)
+	twin.position = at
+	twin.rotation.y = rig.rotation.y
+	scene.add_child(twin)
+	twin.drive(0.016, false, Vector3.ZERO, true)
+	twin.set_alive(false)
+	for i in 200:
+		await get_tree().process_frame
+		twin.drive(get_process_delta_time(), false, Vector3.ZERO, true)
+		if i == 6:
+			await _shot("1e-pop", 0)
+		if twin.pop_time < 0.0:
+			break
+	if twin.pop_time >= 0.0:
+		errors.append("the knocked-out Squirmling never finished popping")
+	await _shot("1f-marker")
+	scene.remove_child(twin)
+	twin.queue_free()
+	scene._rig.dist = old_dist
+	scene._rig.pitch_deg = old_pitch
+	scene._rig.yaw_deg = old_yaw
+	print("E2E ok: Squirmling close-up")
+
+
+func _shot(shot_name: String, frames := 20) -> void:
 	if shots_dir == "" or DisplayServer.get_name() == "headless":
 		return
-	for i in 20:
+	for i in frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
