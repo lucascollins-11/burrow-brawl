@@ -104,3 +104,12 @@ func test_menu_builds_with_a_button_for_every_action() -> void:
 	check_eq(menu._key_buttons.size(), GameSettings.ACTIONS.size(), "one key button per action")
 	check_eq((menu._key_buttons["jump"] as Button).text, "Space", "shows the bound key")
 	menu.free()
+
+
+func test_hint_text_follows_rebinding() -> void:
+	_reset()
+	var pairs := [["jump", "jump"], ["skip", "skip"]]
+	check_eq(GameSettings.hint_for(pairs), "Space jump - Backspace skip", "defaults")
+	GameSettings.rebind("skip", KEY_K)
+	check_eq(GameSettings.hint_for(pairs), "Space jump - K skip", "skip rebound")
+	_reset()
