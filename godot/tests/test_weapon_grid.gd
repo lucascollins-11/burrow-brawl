@@ -53,3 +53,10 @@ func test_hud_grid_pick_maps_to_a_weapon_index() -> void:
 	hud._on_weapon_id_picked("slingshot")
 	check_eq(got, [1], "only weapons Controls knows are forwarded")
 	hud.free()
+
+
+func test_grid_width_follows_the_number_of_weapons() -> void:
+	check_eq(WeaponGrid.columns_for(0), 3, "an empty table still has a shape")
+	check_eq(WeaponGrid.columns_for(6), 4, "six weapons: 4 columns")
+	check_eq(WeaponGrid.columns_for(12), 5, "twelve weapons: 5 columns")
+	check_eq(WeaponGrid.columns_for(40), 8, "the whole arsenal: 8 columns")

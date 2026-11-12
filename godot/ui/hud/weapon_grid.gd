@@ -2,8 +2,9 @@ class_name WeaponGrid
 extends PanelContainer
 ## Weapon picker: a grid of tiles that scales to the whole 40-item arsenal. Each tile has a coloured
 ## icon (category colour and the item's initials, drawn in code), the name and the ammo left.
-## Hover or focus a tile to read the description underneath. Items with no ammo entry (or 0) are
-## shown greyed and cannot be picked. Emits `picked(id)`.
+## Hover or focus a tile to read the description underneath. Only items in the ammo table get a
+## tile on screen, so the grid shows what this match offers and grows as weapons are added; an item
+## that has run out (0) stays, greyed. Emits `picked(id)`.
 
 signal picked(id: String)
 
@@ -161,6 +162,7 @@ func _refresh() -> void:
 		var b: Button = _tiles[id]
 		var n := int(_ammo.get(id, 0))
 		b.disabled = n == 0
+		b.visible = _ammo.has(id)
 		b.modulate = Color.WHITE if n != 0 else Color(1, 1, 1, 0.45)
 		# Toggle mode first, or the pressed look of the current weapon would not stick.
 		b.toggle_mode = true
@@ -168,3 +170,14 @@ func _refresh() -> void:
 		var ammo := b.get_node_or_null("Ammo") as Label
 		if ammo != null:
 			ammo.text = WeaponCatalog.ammo_label(n) if n != 0 or _ammo.has(id) else ""
+	if _grid != null:
+		_grid.columns = columns_for(_ammo.size())
+		# Shrink back towards the anchored corner after tiles are hidden; the panel then grows to
+		# its new minimum size in its grow directions.
+		offset_left = offset_right
+		offset_top = offset_bottom
+
+
+## Columns for a grid of `count` tiles: a compact block for a few, the full width for many.
+static func columns_for(count: int) -> int:
+	return clampi(ceili(sqrt(float(maxi(count, 1)) * 1.6)), 3, COLUMNS)
