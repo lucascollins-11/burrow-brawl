@@ -3,6 +3,7 @@ import { applyEdit } from "./edit.js";
 import { createTerrain } from "./grid.js";
 import { findSpawns } from "./spawns.js";
 import { generateV2 } from "./mapgen.js";
+import { generateThemed, THEMED_GENERATOR } from "./themes/index.js";
 
 /** Bumped whenever generator output changes for the same inputs. */
 export const GENERATOR_VERSION = 2;
@@ -14,6 +15,7 @@ export const SEA_Y = 26;
  * client rebuilds the same bytes. The seed only picks the spawn order for now.
  */
 export function generate(recipe: MapRecipe): GeneratedMap {
+  if (recipe.generator === THEMED_GENERATOR) return generateThemed(recipe);
   if (recipe.generator === 2) return generateV2(recipe);
   if (recipe.generator !== 1)
     throw new RangeError(`terrain3d: unknown generator version ${recipe.generator}`);
