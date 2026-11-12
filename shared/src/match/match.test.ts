@@ -148,7 +148,7 @@ describe("match model", () => {
     let s = run(createMatch(cfg), 5);
     // Unsupported weapons do nothing; a real shot starts retreat.
     s = stepMatch(cfg, s, [
-      { k: "fire", weaponId: "root-punch", yaw: 0, pitch: 45, power: 50 },
+      { k: "fire", weaponId: "rope-claw", yaw: 0, pitch: 45, power: 50 },
     ]).state;
     expect(s.turns.phase).toBe("control");
     s = stepMatch(cfg, s, [mortar(0, 80)]).state;

@@ -238,6 +238,15 @@ func test_map_look_follows_the_theme_and_falls_back() -> void:
 	check(MapLook.color(MapLook.for_theme("toybox-harbor"), "grass") != MapLook.color(base, "grass"), "themes differ")
 
 
+func test_view_model_does_not_slide_a_burrowed_critter() -> void:
+	var vm := ViewModel.new()
+	var one := int(ViewModel.FIXED_ONE)
+	vm.apply_state({"tick": 3, "critters": [{"id": 1, "team": 0, "x": 10 * one, "y": 20 * one, "z": 30 * one}]})
+	vm.apply_state({"tick": 6, "critters": [{"id": 1, "team": 0, "x": 200 * one, "y": 20 * one, "z": 30 * one}]})
+	var c: Dictionary = vm.snapshot()["critters"][0]
+	check_eq((c["pos"] as Vector3).x, 200.0, "a burrow lands at once, with nothing in between")
+
+
 func test_view_model_keeps_ammo_per_team() -> void:
 	var vm := ViewModel.new()
 	check_eq(vm.ammo_left(0, "fizz-grenade"), -1, "an older server sends no ammo: unlimited")
