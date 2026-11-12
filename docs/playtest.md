@@ -27,6 +27,8 @@ To open it, press Windows+R, paste the path, and press Enter.
 - [ ] Type a nickname of 2 to 16 characters. A shorter or longer one shows a red message.
 - [ ] Click **Create room**. The first try can take up to a minute while the free server wakes up.
   The message says so while you wait.
+- [ ] Click **How to play**. It opens seven pages. **Next** and **Back** move through them, and
+  **Close** or Esc returns to the title screen. Every page fits the window with no cut-off text.
 
 ## 3. Lobby (two or more people)
 

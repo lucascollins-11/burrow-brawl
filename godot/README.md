@@ -9,7 +9,7 @@ See `docs/view-protocol.md` for the match contract and `docs/protocol.md` for th
 1. On the project's GitHub page, open **Releases** and pick the `godot-pr-<number>` release for the build you were given.
 2. Download `BurrowBrawl-windows.zip`, right-click it, and choose **Extract All**.
 3. Open the folder and double-click `BurrowBrawl.exe`. If Windows warns about an unknown app, click **More info**, then **Run anyway**.
-4. Type a nickname and click **Create room**, or type a room code and click **Join by code**.
+4. Type a nickname and click **Create room**, or type a room code and click **Join by code**. New to the game? Click **How to play** on the title screen first.
 
 The game opens in its own window; the release build has no console. Logs are in `%APPDATA%\Godot\app_userdata\Burrow Brawl\logs`. Steps for reporting problems are in [docs/playtest.md](../docs/playtest.md).
 
@@ -72,7 +72,7 @@ Nobody can run Godot inside the agent workspaces yet, so CI is the build and tes
 project.godot          engine settings and the Net autoload
 export_presets.cfg     Windows export preset
 net/                   Net autoload (WebSocket, guest login, room state), protocol helpers, lobby state, server URLs
-ui/                    title and lobby screens (built in code on top of small .tscn shells)
+ui/                    title, lobby and how-to-play screens (built in code on top of small .tscn shells)
 tests/                 headless GDScript tests
 ```
 
