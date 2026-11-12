@@ -4,13 +4,27 @@ extends Node
 ## The server never sees the camera: WASD becomes an absolute walk heading (wire yaw 0..1023) and
 ## the aim becomes yaw, pitch and power integers.
 ##
-## WASD walks relative to the camera, Space jumps, Enter backflips, Tab or F enters aim mode, the
-## mouse aims, hold F to charge and release to fire, 1/2 pick a weapon, Z/X set the grenade fuse,
-## Backspace skips the turn. Dragging the mouse orbits the camera and the wheel zooms.
+## Default keys (all rebindable in the settings menu): WASD or arrows walk relative to the camera,
+## Space jumps, Enter backflips, Tab or F enters aim mode, the mouse aims, hold F to charge and
+## release to fire, 1/2 pick a weapon, Z/X set the grenade fuse, Backspace skips the turn. Dragging
+## the mouse orbits the camera and the wheel zooms.
 
 ## Walk headings are snapped to this many yaw steps so orbiting the camera does not flood the server.
 const MOVE_SNAP := 8
 const WHEEL_NOTCH := 100.0
+## InputMap action -> internal action name queued on a key press.
+const KEY_ACTIONS: Array = [
+	["jump", "jump"],
+	["backflip", "backflip"],
+	["skip", "skip"],
+	["toggle_aim", "toggle_aim"],
+	["cancel_aim", "cancel_aim"],
+	["weapon_1", "weapon1"],
+	["weapon_2", "weapon2"],
+	["fuse_down", "fuse_down"],
+	["fuse_up", "fuse_up"],
+	["fire", "fire_down"],
+]
 const WEAPONS: Array[Dictionary] = [
 	{"id": "acorn-mortar", "name": "Acorn Mortar"},
 	{"id": "fizz-grenade", "name": "Fizz Grenade"},
@@ -36,6 +50,10 @@ var _wheel: float = 0.0
 var _dragging: bool = false
 
 
+func _init() -> void:
+	GameSettings.apply_bindings()
+
+
 func weapon_name() -> String:
 	var w: Dictionary = WEAPONS[weapon]
 	if w["id"] == "fizz-grenade":
@@ -43,35 +61,15 @@ func weapon_name() -> String:
 	return str(w["name"])
 
 
-## Feed every unhandled input event here.
+## Feed every unhandled input event here. Keys come from the InputMap actions in GameSettings.ACTIONS.
 func handle_event(ev: InputEvent) -> void:
 	if ev is InputEventKey:
-		var k := ev as InputEventKey
-		if k.echo:
+		if (ev as InputEventKey).echo:
 			return
-		if k.pressed:
-			match k.physical_keycode:
-				KEY_SPACE:
-					_actions.append("jump")
-				KEY_ENTER, KEY_KP_ENTER:
-					_actions.append("backflip")
-				KEY_BACKSPACE:
-					_actions.append("skip")
-				KEY_TAB:
-					_actions.append("toggle_aim")
-				KEY_ESCAPE:
-					_actions.append("cancel_aim")
-				KEY_1:
-					_actions.append("weapon1")
-				KEY_2:
-					_actions.append("weapon2")
-				KEY_Z:
-					_actions.append("fuse_down")
-				KEY_X:
-					_actions.append("fuse_up")
-				KEY_F:
-					_actions.append("fire_down")
-		elif k.physical_keycode == KEY_F:
+		for pair in KEY_ACTIONS:
+			if ev.is_action_pressed(pair[0]):
+				_actions.append(pair[1])
+		if ev.is_action_released("fire"):
 			_actions.append("fire_up")
 	elif ev is InputEventMouseButton:
 		var b := ev as InputEventMouseButton
@@ -90,25 +88,18 @@ func handle_event(ev: InputEvent) -> void:
 			_dy += m.relative.y
 
 
-## WASD / arrows as -1, 0, 1 axes: forward (W) and right (D).
+## Walk keys as -1, 0, 1 axes: forward and right.
 func axes() -> Vector2i:
-	var f := 0
-	var r := 0
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
-		f += 1
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
-		f -= 1
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
-		r += 1
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
-		r -= 1
+	var f := int(Input.is_action_pressed("move_forward")) - int(Input.is_action_pressed("move_back"))
+	var r := int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left"))
 	return Vector2i(r, f)  # x = right, y = forward
 
 
 ## Once per rendered frame. Returns the mouse movement left over for the orbit camera.
 func frame(dt: float) -> Dictionary:
-	var dx := _dx
-	var dy := _dy
+	var scaled := GameSettings.scale_mouse(_dx, _dy)
+	var dx := scaled.x
+	var dy := scaled.y
 	var wheel := _wheel
 	_dx = 0.0
 	_dy = 0.0
