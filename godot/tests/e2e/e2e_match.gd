@@ -239,13 +239,15 @@ func _closeup(v: Dictionary) -> void:
 	scene.add_child(twin)
 	twin.drive(0.016, false, Vector3.ZERO, true)
 	twin.set_alive(false)
-	for i in 200:
+	# Timed by the clock, not by frames: headless frames take almost no time.
+	var deadline := Time.get_ticks_msec() + 8000
+	var pictured := false
+	while twin.pop_time >= 0.0 and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
 		twin.drive(get_process_delta_time(), false, Vector3.ZERO, true)
-		if i == 6:
+		if not pictured and twin.pop_time > 0.3:
+			pictured = true
 			await _shot("1e-pop", 0)
-		if twin.pop_time < 0.0:
-			break
 	if twin.pop_time >= 0.0:
 		errors.append("the knocked-out Squirmling never finished popping")
 	await _shot("1f-marker")
