@@ -56,11 +56,21 @@ describe("theme registry", () => {
   });
 });
 
-describe("picnic-atoll", () => {
-  // Recorded when the theme landed: any change to the output must bump the generator on purpose.
-  const GOLDEN: Record<number, number> = { 256: 2855479326, 384: 3677026463, 512: 1716054583 };
+// Recorded when each theme landed: any change to its output must bump the generator on purpose.
+const THEME_CASES = [
+  {
+    id: "picnic-atoll",
+    golden: { 256: 2855479326, 384: 3677026463, 512: 1716054583 } as Record<number, number>,
+  },
+  {
+    id: "toybox-harbor",
+    golden: { 256: 256779419, 384: 4237372040, 512: 685627790 } as Record<number, number>,
+  },
+];
+
+describe.each(THEME_CASES)("$id", ({ id, golden }) => {
   it.each(MAP_SIZES)("size %i is deterministic, roomy and walkable", (size) => {
-    const recipe = themedRecipe("picnic-atoll", 1, size);
+    const recipe = themedRecipe(id, 1, size);
     const a = generate(recipe);
     const b = generate(recipe);
     expect(hash(a.terrain)).toBe(hash(b.terrain));
@@ -68,7 +78,7 @@ describe("picnic-atoll", () => {
     expect(a.objects).toEqual(b.objects);
     expect(a.terrain.edits).toHaveLength(0);
     expect(a.terrain.chunkVersion.every((v) => v === 0)).toBe(true);
-    expect(hash(a.terrain)).toBe(GOLDEN[size]);
+    expect(hash(a.terrain)).toBe(golden[size]);
 
     const t = a.terrain;
     expect(a.spawns.length).toBeGreaterThanOrEqual(16);
@@ -88,8 +98,8 @@ describe("picnic-atoll", () => {
   });
 
   it("changes with the seed and restores from its recipe", () => {
-    const r1 = themedRecipe("picnic-atoll", 1, 256);
-    const r2 = themedRecipe("picnic-atoll", 2, 256);
+    const r1 = themedRecipe(id, 1, 256);
+    const r2 = themedRecipe(id, 2, 256);
     expect(hash(generate(r1).terrain)).not.toBe(hash(generate(r2).terrain));
     const edits = [{ op: "carve", x: 128, y: 40, z: 128, r: 6 } as const];
     const t = restore(r1, edits);
@@ -98,7 +108,7 @@ describe("picnic-atoll", () => {
 
   it("stays roomy and connected across seeds", () => {
     for (let seed = 1; seed <= 12; seed++) {
-      const a = generate(themedRecipe("picnic-atoll", seed, 256));
+      const a = generate(themedRecipe(id, seed, 256));
       expect(a.spawns.length).toBeGreaterThanOrEqual(16);
       expect(a.objects!.length).toBeGreaterThan(8);
       const reach = walkable(a.terrain, a.spawns[0]!.x, a.spawns[0]!.z);

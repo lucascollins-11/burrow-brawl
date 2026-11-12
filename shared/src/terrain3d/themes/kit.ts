@@ -143,3 +143,28 @@ export function keepWalkableSpawns(
   for (const [id, n] of counts) if (n > bestN) [best, bestN] = [id, n];
   return spawns.filter((_, i) => ids[i] === best);
 }
+
+/** An axis-aligned land area a theme can scatter placements over (inclusive corners). */
+export interface Rect {
+  readonly x0: number;
+  readonly z0: number;
+  readonly x1: number;
+  readonly z1: number;
+}
+
+/** Barrels, mines and crate pads on flat, dry, open ground inside the given areas. */
+export function scatterObjects(ctx: ThemeCtx, areas: readonly Rect[], salt: number): void {
+  const { rnd, objects } = ctx;
+  const budget = 6 + ((ctx.w * ctx.d) >> 12) * 2;
+  let n = 0;
+  for (let i = 0; i < budget * 8 && n < budget; i++) {
+    const a = areas[rnd(salt, i, areas.length)]!;
+    const x = a.x0 + rnd(salt + 1, i, a.x1 - a.x0 + 1);
+    const z = a.z0 + rnd(salt + 2, i, a.z1 - a.z0 + 1);
+    const y = flatDrySpot(ctx, x, z);
+    if (y < 0) continue;
+    const roll = rnd(salt + 3, i, 6);
+    objects.push({ kind: roll < 3 ? "barrel" : roll < 5 ? "mine" : "crate-pad", x, y, z });
+    n++;
+  }
+}
