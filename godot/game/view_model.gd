@@ -235,6 +235,7 @@ func snapshot() -> Dictionary:
 		"sea_y": sea_y,
 		"winner_team": turns.get("winnerTeam", null),
 		"my_turn": active_team != null and local_teams.has(int(active_team)),
+		"local_teams": local_teams,
 	}
 
 

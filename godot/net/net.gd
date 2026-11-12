@@ -3,6 +3,9 @@
 ## Wire contract: docs/protocol.md (lobby) and docs/view-protocol.md (match, view client).
 extends Node
 
+## Set by the title screen's Practice button: the lobby starts a practice match as soon as it opens.
+var practice_pending := false
+
 signal entered_room
 signal enter_failed(message: String)
 signal room_changed
@@ -114,6 +117,11 @@ func remove_team(team_id: String) -> void:
 
 func start_match() -> void:
 	_send("lobby.start")
+
+
+## Host, alone in the room: a practice match against target dummies.
+func start_practice() -> void:
+	_send("lobby.practice")
 
 
 ## Last match.start received in this room, or {} when there is no match. Survives a reconnect

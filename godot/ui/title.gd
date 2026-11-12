@@ -102,6 +102,12 @@ func _build() -> void:
 	MenuStyle.paint(help_button, MenuStyle.GREEN, 20)
 	help_button.pressed.connect(_on_help_pressed)
 	extras.add_child(help_button)
+	var practice_button := Button.new()
+	practice_button.text = "Practice"
+	practice_button.tooltip_text = "Play alone against target dummies, with prompts for every control."
+	practice_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	practice_button.pressed.connect(_on_practice_pressed)
+	extras.add_child(practice_button)
 	var settings_button := Button.new()
 	settings_button.text = "Settings"
 	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -129,10 +135,18 @@ func _on_help_pressed() -> void:
 
 
 func _on_create_pressed() -> void:
+	Net.practice_pending = false
+	_begin("create", "")
+
+
+## Practice is a room of your own with a match against dummies started straight away.
+func _on_practice_pressed() -> void:
+	Net.practice_pending = true
 	_begin("create", "")
 
 
 func _on_join_pressed() -> void:
+	Net.practice_pending = false
 	_begin("join", _code_edit.text)
 
 

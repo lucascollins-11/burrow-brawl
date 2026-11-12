@@ -54,6 +54,10 @@ export interface RoomOptions {
 
 const DEFAULT_CRITTER_NAMES = ["Pip", "Nib", "Moss", "Tuck"];
 const CHAT_MIN_INTERVAL_MS = 1_000;
+/** Practice: this many still target dummies, and long turns with no wind to learn in. */
+const PRACTICE_DUMMIES = 3;
+const PRACTICE_TURN_SECONDS = 90;
+const TICKS_PER_SECOND = 60;
 
 export class Room {
   phase: RoomPhase = "lobby";
@@ -348,6 +352,16 @@ export class Room {
         this.startMatch();
         return null; // startMatch broadcast the new phase
       }
+
+      case "lobby.practice": {
+        // One player against target dummies: only for a host alone in the room, with a team.
+        if (!isHost) return "not_host";
+        const mine = this.teams.find((t) => t.controllerId === id);
+        const dummies = this.teams.find((t) => t.controllerId === null);
+        if (this.members.size !== 1 || !mine || !dummies) return "not_allowed";
+        this.startMatch({ dummies: dummies.id });
+        return null;
+      }
     }
     this.bump();
     this.broadcast({ t: "room.update", room: this.state() });
@@ -356,9 +370,22 @@ export class Room {
 
   // ------------------------------------------------------------ match
 
-  private startMatch(): void {
-    const teams = this.teams.filter((t) => t.controllerId !== null);
-    const config = MatchRunner.configFor(this.settings, teams.length);
+  /**
+   * Start the match with every controlled team. `practice.dummies` adds that uncontrolled team as
+   * target dummies: nobody controls it, so the runner skips its turns.
+   */
+  private startMatch(practice?: { dummies: string }): void {
+    const teams = this.teams.filter((t) => t.controllerId !== null || t.id === practice?.dummies);
+    let config = MatchRunner.configFor(this.settings, teams.length);
+    if (practice) {
+      config = {
+        ...config,
+        practice: true,
+        teamSizes: teams.map((t) => (t.id === practice.dummies ? PRACTICE_DUMMIES : 1)),
+        turnTicks: PRACTICE_TURN_SECONDS * TICKS_PER_SECOND,
+        windMax: 0,
+      };
+    }
     this.phase = "match";
     for (const m of this.members.values()) m.ready = false;
     this.bump();
@@ -366,7 +393,8 @@ export class Room {
     this.match = new MatchRunner(
       config,
       teams.map((t) => t.id),
-      teams.map((t) => t.controllerId!),
+      // "" is nobody: a dummy team's turn starts with its controller absent and is skipped.
+      teams.map((t) => t.controllerId ?? ""),
       {
         broadcast: (msg) => this.broadcast(msg),
         broadcastTo: (kind, msg) => {

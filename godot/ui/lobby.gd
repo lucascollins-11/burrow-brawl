@@ -32,6 +32,10 @@ func _ready() -> void:
 	Net.server_error.connect(_on_server_error)
 	Net.match_started.connect(_on_match_started)
 	_refresh()
+	if Net.practice_pending:
+		Net.practice_pending = false
+		_status.text = "Starting practice."
+		Net.start_practice()
 
 
 func _build() -> void:

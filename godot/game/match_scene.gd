@@ -47,6 +47,9 @@ var _time := 0.0
 var _last_turn := -1
 var _ammo_hash := -1
 var _crates_seen := false
+## Set for a practice match (config.practice): the guided prompts and the label that shows them.
+var _guide: PracticeGuide = null
+var _guide_label: Label = null
 var _last_tick_second := -1
 var _prev_pos: Dictionary = {}  # id -> Vector3, to tell walking from standing
 var _built := false
@@ -139,6 +142,7 @@ func handle_match_start(msg: Dictionary) -> void:
 		var node := Node3D.new()
 		node.set_script(script)
 		set_terrain_view(node)
+	_setup_guide(bool((msg.get("config", {}) as Dictionary).get("practice", false)))
 	var look := MapLook.for_theme(MapLook.theme_of(msg))
 	if terrain_view != null and terrain_view.has_method("load_terrain"):
 		terrain_view.call("load_terrain", t)
@@ -200,6 +204,43 @@ func _hint_walk() -> String:
 	)
 
 
+func _guide_keys() -> Dictionary:
+	var walk := ""
+	for id in ["move_forward", "move_left", "move_back", "move_right"]:
+		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
+	return {
+		"walk": walk,
+		"jump": GameSettings.key_label(int(GameSettings.keys.get("jump", 0))),
+		"aim": GameSettings.key_label(int(GameSettings.keys.get("toggle_aim", 0))),
+		"fire": GameSettings.key_label(int(GameSettings.keys.get("fire", 0))),
+	}
+
+
+## Practice matches get a prompt banner under the turn banner.
+func _setup_guide(practice: bool) -> void:
+	if _guide_label != null:
+		_guide_label.get_parent().get_parent().queue_free()
+		_guide_label = null
+	_guide = null
+	if not practice:
+		return
+	_guide = PracticeGuide.new()
+	var layer := CanvasLayer.new()
+	layer.name = "PracticeGuide"
+	layer.layer = 5
+	add_child(layer)
+	var panel := PanelContainer.new()
+	panel.theme = MenuStyle.theme()
+	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.offset_top = 104.0
+	layer.add_child(panel)
+	_guide_label = Label.new()
+	_guide_label.add_theme_font_size_override("font_size", 22)
+	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(_guide_label)
+
+
 func _hint_aim() -> String:
 	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
@@ -245,7 +286,12 @@ func _process(dt: float) -> void:
 		_send_input(int(v["turn"]), cmds)
 	var aim: CameraMath.AimState = controls.aim
 
-	_handle_events(vm.take_events(), v)
+	var events := vm.take_events()
+	_handle_events(events, v)
+	if _guide != null and _guide_label != null:
+		_guide.feed(v, aim != null, events, controls.weapon_id())
+		_guide_label.text = _guide.text(_guide_keys())
+		_guide_label.visible = v["phase"] != "over" and not pause.is_open()
 	_sync_critters(v, active, aim, dt)
 	shots.sync(v["projectiles"])
 	crates.sync(v["crates"], dt, _crates_seen)

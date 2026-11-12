@@ -68,6 +68,52 @@ function expectBatchOrder(v: ViewPlayer): void {
   }
 }
 
+describe("practice", () => {
+  it("a host alone plays against three dummies whose turns pass by themselves", async () => {
+    h = await startHarness();
+    const vc = await connectView(h, "Solo");
+    vc.send({ t: "room.create" });
+    const { code } = await vc.room();
+    expect(await vc.request({ t: "lobby.practice" })).toMatchObject({ t: "ok" });
+    const v = new ViewPlayer(vc);
+    await v.until((m) => m.t === "match.start");
+    const runner = h.server.registry.get(code)!.match!;
+    expect(runner.config.practice).toBe(true);
+    expect(runner.config.teamSizes).toEqual([1, 3]);
+    expect(runner.config.windMax).toBe(0);
+    expect(v.critters.size).toBe(4);
+
+    runner.advance(30);
+    expect(runner.matchState.turns).toMatchObject({ turn: 1, phase: "control", activeTeam: 0 });
+    expect(await vc.request({ t: "input", turn: 1, cmds: [{ k: "skip" }] })).toMatchObject({
+      t: "ok",
+    });
+    // The dummies' turn 2 is skipped as it starts; control comes straight back.
+    for (let i = 0; i < 400 && runner.matchState.turns.turn < 3; i++) runner.advance(1);
+    expect(runner.matchState.turns).toMatchObject({ turn: 3, activeTeam: 0 });
+    expect(runner.matchState.sim.critters.filter((c) => c.team === 1)).toHaveLength(3);
+  });
+
+  it("is refused when someone else is in the room", async () => {
+    h = await startHarness();
+    const vc = await connectView(h, "Host");
+    vc.send({ t: "room.create" });
+    const { code } = await vc.room();
+    const ac = await h.player("Guest");
+    ac.send({ t: "room.join", code });
+    await ac.next("room.joined");
+    await vc.room((s) => s.members.length === 2);
+    expect(await vc.request({ t: "lobby.practice" })).toMatchObject({
+      t: "error",
+      code: "not_allowed",
+    });
+    expect(await ac.request({ t: "lobby.practice" })).toMatchObject({
+      t: "error",
+      code: "not_host",
+    });
+  });
+});
+
 describe("view protocol", () => {
   it("a view client and a lockstep client share a match; the view client's world is the server's", async () => {
     h = await startHarness();

@@ -191,6 +191,8 @@ export type ClientMessage =
   | { t: "lobby.ready"; seq?: number; ready: boolean }
   | { t: "lobby.kick"; seq?: number; memberId: string }
   | { t: "lobby.start"; seq?: number }
+  /** Host, alone in the room: start a practice match against still target dummies. */
+  | { t: "lobby.practice"; seq?: number }
   | { t: "match.rematch"; seq?: number }
   | { t: "chat"; seq?: number; text: string }
   | { t: "ping"; seq?: number; clientTime: number }
@@ -255,6 +257,7 @@ const ALLOWED_KEYS: Record<ClientMessageType, readonly string[]> = {
   "lobby.ready": ["ready"],
   "lobby.kick": ["memberId"],
   "lobby.start": [],
+  "lobby.practice": [],
   "match.rematch": [],
   chat: ["text"],
   ping: ["clientTime"],
@@ -440,6 +443,7 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
     case "room.sync":
     case "lobby.addTeam":
     case "lobby.start":
+    case "lobby.practice":
     case "match.rematch":
       return ok();
   }

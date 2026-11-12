@@ -133,6 +133,11 @@ export interface MatchConfig {
   windMax: number;
   /** How the island is built. Every client regenerates it from this. */
   map: MapRecipe;
+  /**
+   * True for a practice match: one player against a team of target dummies nobody controls.
+   * The rules are the same; clients use it to show the guided prompts.
+   */
+  practice?: boolean;
   /** Sudden death: from the round after this one the soda rises every turn. 0 or absent = off. */
   suddenDeathRound?: number;
   /** Voxels the soda rises per turn once sudden death starts. Default 2. */
