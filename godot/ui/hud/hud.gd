@@ -32,10 +32,12 @@ var _end_label: Label
 var _again: Button
 var _shown_key: String = ""
 
-## Screenshot and test hooks. While `preview_aim` is set, the HUD draws that aim (crosshair and
+## Screenshot and test hooks, for the e2e screenshot scene only: nothing in the live game sets them,
+## so do not build features on them. While `preview_aim` is set, the HUD draws that aim (crosshair and
 ## power bar) whatever the controls say. While `preview_view` is set (see sample_results), the HUD
 ## draws that snapshot instead of the live one, which is how the results screen is shown without
-## finishing a match. Clear them (null and {}) to go back to the live match.
+## finishing a match. The e2e scene must reset them (null and {}) right after each shot; while one is
+## left set the live HUD never comes back.
 var preview_aim: CameraMath.AimState = null
 var preview_view: Dictionary = {}
 
