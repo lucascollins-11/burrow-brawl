@@ -172,7 +172,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 ## Walk and aim hints use whatever keys the player has bound.
 func _hint_walk() -> String:
-	return "WASD walk - " + GameSettings.hint_for(
+	var walk := ""
+	for id in ["move_forward", "move_left", "move_back", "move_right"]:
+		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
+	return walk + " walk - " + GameSettings.hint_for(
 		[["jump", "jump"], ["backflip", "backflip"], ["toggle_aim", "aim"], ["skip", "skip"]]
 	)
 
