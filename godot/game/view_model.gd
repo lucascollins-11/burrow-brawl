@@ -20,6 +20,8 @@ var turns: Dictionary = {}
 var sea_y: float = 0.0
 ## Shots left per sim team: weapon id -> count, limited weapons only. Empty with an older server.
 var ammo: Array = []
+## Crates on the map as the server sent them: [{id, kind, weaponId, x, y, z}] in voxels.
+var crates: Array = []
 var latest_tick: int = 0
 var max_hp: int = MAX_HP_DEFAULT
 var started: bool = false
@@ -44,6 +46,7 @@ func apply_match_start(msg: Dictionary) -> void:
 	_projectiles.clear()
 	_events.clear()
 	ammo = []
+	crates = []
 	match_id = str(msg.get("matchId", ""))
 	config = msg.get("config", {})
 	team_ids = msg.get("teamIds", [])
@@ -56,6 +59,23 @@ func apply_match_start(msg: Dictionary) -> void:
 		for i in range(team_ids.size()):
 			teams.append(TeamStyle.default_look(i))
 	started = true
+
+
+## Crates for drawing: [{id, kind, weapon, pos}], pos at the middle of the crate's floor.
+func crate_list() -> Array:
+	var out: Array = []
+	for c in crates:
+		if not (c is Dictionary):
+			continue
+		out.append(
+			{
+				"id": int(c.get("id", 0)),
+				"kind": str(c.get("kind", "weapon")),
+				"weapon": str(c.get("weaponId", "")),
+				"pos": Vector3(float(c.get("x", 0)) + 0.5, float(c.get("y", 0)), float(c.get("z", 0)) + 0.5),
+			}
+		)
+	return out
 
 
 ## Shots left for a team: weapon id -> count. A weapon that is not in it is unlimited.
@@ -78,6 +98,8 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 	sea_y = float(msg.get("seaY", sea_y))
 	if msg.has("ammo"):
 		ammo = msg["ammo"]
+	if msg.has("crates"):
+		crates = msg["crates"]
 	for c in msg.get("critters", []):
 		var id := int(c["id"])
 		var pos := _pos(c)
@@ -202,6 +224,7 @@ func snapshot() -> Dictionary:
 		"teams": teams,
 		"critters": crit,
 		"projectiles": shots,
+		"crates": crate_list(),
 		"active_critter_id": turns.get("activeCritter", null),
 		"active_team": active_team,
 		"phase": phase,

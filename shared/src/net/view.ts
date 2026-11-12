@@ -1,6 +1,7 @@
 // View protocol types (docs/view-protocol.md). Types only; owner: the architect.
 // A view client draws the match and never simulates it.
 
+import type { Crate } from "../match/crates";
 import type { MatchConfig } from "../match/match";
 import type { TurnState } from "../match/turns";
 import type { CritterStatus, SimEvent } from "../sim3d/api";
@@ -45,6 +46,8 @@ export interface ViewState {
    * unlimited. Always complete. Absent from servers older than ammo.
    */
   ammo?: Record<string, number>[];
+  /** Crates on the map: always the full list; a missing id is gone. Absent from older servers. */
+  crates?: Crate[];
 }
 
 export interface ViewTerrain {

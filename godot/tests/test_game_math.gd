@@ -248,3 +248,19 @@ func test_view_model_keeps_ammo_per_team() -> void:
 	check_eq(vm.ammo_left(5, "fizz-grenade"), -1, "no such team: nothing to limit")
 	vm.apply_state({"tick": 2})
 	check_eq(vm.ammo_left(0, "fizz-grenade"), 4, "a state without ammo keeps the last table")
+
+
+func test_view_model_lists_crates_and_the_views_follow() -> void:
+	var vm := ViewModel.new()
+	vm.apply_state({"tick": 1, "crates": [{"id": 3, "kind": "health", "weaponId": "", "x": 10, "y": 30, "z": 20}]})
+	var list := vm.crate_list()
+	check_eq(list.size(), 1, "one crate")
+	check_eq(list[0]["pos"], Vector3(10.5, 30.0, 20.5), "the middle of the crate's floor")
+	vm.apply_state({"tick": 2})
+	check_eq(vm.crate_list().size(), 1, "a state without crates keeps the last list")
+	var views := CrateViews.new()
+	views.sync(list, 0.016, false)
+	check_eq(views.count(), 1, "a node per crate")
+	views.sync([], 0.016)
+	check_eq(views.count(), 0, "a missing id is removed")
+	views.free()

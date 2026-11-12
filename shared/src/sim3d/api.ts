@@ -149,7 +149,27 @@ export type SimEvent =
       readonly weaponId: WeaponId;
       readonly edit: TerrainEdit;
     }
-  | { readonly type: "projectileLost"; readonly projectileId: number };
+  | { readonly type: "projectileLost"; readonly projectileId: number }
+  /** A crate landed on the map at voxel (x, y, z). Crate events come from the match, not the sim. */
+  | {
+      readonly type: "crateDropped";
+      readonly crateId: number;
+      readonly kind: "health" | "weapon";
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    }
+  /** A critter took a crate: `amount` health for a snack box, or shots of `weaponId`. */
+  | {
+      readonly type: "crateTaken";
+      readonly crateId: number;
+      readonly critterId: number;
+      readonly kind: "health" | "weapon";
+      readonly weaponId: string;
+      readonly amount: number;
+    }
+  /** A crate sank into the soda. */
+  | { readonly type: "crateLost"; readonly crateId: number };
 
 export interface StepResult {
   readonly state: SimState;
