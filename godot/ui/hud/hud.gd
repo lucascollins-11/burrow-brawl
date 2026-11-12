@@ -223,6 +223,14 @@ func set_team_ammo(left: Dictionary) -> void:
 	set_arsenal(ammo)
 
 
+## The display name of a weapon id from the server's list, or the id itself when unknown.
+func weapon_title(id: String) -> String:
+	for w in _weapon_list:
+		if str(w.get("id", "")) == id:
+			return str(w.get("name", id))
+	return id
+
+
 func _weapon_id(index: int) -> String:
 	if index >= 0 and index < _weapon_list.size():
 		return str(_weapon_list[index]["id"])

@@ -33,6 +33,7 @@ var camera: Camera3D
 var env: MatchEnvironment
 var fx: MatchEffects
 var shots: ShotViews
+var crates: CrateViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
 
@@ -45,6 +46,7 @@ var _target_ring: MeshInstance3D
 var _time := 0.0
 var _last_turn := -1
 var _ammo_hash := -1
+var _crates_seen := false
 var _last_tick_second := -1
 var _prev_pos: Dictionary = {}  # id -> Vector3, to tell walking from standing
 var _built := false
@@ -69,6 +71,9 @@ func _ready() -> void:
 	shots = ShotViews.new()
 	shots.name = "Shots"
 	add_child(shots)
+	crates = CrateViews.new()
+	crates.name = "Crates"
+	add_child(crates)
 	controls.name = "Controls"
 	add_child(controls)
 	hud = Hud.new()
@@ -117,6 +122,8 @@ func set_terrain_view(node: Node3D) -> void:
 func handle_match_start(msg: Dictionary) -> void:
 	_clear_critters()
 	shots.clear()
+	crates.clear()
+	_crates_seen = false
 	vm.set_teams(_teams_from_net(msg.get("teamIds", [])))
 	vm.set_local_teams(_local_teams_from_net(msg.get("teamIds", [])))
 	vm.apply_match_start(msg)
@@ -241,6 +248,8 @@ func _process(dt: float) -> void:
 	_handle_events(vm.take_events(), v)
 	_sync_critters(v, active, aim, dt)
 	shots.sync(v["projectiles"])
+	crates.sync(v["crates"], dt, _crates_seen)
+	_crates_seen = true
 	_update_marker(v, active, aim)
 	_update_camera(v, active, aim, mouse, dt)
 
@@ -282,6 +291,13 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var hit: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if hit != null:
 				hit.hurt()
+		elif kind == "crateTaken":
+			var taker := _find(v["critters"], int(e.get("critterId", -1)))
+			if not taker.is_empty():
+				var what := "+%d" % int(e.get("amount", 0))
+				if str(e.get("kind", "")) == "weapon":
+					what = "+1 %s" % hud.weapon_title(str(e.get("weaponId", "")))
+				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
 			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})))
 		elif kind == "fired":

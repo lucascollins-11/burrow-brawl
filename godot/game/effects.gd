@@ -186,6 +186,31 @@ func damage(at: Vector3, amount: int) -> void:
 	rise.chain().tween_callback(label.queue_free)
 
 
+## Floating green "+25" or "+1 Fizz Grenade" above whoever took a crate, with a pale puff.
+func pickup(at: Vector3, text: String) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.pixel_size = 0.05
+	label.font_size = 64
+	label.outline_size = 20
+	label.modulate = Color("5cc49b")
+	label.outline_modulate = Color("fff8ea")
+	label.position = at
+	label.scale = Vector3.ONE * 0.2
+	add_child(label)
+	var tw := create_tween()
+	tw.tween_property(label, "scale", Vector3.ONE * 1.2, 0.12)
+	tw.tween_property(label, "scale", Vector3.ONE, 0.1)
+	var rise := create_tween()
+	rise.set_parallel(true)
+	rise.tween_property(label, "position:y", at.y + 9.0, 1.8)
+	rise.tween_property(label, "modulate:a", 0.0, 1.0).set_delay(0.8)
+	rise.chain().tween_callback(label.queue_free)
+	puff(at, 3.0)
+
+
 ## Decay the shake and pick this frame's camera offset. Add `shake_offset` to the camera, then remove it.
 func update(dt: float) -> void:
 	_shake = maxf(0.0, _shake - dt * 1.8)

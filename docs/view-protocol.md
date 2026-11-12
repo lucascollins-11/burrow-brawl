@@ -79,6 +79,8 @@ ViewState = {
   projectiles: ViewProjectile[] // always the full list; a missing id is gone
   ammo?: Record<string, number>[] // per sim team: shots left by weapon id, limited weapons only;
                                 // a weapon not listed is unlimited; always complete
+  crates?: Crate[]              // {id, kind: "health"|"weapon", weaponId, x, y, z} in voxels;
+                                // always the full list; a missing id was taken or sank
 }
 ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean }
 ViewProjectile = { id, ownerId, weaponId, x, y, z, fuseTicks }
@@ -96,7 +98,8 @@ between them (about 50 ms behind the server). Seconds left on the timer are
 
 The sim's events in order, sent in the same 3-tick batch as the `state` that covers them and
 before it: `jumped`, `landed`, `damage`, `died`, `fired`, `tracer`, `bounced`, `explosion`,
-`projectileLost`. A hitscan weapon (the Pepper Shotgun) sends `fired` with `projectileId: -1`, then
+`projectileLost`, and the crate events `crateDropped`, `crateTaken` `{crateId, critterId, kind,
+weaponId, amount}` and `crateLost`. A hitscan weapon (the Pepper Shotgun) sends `fired` with `projectileId: -1`, then
 one `tracer` `{critterId, weaponId, from, to, hit}` per pellet (`from` and `to` are Q16.16 voxel
 points) and an `explosion` for each pellet that hit. They drive sound, effects and damage numbers. They never change what the client
 believes about positions, health or terrain; `state` and `terrain.patch` do that.

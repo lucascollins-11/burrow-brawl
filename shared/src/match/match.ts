@@ -5,6 +5,7 @@
 import { Prng, StateHasher, type PrngState } from "../determinism";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim3d/api";
 import { PITCH_MAX, PITCH_MIN, YAW_STEPS } from "../sim3d/api";
+import { MAX_HEALTH } from "../sim3d/constants";
 import { createCritter, createWorld, stepWorld } from "../sim3d/world";
 import type { MapRecipe, TerrainEdit } from "../terrain3d/api";
 import {
@@ -18,6 +19,16 @@ import {
 } from "../terrain3d/impl";
 import { weaponCatalog } from "../weapons/catalog";
 import type { WeaponId } from "../weapons/load";
+import {
+  CRATE_CHANCE_DEN,
+  CRATE_CHANCE_NUM,
+  CRATE_HEAL,
+  MAX_CRATES,
+  collectCrates,
+  dropCrate,
+  settleCrates,
+  type Crate,
+} from "./crates";
 import { basicTurns, type TurnRules, type TurnState } from "./turns";
 
 // ------------------------------------------------------------ commands
@@ -139,6 +150,8 @@ export interface MatchState {
    * is unlimited. A fire command for a weapon at 0 is dropped.
    */
   ammo: Record<string, number>[];
+  /** Crates lying on the map (see crates.ts). */
+  crates: Crate[];
 }
 
 /** The ammo every team starts a match with: the limited weapons from the catalogue. */
@@ -243,6 +256,7 @@ export function createMatch(cfg: MatchConfig): MatchState {
     rng: rng.getState(),
     moveYaw: -1,
     ammo: cfg.teamSizes.map(() => startingAmmo()),
+    crates: [],
   };
 }
 
@@ -336,6 +350,63 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
     const top = simOut.terrain.sizeY;
     simOut = { ...simOut, seaY: Math.min(top, simOut.seaY + (cfg.seaRisePerTurn ?? 2)) };
   }
+  // Crates: fall with the ground, get taken by whoever walks into them, and a new one may drop
+  // as each turn starts.
+  const events: SimEvent[] = [...r.events];
+  const settled = settleCrates(simOut.terrain, simOut.seaY, state.crates);
+  for (const c of settled.lost) events.push({ type: "crateLost", crateId: c.id });
+  const got = collectCrates(settled.crates, simOut.critters);
+  let crates = got.crates;
+  for (const { crate, critterId } of got.taken) {
+    const who = simOut.critters.find((c) => c.id === critterId)!;
+    let amount = 1;
+    if (crate.kind === "health") {
+      amount = Math.min(CRATE_HEAL, Math.max(0, MAX_HEALTH - who.hp));
+      simOut = {
+        ...simOut,
+        critters: simOut.critters.map((c) =>
+          c.id === critterId ? { ...c, hp: c.hp + amount } : c,
+        ),
+      };
+    } else {
+      const left = ammo[who.team]?.[crate.weaponId];
+      if (left !== undefined)
+        ammo = ammo.map((a, i) => (i === who.team ? { ...a, [crate.weaponId]: left + 1 } : a));
+    }
+    events.push({
+      type: "crateTaken",
+      crateId: crate.id,
+      critterId,
+      kind: crate.kind,
+      weaponId: crate.weaponId,
+      amount,
+    });
+  }
+  if (
+    turnChanged &&
+    next.phase !== "over" &&
+    crates.length < MAX_CRATES &&
+    rng.chance(CRATE_CHANCE_NUM, CRATE_CHANCE_DEN)
+  ) {
+    const fresh = dropCrate(
+      simOut.terrain,
+      simOut.seaY,
+      rng,
+      next.turn,
+      Object.keys(startingAmmo()),
+    );
+    if (fresh) {
+      crates = [...crates, fresh];
+      events.push({
+        type: "crateDropped",
+        crateId: fresh.id,
+        kind: fresh.kind,
+        x: fresh.x,
+        y: fresh.y,
+        z: fresh.z,
+      });
+    }
+  }
   return {
     state: {
       sim: simOut,
@@ -343,8 +414,9 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
       rng: rng.getState(),
       moveYaw: turnChanged ? -1 : moveYaw,
       ammo,
+      crates,
     },
-    events: r.events,
+    events,
     turnChanged,
   };
 }
@@ -362,6 +434,7 @@ export function hashMatch(state: MatchState): number {
   for (const w of state.rng) h.i32(w);
   h.i32(state.moveYaw);
   h.value(state.ammo);
+  h.value(state.crates);
   return h.digest();
 }
 
@@ -381,6 +454,8 @@ export interface MatchSnapshot {
   moveYaw: number;
   /** Absent in snapshots from before ammo existed: those load with full ammo. */
   ammo?: Record<string, number>[];
+  /** Absent in snapshots from before crates existed. */
+  crates?: Crate[];
 }
 
 export function saveMatch(state: MatchState): MatchSnapshot {
@@ -392,6 +467,7 @@ export function saveMatch(state: MatchState): MatchSnapshot {
     rng: [...state.rng] as [number, number, number, number],
     moveYaw: state.moveYaw,
     ammo: structuredClone(state.ammo),
+    crates: structuredClone(state.crates),
   };
 }
 
@@ -404,5 +480,6 @@ export function loadMatch(cfg: MatchConfig, snap: MatchSnapshot): MatchState {
     rng: Prng.fromState(snap.rng).getState(),
     moveYaw: snap.moveYaw,
     ammo: snap.ammo ? structuredClone(snap.ammo) : cfg.teamSizes.map(() => startingAmmo()),
+    crates: snap.crates ? structuredClone(snap.crates) : [],
   };
 }
