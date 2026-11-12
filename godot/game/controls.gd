@@ -38,6 +38,9 @@ var can_fire: bool = true
 var camera_yaw_deg: float = 0.0
 var heading_deg: float = 0.0
 var aim: CameraMath.AimState = null
+## Set by the scene while a menu covers the match: held keys stop walking, any charge in progress is
+## dropped (nothing fires) and key presses are ignored.
+var paused: bool = false
 var weapon: int = 0
 var fuse_seconds: int = 3
 
@@ -90,6 +93,8 @@ func handle_event(ev: InputEvent) -> void:
 
 ## Walk keys as -1, 0, 1 axes: forward and right.
 func axes() -> Vector2i:
+	if paused:
+		return Vector2i.ZERO
 	var f := int(Input.is_action_pressed("move_forward")) - int(Input.is_action_pressed("move_back"))
 	var r := int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left"))
 	return Vector2i(r, f)  # x = right, y = forward
@@ -106,7 +111,12 @@ func frame(dt: float) -> Dictionary:
 	_wheel = 0.0
 	var actions := _actions
 	_actions = []
-	if not enabled or not can_fire:
+	if paused:
+		actions = []
+		dx = 0.0
+		dy = 0.0
+		wheel = 0.0
+	if not enabled or not can_fire or paused:
 		_set_aim(null)
 	for a in actions:
 		if not enabled:

@@ -106,6 +106,22 @@ func test_menu_builds_with_a_button_for_every_action() -> void:
 	menu.free()
 
 
+func test_pause_menu_opens_toggles_and_leaves() -> void:
+	var pause := PauseMenu.new()
+	pause._ready()
+	check(not pause.is_open(), "starts closed")
+	pause.toggle()
+	check(pause.is_open(), "toggle opens")
+	pause.toggle()
+	check(not pause.is_open(), "toggle closes")
+	pause.open()
+	pause._open_settings()
+	check(not pause._menu_column.visible, "settings replace the pause buttons")
+	pause.toggle()
+	check(pause.is_open() and pause._menu_column.visible, "toggle backs out of settings first")
+	pause.free()
+
+
 func test_hint_text_follows_rebinding() -> void:
 	_reset()
 	var pairs := [["jump", "jump"], ["skip", "skip"]]
@@ -113,3 +129,16 @@ func test_hint_text_follows_rebinding() -> void:
 	GameSettings.rebind("skip", KEY_K)
 	check_eq(GameSettings.hint_for(pairs), "Space jump - K skip", "skip rebound")
 	_reset()
+
+
+func test_pausing_stops_walking_and_drops_a_charge() -> void:
+	_reset()
+	var c := Controls.new()
+	c.aim = CameraMath.new_aim(0.0)
+	c.aim.charging = true
+	c.paused = true
+	c.frame(0.1)
+	check(c.aim == null, "a charge is dropped while paused")
+	check_eq(c.axes(), Vector2i.ZERO, "held keys do not walk while paused")
+	check_eq(c.read_cmds().size(), 0, "nothing is sent while paused")
+	c.free()
