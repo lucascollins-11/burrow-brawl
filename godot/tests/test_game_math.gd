@@ -236,3 +236,15 @@ func test_map_look_follows_the_theme_and_falls_back() -> void:
 		for key: String in base:
 			check((MapLook.LOOKS[id] as Dictionary).has(key), "%s has %s" % [id, key])
 	check(MapLook.color(MapLook.for_theme("toybox-harbor"), "grass") != MapLook.color(base, "grass"), "themes differ")
+
+
+func test_view_model_keeps_ammo_per_team() -> void:
+	var vm := ViewModel.new()
+	check_eq(vm.ammo_left(0, "fizz-grenade"), -1, "an older server sends no ammo: unlimited")
+	vm.apply_state({"tick": 1, "ammo": [{"fizz-grenade": 4}, {"fizz-grenade": 0}]})
+	check_eq(vm.ammo_left(0, "fizz-grenade"), 4, "team 0 has four")
+	check_eq(vm.ammo_left(1, "fizz-grenade"), 0, "team 1 is out")
+	check_eq(vm.ammo_left(0, "acorn-mortar"), -1, "not listed means unlimited")
+	check_eq(vm.ammo_left(5, "fizz-grenade"), -1, "no such team: nothing to limit")
+	vm.apply_state({"tick": 2})
+	check_eq(vm.ammo_left(0, "fizz-grenade"), 4, "a state without ammo keeps the last table")

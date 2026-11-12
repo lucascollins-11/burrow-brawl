@@ -40,6 +40,11 @@ export interface ViewState {
   critters: ViewCritter[];
   /** Always the full list. */
   projectiles: ViewProjectile[];
+  /**
+   * Shots left per sim team, by weapon id, for weapons with limited ammo; a weapon not listed is
+   * unlimited. Always complete. Absent from servers older than ammo.
+   */
+  ammo?: Record<string, number>[];
 }
 
 export interface ViewTerrain {

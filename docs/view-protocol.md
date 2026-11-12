@@ -77,6 +77,8 @@ ViewState = {
   seaY: number,                 // rises in sudden death
   critters: ViewCritter[],      // only critters that changed since the previous state message
   projectiles: ViewProjectile[] // always the full list; a missing id is gone
+  ammo?: Record<string, number>[] // per sim team: shots left by weapon id, limited weapons only;
+                                // a weapon not listed is unlimited; always complete
 }
 ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean }
 ViewProjectile = { id, ownerId, weaponId, x, y, z, fuseTicks }

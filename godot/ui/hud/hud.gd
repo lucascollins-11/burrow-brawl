@@ -24,6 +24,7 @@ var _power_label: Label
 var _power_bar: ProgressBar
 var _hint: Label
 var _weapon_grid: WeaponGrid
+var _full_ammo: Dictionary = {}  # the catalogue's starting ammo: id -> count, -1 unlimited
 var _weapon_menu_button: Button
 var _weapon_buttons: Array[Button] = []
 var _weapon_names: Array[String] = ["Acorn Mortar", "Fizz Grenade"]
@@ -209,6 +210,16 @@ func set_catalog(list: Array) -> void:
 	if fireable.is_empty():
 		return
 	_weapon_list = fireable
+	_full_ammo = ammo
+	set_arsenal(ammo)
+
+
+## What a team has left (weapon id -> count, limited weapons only), laid over the catalogue.
+func set_team_ammo(left: Dictionary) -> void:
+	var ammo := _full_ammo.duplicate()
+	for id: String in left:
+		if ammo.has(id):
+			ammo[id] = int(left[id])
 	set_arsenal(ammo)
 
 

@@ -16,6 +16,7 @@ import {
   restore,
   themedRecipe,
 } from "../terrain3d/impl";
+import { weaponCatalog } from "../weapons/catalog";
 import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnRules, type TurnState } from "./turns";
 
@@ -133,6 +134,18 @@ export interface MatchState {
   rng: PrngState;
   /** Active critter's held walk heading, -1 when standing. Reset on every new turn. */
   moveYaw: number;
+  /**
+   * Shots left per team, by weapon id, for weapons with limited ammo. A weapon that is not listed
+   * is unlimited. A fire command for a weapon at 0 is dropped.
+   */
+  ammo: Record<string, number>[];
+}
+
+/** The ammo every team starts a match with: the limited weapons from the catalogue. */
+export function startingAmmo(): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const w of weaponCatalog()) if (w.fireable && w.ammo !== null) out[w.id] = w.ammo;
+  return out;
 }
 
 export interface StepOutput {
@@ -229,6 +242,7 @@ export function createMatch(cfg: MatchConfig): MatchState {
     turns: first,
     rng: rng.getState(),
     moveYaw: -1,
+    ammo: cfg.teamSizes.map(() => startingAmmo()),
   };
 }
 
@@ -289,12 +303,27 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
     inputs.length = 0;
     moveYaw = -1;
   }
+  // Out of ammo: the shot is dropped and the turn goes on.
+  const shooter = turns.activeTeam(ts);
+  const wanted = inputs[0]?.fire?.weaponId;
+  if (shooter !== null && wanted !== undefined && state.ammo[shooter]?.[wanted] === 0) {
+    const { fire: _empty, ...rest } = inputs[0]!;
+    void _empty;
+    inputs[0] = rest;
+  }
 
   const rng = Prng.fromState(state.rng);
   // The turn controller owns wind; the sim reads it from SimState.
   const sim: SimState = { ...state.sim, windX: ts.windX, windZ: ts.windZ };
   const r = stepWorld(sim, inputs, rng);
-  if (r.events.some((e) => e.type === "fired" && e.critterId === ts.activeCritter)) {
+  let ammo = state.ammo;
+  for (const e of r.events) {
+    if (e.type !== "fired" || e.critterId !== ts.activeCritter) continue;
+    const left = shooter === null ? undefined : ammo[shooter]?.[e.weaponId];
+    if (left !== undefined)
+      ammo = ammo.map((a, i) =>
+        i === shooter ? { ...a, [e.weaponId]: Math.max(0, left - 1) } : a,
+      );
     ts = turns.endTurn(ts, rules, "fired", tick);
   }
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
@@ -308,7 +337,13 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
     simOut = { ...simOut, seaY: Math.min(top, simOut.seaY + (cfg.seaRisePerTurn ?? 2)) };
   }
   return {
-    state: { sim: simOut, turns: next, rng: rng.getState(), moveYaw: turnChanged ? -1 : moveYaw },
+    state: {
+      sim: simOut,
+      turns: next,
+      rng: rng.getState(),
+      moveYaw: turnChanged ? -1 : moveYaw,
+      ammo,
+    },
     events: r.events,
     turnChanged,
   };
@@ -326,6 +361,7 @@ export function hashMatch(state: MatchState): number {
   h.value(state.turns);
   for (const w of state.rng) h.i32(w);
   h.i32(state.moveYaw);
+  h.value(state.ammo);
   return h.digest();
 }
 
@@ -343,6 +379,8 @@ export interface MatchSnapshot {
   turns: TurnState;
   rng: [number, number, number, number];
   moveYaw: number;
+  /** Absent in snapshots from before ammo existed: those load with full ammo. */
+  ammo?: Record<string, number>[];
 }
 
 export function saveMatch(state: MatchState): MatchSnapshot {
@@ -353,6 +391,7 @@ export function saveMatch(state: MatchState): MatchSnapshot {
     turns: structuredClone(state.turns),
     rng: [...state.rng] as [number, number, number, number],
     moveYaw: state.moveYaw,
+    ammo: structuredClone(state.ammo),
   };
 }
 
@@ -364,5 +403,6 @@ export function loadMatch(cfg: MatchConfig, snap: MatchSnapshot): MatchState {
     turns: structuredClone(snap.turns),
     rng: Prng.fromState(snap.rng).getState(),
     moveYaw: snap.moveYaw,
+    ammo: snap.ammo ? structuredClone(snap.ammo) : cfg.teamSizes.map(() => startingAmmo()),
   };
 }
