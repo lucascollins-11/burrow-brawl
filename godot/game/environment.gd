@@ -14,10 +14,17 @@ var _streamers: Array[Dictionary] = []
 var _time: float = 0.0
 var _size_x: float = 256.0
 var _size_z: float = 256.0
+var _look: Dictionary = MapLook.for_theme(MapLook.DEFAULT)
 
 
 ## Build everything for a map of the given size. `ground_y` is a Callable(x, z) -> float.
-func setup(size_x: float, size_z: float, sea_y: float, ground_y: Callable) -> void:
+func setup(size_x: float, size_z: float, sea_y: float, ground_y: Callable, look: Dictionary = {}) -> void:
+	if not look.is_empty():
+		_look = look
+	# A fresh match.start (a reconnect) rebuilds everything.
+	for child in get_children():
+		child.queue_free()
+	_streamers.clear()
 	_size_x = size_x
 	_size_z = size_z
 	_build_sky()
@@ -34,10 +41,10 @@ func set_sea_y(y: float) -> void:
 
 func _build_sky() -> void:
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color("4f8fd8")
-	sky_mat.sky_horizon_color = Color("ffb27a")
-	sky_mat.ground_horizon_color = Color("ffb27a")
-	sky_mat.ground_bottom_color = Color("c46a5a")
+	sky_mat.sky_top_color = MapLook.color(_look, "sky_top")
+	sky_mat.sky_horizon_color = MapLook.color(_look, "sky_horizon")
+	sky_mat.ground_horizon_color = MapLook.color(_look, "sky_horizon")
+	sky_mat.ground_bottom_color = MapLook.color(_look, "sky_bottom")
 	sky_mat.sun_angle_max = 9.0
 	sky_mat.sky_curve = 0.18
 	var sky := Sky.new()
@@ -56,7 +63,7 @@ func _build_sky() -> void:
 	env.glow_hdr_threshold = 1.2
 	# A light warm haze far away. It must not paint over the sky or the near island.
 	env.fog_enabled = true
-	env.fog_light_color = Color("ffc79a")
+	env.fog_light_color = MapLook.color(_look, "fog")
 	env.fog_density = 0.0003
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
@@ -69,15 +76,15 @@ func _build_sky() -> void:
 func _build_sun() -> void:
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.light_color = Color("ffd9a8")
-	sun.light_energy = 1.5
+	sun.light_color = MapLook.color(_look, "sun")
+	sun.light_energy = float(_look.get("sun_energy", 1.5))
 	sun.light_specular = 0.25  # keeps the sun's mirror image on the sea from whiting out the view
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = maxf(_size_x, _size_z) * 1.4
 	sun.shadow_bias = 0.05
 	sun.shadow_normal_bias = 1.0
 	# Low warm light from the south-west, so craters and hats throw long shadows.
-	sun.rotation_degrees = Vector3(-38.0, 215.0, 0.0)
+	sun.rotation_degrees = Vector3(float(_look.get("sun_pitch", -38.0)), 215.0, 0.0)
 	add_child(sun)
 
 
@@ -89,7 +96,9 @@ func _build_sea(sea_y: float) -> void:
 	sea = MeshInstance3D.new()
 	sea.name = "Sea"
 	sea.mesh = plane
-	sea.material_override = preload("res://terrain/sea_material.gd").make()
+	sea.material_override = preload("res://terrain/sea_material.gd").make(
+		MapLook.color(_look, "sea_shallow"), MapLook.color(_look, "sea_deep"), MapLook.color(_look, "sea_horizon")
+	)
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	sea.position = Vector3(_size_x * 0.5, sea_y, _size_z * 0.5)
 	add_child(sea)
@@ -99,7 +108,7 @@ func _build_clouds() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1234  # looks only: clouds are the same every run
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color("fff3e6")
+	mat.albedo_color = MapLook.color(_look, "cloud")
 	mat.roughness = 1.0
 	mat.emission_enabled = true
 	mat.emission = Color("ffd2a8")

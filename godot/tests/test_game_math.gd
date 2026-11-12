@@ -224,3 +224,15 @@ func test_standings_put_the_winner_first_then_survivors_by_health() -> void:
 	check_eq(rows[2]["index"], 0, "the eliminated team is last")
 	check_eq(rows[0]["rank"], 1, "rank starts at 1")
 	check(rows[0]["winner"] and not rows[1]["winner"], "only one winner")
+
+
+func test_map_look_follows_the_theme_and_falls_back() -> void:
+	var msg := {"config": {"map": {"theme": "toybox-harbor"}}}
+	check_eq(MapLook.theme_of(msg), "toybox-harbor", "the theme comes from config.map.theme")
+	check_eq(MapLook.theme_of({}), MapLook.DEFAULT, "no theme: the default look")
+	check_eq(MapLook.theme_of({"config": {"map": {"theme": "not-yet-made"}}}), MapLook.DEFAULT, "unknown theme: the default look")
+	var base: Dictionary = MapLook.LOOKS[MapLook.DEFAULT]
+	for id: String in MapLook.LOOKS:
+		for key: String in base:
+			check((MapLook.LOOKS[id] as Dictionary).has(key), "%s has %s" % [id, key])
+	check(MapLook.color(MapLook.for_theme("toybox-harbor"), "grass") != MapLook.color(base, "grass"), "themes differ")
