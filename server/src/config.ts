@@ -74,9 +74,14 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
   }
   const port = Number(env.PORT ?? DEFAULTS.port);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("PORT is invalid");
+  // Slow test clients (a software-rendered CI run) can go many seconds between frames.
+  const heartbeatMs = Number(env.HEARTBEAT_MS ?? DEFAULTS.heartbeatMs);
+  if (!Number.isInteger(heartbeatMs) || heartbeatMs < 1_000 || heartbeatMs > 600_000)
+    throw new Error("HEARTBEAT_MS must be 1000..600000");
   return {
     ...DEFAULTS,
     port,
+    heartbeatMs,
     host: env.HOST ?? DEFAULTS.host,
     jwtSecret,
     allowedOrigins: origins,

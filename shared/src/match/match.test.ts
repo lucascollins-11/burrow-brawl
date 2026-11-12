@@ -293,6 +293,54 @@ describe("match model", () => {
   });
 });
 
+describe("ammo", () => {
+  const bundle: Cmd = { k: "fire", weaponId: "firecracker-bundle", yaw: 0, pitch: 0, power: 0 };
+
+  it("starts every team with the catalogue's limited weapons", () => {
+    const s = createMatch(cfg);
+    expect(s.ammo).toHaveLength(2);
+    expect(s.ammo[0]).toEqual(s.ammo[1]);
+    expect(s.ammo[0]!["firecracker-bundle"]).toBe(1);
+    expect(s.ammo[0]!["acorn-mortar"]).toBeUndefined();
+  });
+
+  it("spends one on a shot, for the firing team only, and survives a snapshot", () => {
+    let s = run(createMatch(cfg), 5);
+    const team = active(s).team;
+    const at = s.sim.tick + 1;
+    s = run(s, 2, (t) => (t === at ? [bundle] : []));
+    expect(s.sim.projectiles).toHaveLength(1);
+    expect(s.ammo[team]!["firecracker-bundle"]).toBe(0);
+    expect(s.ammo[1 - team]!["firecracker-bundle"]).toBe(1);
+    const back = loadMatch(cfg, JSON.parse(JSON.stringify(saveMatch(s))));
+    expect(back.ammo).toEqual(s.ammo);
+    expect(hashMatch(back)).toBe(hashMatch(s));
+  });
+
+  it("drops a shot with no ammo left: nothing flies and the turn goes on", () => {
+    let s = run(createMatch(cfg), 5);
+    const team = active(s).team;
+    const full = hashMatch(s);
+    s = { ...s, ammo: s.ammo.map((a, i) => (i === team ? { ...a, "firecracker-bundle": 0 } : a)) };
+    expect(hashMatch(s)).not.toBe(full);
+    const at = s.sim.tick + 1;
+    s = run(s, 2, (t) => (t === at ? [bundle] : []));
+    expect(s.sim.projectiles).toHaveLength(0);
+    expect(s.turns.phase).toBe("control");
+    // The unlimited mortar still fires.
+    const next = s.sim.tick + 1;
+    s = run(s, 2, (t) => (t === next ? [mortar(0)] : []));
+    expect(s.sim.projectiles).toHaveLength(1);
+  });
+
+  it("loads a snapshot from before ammo with full ammo", () => {
+    const s = run(createMatch(cfg), 5);
+    const { ammo: _old, ...snap } = saveMatch(s);
+    void _old;
+    expect(loadMatch(cfg, snap).ammo).toEqual(createMatch(cfg).ammo);
+  });
+});
+
 describe("MatchMirror", () => {
   it("follows relayed commands, stops at the confirmed tick, and checks hashes", () => {
     let server = createMatch(cfg);

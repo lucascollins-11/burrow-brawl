@@ -139,6 +139,7 @@ export class ViewStream {
       seaY: s.sim.seaY,
       critters: s.sim.critters.map(viewCritter),
       projectiles: s.sim.projectiles.map(viewProjectile),
+      ammo: s.ammo,
     };
   }
 
@@ -173,6 +174,7 @@ export class ViewStream {
       seaY: s.sim.seaY,
       critters,
       projectiles: s.sim.projectiles.map(viewProjectile),
+      ammo: s.ammo,
     };
     out.push(state);
     return out;

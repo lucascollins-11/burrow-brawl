@@ -18,6 +18,8 @@ var teams: Array = []  # [{index, name, color, hat}]
 var local_teams: Array = []  # sim team indexes controlled by this client
 var turns: Dictionary = {}
 var sea_y: float = 0.0
+## Shots left per sim team: weapon id -> count, limited weapons only. Empty with an older server.
+var ammo: Array = []
 var latest_tick: int = 0
 var max_hp: int = MAX_HP_DEFAULT
 var started: bool = false
@@ -41,6 +43,7 @@ func apply_match_start(msg: Dictionary) -> void:
 	_critters.clear()
 	_projectiles.clear()
 	_events.clear()
+	ammo = []
 	match_id = str(msg.get("matchId", ""))
 	config = msg.get("config", {})
 	team_ids = msg.get("teamIds", [])
@@ -55,12 +58,26 @@ func apply_match_start(msg: Dictionary) -> void:
 	started = true
 
 
+## Shots left for a team: weapon id -> count. A weapon that is not in it is unlimited.
+func team_ammo(team: int) -> Dictionary:
+	if team < 0 or team >= ammo.size() or not (ammo[team] is Dictionary):
+		return {}
+	return ammo[team]
+
+
+## How many shots a team has left with a weapon, or -1 for unlimited.
+func ammo_left(team: int, weapon_id: String) -> int:
+	return int(team_ammo(team).get(weapon_id, -1))
+
+
 ## state: critters are only the ones that changed, projectiles are always the full list.
 func apply_state(msg: Dictionary, snap := false) -> void:
 	var tick := int(msg.get("tick", latest_tick))
 	latest_tick = maxi(latest_tick, tick)
 	turns = msg.get("turns", turns)
 	sea_y = float(msg.get("seaY", sea_y))
+	if msg.has("ammo"):
+		ammo = msg["ammo"]
 	for c in msg.get("critters", []):
 		var id := int(c["id"])
 		var pos := _pos(c)

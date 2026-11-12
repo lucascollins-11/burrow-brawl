@@ -24,6 +24,7 @@ const LOBBY_SCENE := "res://ui/lobby.tscn"
 const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
 const HINT_WATCH := "Watching. Hold tight."
+const HINT_EMPTY := "Out of ammo for this one. Pick another weapon."
 
 var vm := ViewModel.new()
 var controls := Controls.new()
@@ -43,6 +44,7 @@ var _marker: MeshInstance3D
 var _target_ring: MeshInstance3D
 var _time := 0.0
 var _last_turn := -1
+var _ammo_hash := -1
 var _last_tick_second := -1
 var _prev_pos: Dictionary = {}  # id -> Vector3, to tell walking from standing
 var _built := false
@@ -203,7 +205,18 @@ func _process(dt: float) -> void:
 	var v := vm.snapshot()
 
 	controls.enabled = bool(v["my_turn"]) and v["phase"] != "over"
-	controls.can_fire = controls.enabled and v["phase"] == "control"
+	# The team whose ammo the HUD shows: the one playing if it is ours, else our first team.
+	var ammo_team := -1
+	if v["my_turn"]:
+		ammo_team = int(v["active_team"])
+	elif not vm.local_teams.is_empty():
+		ammo_team = int(vm.local_teams[0])
+	var left := vm.team_ammo(ammo_team)
+	if left.hash() != _ammo_hash:
+		_ammo_hash = left.hash()
+		hud.set_team_ammo(left)
+	var empty := bool(v["my_turn"]) and vm.ammo_left(ammo_team, controls.weapon_id()) == 0
+	controls.can_fire = controls.enabled and v["phase"] == "control" and not empty
 	controls.paused = pause.is_open()
 	if int(v["turn"]) != _last_turn:
 		_last_turn = int(v["turn"])
@@ -236,6 +249,8 @@ func _process(dt: float) -> void:
 	var hint := HINT_WATCH
 	if v["my_turn"] and v["phase"] != "settling":
 		hint = _hint_aim() if aim != null else _hint_walk()
+		if empty and v["phase"] == "control":
+			hint = HINT_EMPTY
 	hud.update(v, aim, "" if v["phase"] == "over" else hint, controls.weapon_name(), _world)
 
 

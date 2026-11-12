@@ -30,4 +30,11 @@ describe("configFromEnv", () => {
     ).toThrow();
     expect(() => configFromEnv({ JWT_SECRET: strong, PORT: "abc" })).toThrow("PORT");
   });
+
+  it("reads HEARTBEAT_MS and rejects nonsense", () => {
+    expect(configFromEnv({}).heartbeatMs).toBe(10_000);
+    expect(configFromEnv({ HEARTBEAT_MS: "60000" }).heartbeatMs).toBe(60_000);
+    expect(() => configFromEnv({ HEARTBEAT_MS: "5" })).toThrow("HEARTBEAT_MS");
+    expect(() => configFromEnv({ HEARTBEAT_MS: "soon" })).toThrow("HEARTBEAT_MS");
+  });
 });
