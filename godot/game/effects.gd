@@ -3,6 +3,8 @@ extends Node3D
 ## Explosion flash and debris, screen shake and floating damage numbers at 3D positions
 ## (port of client/src/game3d/effects3d.ts). Effects clean themselves up with tweens.
 
+## Colour of the chunks an explosion throws; the match scene sets it from the map theme.
+var debris_color := Color("8b5a2b")
 var shake_offset: Vector3 = Vector3.ZERO
 var _shake: float = 0.0
 var _rng := RandomNumberGenerator.new()
@@ -50,7 +52,7 @@ func explode(at: Vector3, radius: float) -> void:
 	chunk.size = Vector3(0.7, 0.7, 0.7)
 	debris.mesh = chunk
 	var chunk_mat := StandardMaterial3D.new()
-	chunk_mat.albedo_color = Color("8b5a2b")
+	chunk_mat.albedo_color = debris_color
 	debris.material_override = chunk_mat
 	add_child(debris)
 	debris.emitting = true

@@ -130,9 +130,14 @@ func handle_match_start(msg: Dictionary) -> void:
 		var node := Node3D.new()
 		node.set_script(script)
 		set_terrain_view(node)
+	var look := MapLook.for_theme(MapLook.theme_of(msg))
 	if terrain_view != null and terrain_view.has_method("load_terrain"):
 		terrain_view.call("load_terrain", t)
-	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"))
+		var ground_mat := terrain_view.get("material") as ShaderMaterial
+		if ground_mat != null:
+			MapLook.paint_terrain(ground_mat, look)
+	fx.debris_color = MapLook.color(look, "debris")
+	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
 	var world_env := env.get("_world_env") as WorldEnvironment
 	if world_env != null and world_env.environment != null:
 		world_env.environment.glow_enabled = GameSettings.glow_enabled()
