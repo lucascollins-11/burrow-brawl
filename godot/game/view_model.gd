@@ -90,7 +90,12 @@ func ammo_left(team: int, weapon_id: String) -> int:
 	return int(team_ammo(team).get(weapon_id, -1))
 
 
+## Voxels a critter can not cover in one state batch by moving.
+const TELEPORT_DISTANCE := 40.0
+
+
 ## state: critters are only the ones that changed, projectiles are always the full list.
+
 func apply_state(msg: Dictionary, snap := false) -> void:
 	var tick := int(msg.get("tick", latest_tick))
 	latest_tick = maxi(latest_tick, tick)
@@ -105,7 +110,8 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 		var pos := _pos(c)
 		var yaw := CameraMath.yaw_to_deg(int(c.get("yaw", 0)))
 		var e: Dictionary = _critters.get(id, {})
-		if e.is_empty() or snap:
+		# A jump this long in one batch is a burrow, not a move: appear there, do not slide.
+		if e.is_empty() or snap or (e["b"] as Vector3).distance_to(pos) > TELEPORT_DISTANCE:
 			e = {"id": id, "a": pos, "b": pos, "ta": tick, "tb": tick, "yaw_a": yaw, "yaw_b": yaw}
 		else:
 			e["a"] = e["b"]

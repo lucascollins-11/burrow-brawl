@@ -142,6 +142,20 @@ export type SimEvent =
       readonly to: Vec3;
       readonly hit: boolean;
     }
+  /** A melee swing landed at `at` (Q16.16 voxels) and struck `hits` critters; follows `fired`. */
+  | {
+      readonly type: "punch";
+      readonly critterId: number;
+      readonly at: Vec3;
+      readonly hits: number;
+    }
+  /** A critter burrowed from `from` to `to` (feet, Q16.16 voxels); follows `fired`. */
+  | {
+      readonly type: "teleported";
+      readonly critterId: number;
+      readonly from: Vec3;
+      readonly to: Vec3;
+    }
   /** A blast at a voxel. The terrain change itself is `edit`, already applied. */
   | {
       readonly type: "explosion";

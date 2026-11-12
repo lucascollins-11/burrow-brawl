@@ -346,6 +346,12 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
 			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})))
+		elif kind == "punch":
+			fx.puff(ViewModel.point(e.get("at", {})), 3.0)
+		elif kind == "teleported":
+			var up := Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
+			fx.puff(ViewModel.point(e.get("from", {})) + up, 4.5)
+			fx.puff(ViewModel.point(e.get("to", {})) + up, 4.5)
 		elif kind == "fired":
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:

@@ -346,6 +346,76 @@ describe("Pepper Shotgun", () => {
   });
 });
 
+describe("Root Punch", () => {
+  const near = (team: number, x: number): SimState => {
+    const t = flatSlab(128, 96, 128, GROUND, 4);
+    let s = createWorld(t, [
+      createCritter(1, 0, 40, GROUND, 64),
+      createCritter(2, team, x, GROUND, 64),
+    ]);
+    for (let i = 0; i < 2; i++) s = stepWorld(s, [], rng).state;
+    return s;
+  };
+  const swing = (yaw = 0): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "root-punch", yaw, pitch: 0, power: 0 },
+  });
+
+  it("hurts and launches an enemy in reach, up and away from the puncher", () => {
+    const r = stepWorld(near(1, 46), [swing()], rng);
+    expect(r.events.map((e) => e.type)).toEqual(["fired", "punch", "damage"]);
+    const hit = r.state.critters[1]!;
+    expect(hit.hp).toBe(100 - loadWeapons()["root-punch"].damage);
+    expect(hit.vel.y).toBeGreaterThan(0);
+    expect(hit.vel.x).toBeGreaterThan(0);
+    expect(r.state.critters[0]!.hp).toBe(100);
+    const after = run(r.state, 240);
+    expect(cell(after.state.critters[1]!.pos.x)).toBeGreaterThan(46);
+  });
+
+  it("spares team mates, critters out of reach and critters behind", () => {
+    for (const s of [near(0, 46), near(1, 60), near(1, 34)]) {
+      const r = stepWorld(s, [swing()], rng);
+      expect(r.events.map((e) => e.type)).toEqual(["fired", "punch"]);
+      expect(r.state.critters[1]!.hp).toBe(100);
+    }
+  });
+});
+
+describe("Teleport Burrow", () => {
+  const dig = (target?: { x: number; y: number; z: number }): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: {
+      weaponId: "teleport-burrow",
+      yaw: 0,
+      pitch: 0,
+      power: 0,
+      ...(target ? { target } : {}),
+    },
+  });
+
+  it("comes up on the ground above a target inside the terrain, unhurt", () => {
+    const r = stepWorld(world(), [dig({ x: 90, y: GROUND - 2, z: 30 })], rng);
+    expect(r.events.map((e) => e.type)).toEqual(["fired", "teleported"]);
+    const after = run(r.state, 60);
+    const c = after.state.critters[0]!;
+    expect([cell(c.pos.x), cell(c.pos.y), cell(c.pos.z)]).toEqual([90, GROUND, 30]);
+    expect(c.hp).toBe(100);
+    expect(c.grounded).toBe(true);
+  });
+
+  it("is refused without a target, off the map, or onto another critter", () => {
+    const s = world(true);
+    for (const g of [undefined, { x: 0, y: GROUND, z: 30 }, { x: 100, y: GROUND, z: 64 }]) {
+      const r = stepWorld(s, [dig(g)], rng);
+      expect(r.events.filter((e) => e.type === "fired")).toHaveLength(0);
+      expect(cell(r.state.critters[0]!.pos.x)).toBe(40);
+    }
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -382,7 +452,11 @@ describe("weapon catalogue", () => {
       "beehive-strike",
       "firecracker-bundle",
       "pepper-shotgun",
+      "root-punch",
+      "teleport-burrow",
     ]);
+    expect(byId["root-punch"]!.needs).toEqual([]);
+    expect(byId["teleport-burrow"]!.needs).toEqual(["target"]);
     expect(byId["pepper-shotgun"]!.needs).toEqual([]);
     expect(byId["firecracker-bundle"]!.needs).toEqual([]);
     expect(byId["acorn-mortar"]!.needs).toEqual(["charge"]);

@@ -35,6 +35,8 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "beehive-strike",
   "firecracker-bundle",
   "pepper-shotgun",
+  "root-punch",
+  "teleport-burrow",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */

@@ -27,7 +27,7 @@ import {
   TICK_RATE,
   WIND_ACCEL_PER_UNIT,
 } from "./constants";
-import { cell } from "./critter";
+import { bodyBlocked, cell } from "./critter";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
 import {
   aimDir,
@@ -155,6 +155,115 @@ export function fireHitscan(
     cs = explode(t, cs, pellet, cell(pos.x), cell(pos.y), cell(pos.z), events);
   }
   return cs;
+}
+
+/** Weapons that act the moment they fire, with no projectile: hitscan, melee and the burrow. */
+export function isInstantWeapon(id: string): boolean {
+  return isHitscanWeapon(id) || id === "root-punch" || id === "teleport-burrow";
+}
+
+/**
+ * Fire an instant weapon. Returns the critters after it, or null if the shot is refused (a
+ * burrow with no clear spot at its target), in which case nothing happened and no events were
+ * pushed.
+ */
+export function fireInstant(
+  t: VoxelTerrain,
+  critters: readonly Critter[],
+  c: Critter,
+  cmd: FireCommand,
+  events: SimEvent[],
+): Critter[] | null {
+  if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
+  if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
+  return fireHitscan(t, critters, c, cmd, events);
+}
+
+/**
+ * The Root Punch: every living critter of another team within `range` of the puncher, and not
+ * behind it, takes the weapon's damage and is launched along the aim heading at
+ * `launchAngleDegrees`. Pushes one `punch`, then a `damage` (and maybe `died`) per critter hit.
+ */
+function punch(
+  critters: readonly Critter[],
+  c: Critter,
+  cmd: FireCommand,
+  events: SimEvent[],
+): Critter[] {
+  const w = loadWeapons()[cmd.weaponId];
+  const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+  const face = yawDir(yaw);
+  const reach = Math.floor((num(w, "range", 40) * LENGTH_NUM * FIXED_ONE) / LENGTH_DEN);
+  const launch = aimDir(yaw, clampInt(num(w, "launchAngleDegrees", 70), PITCH_MIN, PITCH_MAX));
+  const speed = speedPerTick(w.knockback);
+  const hit = (o: Critter): boolean => {
+    if (o.status !== "alive" || o.id === c.id || o.team === c.team) return false;
+    const d = { x: o.pos.x - c.pos.x, y: o.pos.y - c.pos.y, z: o.pos.z - c.pos.z };
+    return length(d) <= reach && dot({ x: d.x, y: 0, z: d.z }, face) >= 0;
+  };
+  events.push({
+    type: "punch",
+    critterId: c.id,
+    at: {
+      x: c.pos.x + mulQ(face.x, MUZZLE_REACH),
+      y: c.pos.y + MUZZLE_HEIGHT,
+      z: c.pos.z + mulQ(face.z, MUZZLE_REACH),
+    },
+    hits: critters.filter(hit).length,
+  });
+  return critters.map((o) => {
+    if (!hit(o)) return o;
+    const dealt = Math.min(o.hp, w.damage);
+    const hp = o.hp - dealt;
+    if (dealt > 0) events.push({ type: "damage", critterId: o.id, amount: dealt, cause: "hit" });
+    if (hp <= 0) events.push({ type: "died", critterId: o.id, cause: "hit" });
+    return {
+      ...o,
+      hp,
+      status: hp <= 0 ? "dead" : o.status,
+      vel: { x: mulQ(launch.x, speed), y: mulQ(launch.y, speed), z: mulQ(launch.z, speed) },
+      grounded: false,
+      peakY: cell(o.pos.y),
+    };
+  });
+}
+
+/** A burrow looks this many voxels up from its target for room to stand. */
+const BURROW_SEARCH_UP = 12;
+
+/**
+ * The Teleport Burrow: the critter comes up at the lowest clear spot in the target's column, at
+ * or above the target voxel. Refused (null) without a target, off the map, or when the column has
+ * no room or another living critter stands there. Pushes `teleported`.
+ */
+function burrow(
+  t: VoxelTerrain,
+  critters: readonly Critter[],
+  c: Critter,
+  cmd: FireCommand,
+  events: SimEvent[],
+): Critter[] | null {
+  const g = cmd.target;
+  if (!g || g.x < 1 || g.z < 1 || g.x >= t.sizeX - 1 || g.z >= t.sizeZ - 1) return null;
+  let y = -1;
+  for (let k = 0; k <= BURROW_SEARCH_UP && y < 0; k++)
+    if (g.y + k >= t.seaY && !bodyBlocked(t, g.x, g.y + k, g.z)) y = g.y + k;
+  if (y < 0) return null;
+  const taken = critters.some(
+    (o) =>
+      o.id !== c.id &&
+      o.status === "alive" &&
+      Math.abs(cell(o.pos.x) - g.x) <= 2 &&
+      Math.abs(cell(o.pos.z) - g.z) <= 2 &&
+      Math.abs(cell(o.pos.y) - y) < CRITTER_HEIGHT,
+  );
+  if (taken) return null;
+  const half = FIXED_ONE >> 1;
+  const to = { x: g.x * FIXED_ONE + half, y: y * FIXED_ONE, z: g.z * FIXED_ONE + half };
+  events.push({ type: "teleported", critterId: c.id, from: c.pos, to });
+  return critters.map((o) =>
+    o.id === c.id ? { ...o, pos: to, vel: { x: 0, y: 0, z: 0 }, grounded: false, peakY: y } : o,
+  );
 }
 
 /** Weapons whose shot in flight pops when its owner sends trigger. */
