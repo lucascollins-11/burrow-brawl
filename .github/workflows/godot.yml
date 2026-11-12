@@ -103,7 +103,22 @@ jobs:
         run: godot --headless --path godot --import
 
       - name: Online match, headless
-        run: godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080
+        run: |
+          set -euo pipefail
+          godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 2>&1 | tee e2e.log
+          # Engine errors (for example a data race in the threaded mesher) must fail the job even
+          # when the match itself completes.
+          # Only up to "E2E PASS": the engine also prints harmless leak notices while quitting.
+          if sed "/E2E PASS/q" e2e.log | grep -n "^ERROR:\|SCRIPT ERROR"; then
+            echo "The engine reported errors during the match"
+            exit 1
+          fi
+
+      - name: Same match against the live server (probe, best effort)
+        continue-on-error: true
+        run: |
+          timeout 240 godot --headless --path godot res://tests/e2e/e2e_match.tscn -- --server=https://burrow-brawl.onrender.com 2>&1 | tee live.log || true
+          tail -n 40 live.log
 
       - name: Online match with screenshots (software renderer, best effort)
         continue-on-error: true
@@ -221,5 +236,20 @@ jobs:
             gh release create "$TAG" --prerelease --target "$HEAD_SHA" \
               --title "Godot build for PR #${PR_NUMBER}" \
               --notes "Windows build from pull request #${PR_NUMBER}. Replaced on every push to the PR."
+          fi
+          gh release upload "$TAG" build/BurrowBrawl-windows.zip --clobber
+
+      - name: Publish the playtest build (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="playtest"
+          NOTES="Latest Windows build of the main branch (commit ${GITHUB_SHA::7}). Replaced on every merge. Download BurrowBrawl-windows.zip, extract it, run BurrowBrawl.exe. See docs/playtest.md."
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Burrow Brawl playtest build" --notes "$NOTES"
+          else
+            gh release edit "$TAG" --notes "$NOTES"
           fi
           gh release upload "$TAG" build/BurrowBrawl-windows.zip --clobber
