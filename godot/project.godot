@@ -12,6 +12,7 @@ run/main_scene="res://ui/title.tscn"
 
 Net="*res://net/net.gd"
 Audio="*res://audio/audio.gd"
+Prefs="*res://ui/settings/prefs.gd"
 
 [display]
 

@@ -86,6 +86,11 @@ func _build() -> void:
 	_join_button.pressed.connect(_on_join_pressed)
 	join_row.add_child(_join_button)
 
+	var settings_button := Button.new()
+	settings_button.text = "Settings"
+	settings_button.pressed.connect(_open_settings)
+	box.add_child(settings_button)
+
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.custom_minimum_size = Vector2(0, 52)
@@ -98,6 +103,12 @@ func _build() -> void:
 	server_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 10)
 	server_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	add_child(server_label)
+
+
+func _open_settings() -> void:
+	var menu := SettingsMenu.new()
+	menu.closed.connect(menu.queue_free)
+	add_child(menu)
 
 
 func _on_create_pressed() -> void:
