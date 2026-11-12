@@ -67,7 +67,7 @@ func _run() -> bool:
 		return false
 
 	# Short turns and a fixed map, as in the server's own two-player tests.
-	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99}})
+	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 240, "crittersPerTeam": 2, "mapSeed": 99}})
 	a.set_ready(true)
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
@@ -221,10 +221,12 @@ func _closeup(v: Dictionary) -> void:
 	var old_yaw: float = scene._rig.yaw_deg
 	scene._rig.dist = 13.0
 	scene._rig.pitch_deg = 10.0
-	scene._rig.yaw_deg = CameraMath.wrap_deg(float(me["heading_deg"]) + 30.0)
-	for i in 40:
+	# Stand the camera in front of the face, a little to one side.
+	var face: Vector3 = rig.global_transform.basis.z
+	scene._rig.yaw_deg = CameraMath.wrap_deg(rad_to_deg(atan2(face.x, face.z)) + 25.0)
+	for i in 12:
 		await get_tree().process_frame
-	await _shot("1b-squirmling")
+	await _shot("1b-squirmling", 4)
 	rig.hurt()
 	await _shot("1c-hurt", 3)
 	rig.fire()
@@ -250,7 +252,7 @@ func _closeup(v: Dictionary) -> void:
 			await _shot("1e-pop", 0)
 	if twin.pop_time >= 0.0:
 		errors.append("the knocked-out Squirmling never finished popping")
-	await _shot("1f-marker")
+	await _shot("1f-marker", 6)
 	scene.remove_child(twin)
 	twin.queue_free()
 	scene._rig.dist = old_dist

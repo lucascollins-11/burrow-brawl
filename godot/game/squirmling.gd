@@ -209,8 +209,10 @@ static func create(_team: int, hat_style: String, team_color: Color) -> Squirmli
 	tag.name = "Tag"
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	tag.no_depth_test = true
-	tag.fixed_size = false
-	tag.pixel_size = 0.03
+	# Same size on screen at any distance, so names stay readable across a large map and do not
+	# fill the view up close.
+	tag.fixed_size = true
+	tag.pixel_size = 0.0011
 	tag.font_size = 48
 	tag.outline_size = 14
 	tag.modulate = Color.WHITE
