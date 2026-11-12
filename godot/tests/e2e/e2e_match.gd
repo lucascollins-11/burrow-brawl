@@ -151,6 +151,14 @@ func _run() -> bool:
 	if not await _until(func() -> bool: return _turn(_snap_turns()) == 3 and _turn(b_state.get("turns", {})) == 3, "turn 3"):
 		return false
 	await _shot("4-turn3")
+	# The practice prompts, shown over this match so the banner is exercised and pictured.
+	scene._setup_guide(true)
+	for i in 3:
+		await get_tree().process_frame
+	if scene._guide == null or scene._guide_label == null or scene._guide_label.text == "":
+		return _fail("the practice guide shows no prompt")
+	await _shot("5-practice", 1)
+	scene._setup_guide(false)
 	# The close look comes last: under the software renderer it can outlast a turn.
 	await _closeup(_snap())
 	scene.pause.open()
