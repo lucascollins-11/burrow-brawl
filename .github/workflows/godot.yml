@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm --filter @burrow-brawl/server build
-          HOST=127.0.0.1 PORT=8080 node server/dist/index.js > server.log 2>&1 &
+          HOST=127.0.0.1 PORT=8080 HEARTBEAT_MS=60000 node server/dist/index.js > server.log 2>&1 &
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:8080/healthz >/dev/null && break
             sleep 1
