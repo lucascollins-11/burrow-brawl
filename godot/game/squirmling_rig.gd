@@ -237,7 +237,7 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 		var sx: float = brow.get_meta("side", 1.0)
 		# Determined: inner ends down. Worried: inner ends up and the whole brow lifts.
 		brow.rotation.z = deg_to_rad((-6.0 + 22.0 * _mood) * sx)
-		brow.position.y = 0.21 + maxf(0.0, -_mood) * 0.06
+		brow.position.y = 0.22 + maxf(0.0, -_mood) * 0.06
 	var open := _hurt > 0.0 or _fire > 0.0 or not grounded
 	_mouth_open.visible = open
 	_mouth.visible = not open

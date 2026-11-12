@@ -119,11 +119,11 @@ static func _face(head: Node3D) -> void:
 		var side := "L" if sx < 0.0 else "R"
 		var eye := Node3D.new()
 		eye.name = "Eye" + side
-		eye.position = Vector3(sx * 0.31, 0.02, 0.72)
+		eye.position = Vector3(sx * 0.31, 0.02, 0.77)
 		eye.add_child(_part(_sphere(0.085), BEAD, Vector3.ZERO, 0.25))
 		eye.add_child(_part(_sphere(0.028), Color.WHITE, Vector3(0.03, 0.035, 0.07), 0.2))
 		head.add_child(eye)
-		var brow := _part(_box(Vector3(0.26, 0.07, 0.1)), FELT, Vector3(sx * 0.31, 0.21, 0.67), 1.0)
+		var brow := _part(_box(Vector3(0.26, 0.07, 0.1)), FELT, Vector3(sx * 0.31, 0.22, 0.75), 1.0)
 		brow.name = "Brow" + side
 		brow.set_meta("side", sx)
 		brow.rotation.z = deg_to_rad(-6.0 * sx)
@@ -131,11 +131,11 @@ static func _face(head: Node3D) -> void:
 	var mouth := Node3D.new()
 	mouth.name = "Mouth"
 	for k in range(4):
-		var seg := _part(_box(Vector3(0.1, 0.025, 0.03)), BEAD, Vector3(-0.15 + 0.1 * k, -0.17 + 0.03 * (k % 2), 0.73), 0.6)
+		var seg := _part(_box(Vector3(0.1, 0.025, 0.03)), BEAD, Vector3(-0.15 + 0.1 * k, -0.17 + 0.03 * (k % 2), 0.81), 0.6)
 		seg.rotation.z = deg_to_rad(30.0 if k % 2 == 0 else -30.0)
 		mouth.add_child(seg)
 	head.add_child(mouth)
-	var oh := _part(_sphere(0.09), BEAD, Vector3(0.0, -0.17, 0.7), 0.5)
+	var oh := _part(_sphere(0.09), BEAD, Vector3(0.0, -0.17, 0.77), 0.5)
 	oh.name = "MouthOpen"
 	oh.scale = Vector3(1.0, 1.2, 0.5)
 	oh.visible = false

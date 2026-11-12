@@ -88,17 +88,16 @@ void fragment() {
 	alpha = clamp(alpha + foam * 0.4 + bubble * 0.3, 0.0, 1.0);
 	alpha = mix(alpha, 1.0, haze);
 
-	// Ripples flatten out with distance so the horizon stays calm.
-	vec2 slope = ripple_slope(w_pos.xz, TIME) * ripple_strength * (1.0 - smoothstep(150.0, 500.0, cam_dist));
+	// Ripples are a near detail. Past a short distance they are finer than a pixel and would
+	// shimmer in stripes, so they fade out and the far sea stays smooth.
+	vec2 slope = ripple_slope(w_pos.xz, TIME) * ripple_strength * (1.0 - smoothstep(25.0, 140.0, cam_dist));
 	vec3 n_world = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
-	// Lighter streaks on the ripple crests, cartoon style.
-	float crest = smoothstep(0.55, 0.9, slope.x * 2.2 + slope.y * 1.4 + 0.25);
-	col = mix(col, mix(col, foam_color, 0.35), crest * (1.0 - haze) * 0.5);
 
 	ALBEDO = col;
 	ALPHA = alpha;
-	ROUGHNESS = 0.32;
+	// Rougher far away: the sun becomes a wide soft sheen there instead of a hard white patch.
+	ROUGHNESS = mix(0.3, 0.55, smoothstep(25.0, 200.0, cam_dist));
 	METALLIC = 0.0;
 	SPECULAR = 0.35;
 	EMISSION = foam_color * (bubble * 0.25 + foam * 0.05);

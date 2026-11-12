@@ -246,7 +246,11 @@ func _closeup(v: Dictionary) -> void:
 	var pictured := false
 	while twin.pop_time >= 0.0 and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
-		twin.drive(get_process_delta_time(), false, Vector3.ZERO, true)
+		# The rig takes steps of at most 0.05 s; a software-rendered frame can last much longer.
+		var left := get_process_delta_time()
+		while left > 0.0 and twin.pop_time >= 0.0:
+			twin.drive(minf(left, 0.05), false, Vector3.ZERO, true)
+			left -= 0.05
 		if not pictured and twin.pop_time > 0.3:
 			pictured = true
 			await _shot("1e-pop", 0)
