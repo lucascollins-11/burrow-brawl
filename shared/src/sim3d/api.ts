@@ -142,6 +142,8 @@ export type SimEvent =
       readonly to: Vec3;
       readonly hit: boolean;
     }
+  /** A critter came close to an armed mine; it blows a moment later. */
+  | { readonly type: "mineTriggered"; readonly projectileId: number }
   /** A melee swing landed at `at` (Q16.16 voxels) and struck `hits` critters; follows `fired`. */
   | {
       readonly type: "punch";
