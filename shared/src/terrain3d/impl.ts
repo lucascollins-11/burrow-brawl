@@ -34,3 +34,4 @@ export const terrain3d: Terrain3dApi = {
   hash,
   copyChunkPadded,
 };
+export { THEMES, MAP_SIZES, isTheme, themedRecipe, THEMED_GENERATOR } from "./themes/index.js";
