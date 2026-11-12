@@ -27,7 +27,7 @@ export function hashInt(seed: number, salt: number, i: number, n: number): numbe
  * Grounded, dry, flat, roomy spots, picked farthest-first so consecutive picks are spread out.
  * Teams take them interleaved (critter j of team t = spawns[j * teams + t]).
  */
-export function findSpawns(t: VoxelTerrain, seed: number): SpawnPoint[] {
+export function findSpawns(t: VoxelTerrain, seed: number, openSky = false): SpawnPoint[] {
   const { sizeX: w, sizeY: h, sizeZ: d, density } = t;
   const at = (x: number, y: number, z: number): number => density[(y * d + z) * w + x]!;
   const cands: SpawnPoint[] = [];
@@ -45,6 +45,10 @@ export function findSpawns(t: VoxelTerrain, seed: number): SpawnPoint[] {
           for (let dx = -1; dx <= 1 && ok; dx++)
             if (at(jx + dx, y + dy, jz + dz) >= SOLID) ok = false;
       if (!ok) continue;
+      if (openSky) {
+        for (let yy = y + HEADROOM; yy < h && ok; yy++) if (at(jx, yy, jz) >= SOLID) ok = false;
+        if (!ok) continue;
+      }
       for (const [dx, dz] of [
         [3, 0],
         [-3, 0],

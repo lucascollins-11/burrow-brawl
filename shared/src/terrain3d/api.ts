@@ -159,8 +159,19 @@ export interface SpawnPoint {
   readonly z: number;
 }
 
+/** A thing the generator places for the sim to turn into a world object later (ignored for now). */
+export interface MapObject {
+  readonly kind: "barrel" | "mine" | "crate-pad";
+  /** Feet voxel: the air voxel directly above solid ground. */
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
 export interface GeneratedMap {
   readonly terrain: VoxelTerrain;
+  /** Placements from themed generators (generator 3 and up); absent for older generators. */
+  readonly objects?: readonly MapObject[];
   /**
    * At least 32 spawn points in a fixed, deterministic order: grounded, above the sea, with
    * headroom for a critter, and spread out. Teams take them interleaved.
