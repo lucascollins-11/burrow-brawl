@@ -25,9 +25,11 @@ const KEY_ACTIONS: Array = [
 	["fuse_up", "fuse_up"],
 	["fire", "fire_down"],
 ]
+## The weapons known before the server says otherwise. A match replaces the list with the server's
+## catalogue (see set_catalog), so new weapons need no change here.
 const WEAPONS: Array[Dictionary] = [
-	{"id": "acorn-mortar", "name": "Acorn Mortar"},
-	{"id": "fizz-grenade", "name": "Fizz Grenade"},
+	{"id": "acorn-mortar", "name": "Acorn Mortar", "needs": ["charge"]},
+	{"id": "fizz-grenade", "name": "Fizz Grenade", "needs": ["fuse", "charge"]},
 ]
 
 ## False when this player has no control (not their turn, settling, game over).
@@ -38,8 +40,18 @@ var can_fire: bool = true
 var camera_yaw_deg: float = 0.0
 var heading_deg: float = 0.0
 var aim: CameraMath.AimState = null
+## Set by the scene while a menu covers the match: held keys stop walking, any charge in progress is
+## dropped (nothing fires) and key presses are ignored.
+var paused: bool = false
+## Weapons this player can fire, in menu order: {id, name, needs}. `weapon` indexes it.
+var weapons: Array = WEAPONS.duplicate(true)
 var weapon: int = 0
 var fuse_seconds: int = 3
+## Set by the scene each frame for weapons that need a spot on the map: the voxel under the
+## crosshair, or null when the crosshair is on the sky or the sea.
+var target: Variant = null
+
+var _fired_needs_trigger := false
 
 var _queued: Array = []
 var _last_move: int = -1
@@ -54,9 +66,39 @@ func _init() -> void:
 	GameSettings.apply_bindings()
 
 
+## Take the weapon list from match.start (`weapons`): the fireable entries, in the server's order.
+func set_catalog(list: Array) -> void:
+	var keep_id := weapon_id()
+	var out: Array = []
+	for w in list:
+		if w is Dictionary and bool(w.get("fireable", true)):
+			out.append({"id": str(w.get("id", "")), "name": str(w.get("name", "?")), "needs": w.get("needs", [])})
+	if out.is_empty():
+		return
+	weapons = out
+	weapon = 0
+	select_id(keep_id)
+
+
+func weapon_id() -> String:
+	return str(weapons[weapon]["id"])
+
+
+func select_id(id: String) -> bool:
+	for i in range(weapons.size()):
+		if weapons[i]["id"] == id:
+			weapon = i
+			return true
+	return false
+
+
+func needs(what: String) -> bool:
+	return (weapons[weapon].get("needs", []) as Array).has(what)
+
+
 func weapon_name() -> String:
-	var w: Dictionary = WEAPONS[weapon]
-	if w["id"] == "fizz-grenade":
+	var w: Dictionary = weapons[weapon]
+	if needs("fuse"):
 		return "%s (%ds fuse)" % [w["name"], fuse_seconds]
 	return str(w["name"])
 
@@ -90,6 +132,8 @@ func handle_event(ev: InputEvent) -> void:
 
 ## Walk keys as -1, 0, 1 axes: forward and right.
 func axes() -> Vector2i:
+	if paused:
+		return Vector2i.ZERO
 	var f := int(Input.is_action_pressed("move_forward")) - int(Input.is_action_pressed("move_back"))
 	var r := int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left"))
 	return Vector2i(r, f)  # x = right, y = forward
@@ -106,7 +150,12 @@ func frame(dt: float) -> Dictionary:
 	_wheel = 0.0
 	var actions := _actions
 	_actions = []
-	if not enabled or not can_fire:
+	if paused:
+		actions = []
+		dx = 0.0
+		dy = 0.0
+		wheel = 0.0
+	if not enabled or not can_fire or paused:
 		_set_aim(null)
 	for a in actions:
 		if not enabled:
@@ -121,7 +170,11 @@ func frame(dt: float) -> Dictionary:
 			"weapon1":
 				weapon = 0
 			"weapon2":
-				weapon = 1
+				weapon = mini(1, weapons.size() - 1)
+			"fire_down":
+				# After the shot is away, the fire key pops weapons that burst on command.
+				if not can_fire and _fired_needs_trigger:
+					_queued.append({"k": "trigger"})
 			"fuse_down":
 				fuse_seconds = maxi(1, fuse_seconds - 1)
 			"fuse_up":
@@ -136,7 +189,13 @@ func frame(dt: float) -> Dictionary:
 			"fire_down":
 				if aim == null:
 					_set_aim(CameraMath.new_aim(heading_deg))
-				aim.charging = true
+				elif not needs("charge"):
+					# Nothing to charge: the press itself fires, once there is a spot to aim at.
+					if not needs("target") or target != null:
+						aim.power = 100.0
+						_fire(aim)
+						continue
+				aim.charging = needs("charge")
 				aim.power = 0.0
 			"fire_up":
 				if aim != null and aim.charging:
@@ -172,6 +231,7 @@ func read_cmds() -> Array:
 func new_turn() -> void:
 	_last_move = -1
 	_queued = []
+	_fired_needs_trigger = false
 	_set_aim(null)
 
 
@@ -189,7 +249,7 @@ func move_yaw() -> int:
 
 ## The fire command for an aim, as sent in `input.cmds`.
 func fire_cmd(a: CameraMath.AimState) -> Dictionary:
-	var w: Dictionary = WEAPONS[weapon]
+	var w: Dictionary = weapons[weapon]
 	var cmd := {
 		"k": "fire",
 		"weaponId": w["id"],
@@ -197,13 +257,17 @@ func fire_cmd(a: CameraMath.AimState) -> Dictionary:
 		"pitch": a.pitch_deg,
 		"power": int(roundf(a.power)),
 	}
-	if w["id"] == "fizz-grenade":
+	if needs("fuse"):
 		cmd["fuseSeconds"] = fuse_seconds
+	if needs("target") and target is Vector3:
+		var t: Vector3 = target
+		cmd["target"] = {"x": int(floorf(t.x)), "y": int(floorf(t.y)), "z": int(floorf(t.z))}
 	return cmd
 
 
 func _fire(a: CameraMath.AimState) -> void:
 	_queued.append(fire_cmd(a))
+	_fired_needs_trigger = needs("trigger")
 	_set_aim(null)
 
 

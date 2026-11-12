@@ -23,8 +23,14 @@ var _power_panel: PanelContainer
 var _power_label: Label
 var _power_bar: ProgressBar
 var _hint: Label
+var _weapon_grid: WeaponGrid
+var _weapon_menu_button: Button
 var _weapon_buttons: Array[Button] = []
 var _weapon_names: Array[String] = ["Acorn Mortar", "Fizz Grenade"]
+var _weapon_list: Array = Controls.WEAPONS.duplicate(true)
+## Ammo per weapon id for the grid (-1 is unlimited). Only what the sim can fire today; the match
+## replaces this with the real table through set_arsenal().
+var _arsenal: Dictionary = {"acorn-mortar": -1, "fizz-grenade": -1}
 var _end_rows: VBoxContainer
 var _skip: Button
 var _end_panel: PanelContainer
@@ -127,6 +133,11 @@ func _ready() -> void:
 		wb.pressed.connect(func() -> void: weapon_picked.emit(i))
 		_weapon_buttons.append(wb)
 		brow.add_child(wb)
+	_weapon_menu_button = Button.new()
+	_weapon_menu_button.text = "Weapons"
+	_weapon_menu_button.focus_mode = Control.FOCUS_NONE
+	_weapon_menu_button.pressed.connect(func() -> void: _weapon_grid.toggle())
+	brow.add_child(_weapon_menu_button)
 	_skip = Button.new()
 	_skip.text = "Skip turn"
 	_skip.pressed.connect(func() -> void: skip_pressed.emit())
@@ -134,6 +145,14 @@ func _ready() -> void:
 	brow.add_child(_skip)
 	bottom.add_child(brow)
 	root.add_child(bottom)
+	# The full arsenal grid pops up above the bottom bar.
+	_weapon_grid = WeaponGrid.new()
+	_weapon_grid.set_current(_weapon_id(0))
+	_weapon_grid.set_ammo(_arsenal)
+	_weapon_grid.picked.connect(_on_weapon_id_picked)
+	_place(_weapon_grid, Control.PRESET_BOTTOM_RIGHT, 10)
+	_weapon_grid.offset_bottom = -72.0
+	root.add_child(_weapon_grid)
 	_hint = _label(13, false)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(_hint, Control.PRESET_CENTER_BOTTOM, 8)
@@ -167,6 +186,54 @@ func _ready() -> void:
 
 
 ## Refresh from a snapshot. `aim` may be null; `world` is the map's footprint (x, z) for the minimap.
+## Give the weapon grid the ammo table: weapon id -> count (-1 unlimited, 0 or missing: unavailable).
+func set_arsenal(ammo: Dictionary) -> void:
+	_arsenal = ammo
+	if _weapon_grid != null:
+		_weapon_grid.set_ammo(ammo)
+
+
+## The server's weapon list (match.start `weapons`). Fireable entries become pickable in the grid,
+## with their ammo; the index sent by weapon_picked counts through them in the same order Controls
+## uses.
+func set_catalog(list: Array) -> void:
+	var fireable: Array = []
+	var ammo := {}
+	for w in list:
+		if w is Dictionary and bool(w.get("fireable", true)):
+			fireable.append({"id": str(w.get("id", "")), "name": str(w.get("name", "?"))})
+			if _weapon_grid != null:
+				_weapon_grid.ensure_item(w)
+			var n: Variant = w.get("ammo", null)
+			ammo[str(w.get("id", ""))] = -1 if n == null else int(n)
+	if fireable.is_empty():
+		return
+	_weapon_list = fireable
+	set_arsenal(ammo)
+
+
+func _weapon_id(index: int) -> String:
+	if index >= 0 and index < _weapon_list.size():
+		return str(_weapon_list[index]["id"])
+	return ""
+
+
+## A grid pick becomes the same weapon_picked(index) the quick slots send, when Controls knows it.
+func _on_weapon_id_picked(id: String) -> void:
+	for i in range(_weapon_list.size()):
+		if _weapon_list[i]["id"] == id:
+			weapon_picked.emit(i)
+			return
+
+
+func _unhandled_input(ev: InputEvent) -> void:
+	if ev.is_action_pressed("weapon_menu") and _weapon_grid != null:
+		_weapon_grid.toggle()
+	elif ev.is_action_pressed("cancel_aim") and _weapon_grid != null and _weapon_grid.visible:
+		_weapon_grid.close()
+		get_viewport().set_input_as_handled()
+
+
 func update(
 	v: Dictionary, aim: CameraMath.AimState, hint: String, weapon_name: String, world: Vector2
 ) -> void:
@@ -209,6 +276,9 @@ func update(
 		_power_bar.value = aim.power
 	for i in range(_weapon_buttons.size()):
 		_weapon_buttons[i].set_pressed_no_signal(_weapon_names[i] == weapon_name)
+	for i in range(_weapon_list.size()):
+		if weapon_name.begins_with(str(_weapon_list[i]["name"])):
+			_weapon_grid.set_current(_weapon_id(i))
 	_skip.disabled = not (v["my_turn"] and (v["phase"] == "control" or v["phase"] == "retreat"))
 	_hint.text = "" if over else hint
 	_end_panel.visible = over

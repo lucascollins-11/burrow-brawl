@@ -40,6 +40,16 @@ static func theme() -> Theme:
 	t.set_color("font_disabled_color", "Button", Color(INK, 0.45))
 	t.set_font_size("font_size", "Button", 20)
 
+	_button_styles(t, "OptionButton", CREAM)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		t.set_color(c, "OptionButton", INK)
+	t.set_color("font_disabled_color", "OptionButton", Color(INK, 0.7))
+	t.set_stylebox("panel", "PopupMenu", box(CREAM, 12, 3, 6, 0))
+	t.set_stylebox("hover", "PopupMenu", box(PAPER.darkened(0.08), 8, 0, 2, 0))
+	for c in ["font_color", "font_hover_color"]:
+		t.set_color(c, "PopupMenu", INK)
+	t.set_font_size("font_size", "PopupMenu", 20)
+
 	var edit := box(Color.WHITE, 12, 3, 10, 0)
 	var edit_focus := box(Color.WHITE, 12, 3, 10, 0)
 	edit_focus.border_color = ORANGE

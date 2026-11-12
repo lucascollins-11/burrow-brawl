@@ -56,6 +56,7 @@ func _ready() -> void:
 func _run() -> bool:
 	print("E2E server: ", NetConfig.server_base())
 	await _preview("res://ui/title.tscn", "0a-title")
+	await _preview("res://ui/how_to_play.tscn", "0c-howto")
 	a.enter_room("create", "Alba")
 	if not await _until(func() -> bool: return a.lobby.code() != "", "A to create a room"):
 		return false
@@ -67,7 +68,7 @@ func _run() -> bool:
 		return false
 
 	# Short turns and a fixed map, as in the server's own two-player tests.
-	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99}})
+	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": "picnic-atoll", "mapSize": 256}})
 	a.set_ready(true)
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
@@ -90,7 +91,12 @@ func _run() -> bool:
 	if tv == null:
 		return _fail("the match scene has no terrain view")
 	var t0 := Time.get_ticks_msec()
-	if not await _until(func() -> bool: return tv.pending() == 0, "the island to finish meshing", 120.0):
+	# The software renderer in CI takes seconds per frame once terrain is on screen, and chunks are
+	# handed out per frame. Keep the world hidden while it builds so the turn timer is not used up.
+	scene.visible = false
+	var meshed: bool = await _until(func() -> bool: return tv.pending() == 0, "the island to finish meshing", 120.0)
+	scene.visible = true
+	if not meshed:
 		return false
 	print("E2E island meshed in %d ms, %d chunk nodes" % [Time.get_ticks_msec() - t0, tv.get_child_count()])
 	if tv.get_child_count() == 0:
@@ -110,7 +116,6 @@ func _run() -> bool:
 	if not v["my_turn"]:
 		return _fail("turn 1 should be A's (team 0); local teams are %s" % [scene.vm.local_teams])
 	await _shot("1-start")
-	await _closeup(v)
 
 	# A fires an acorn mortar toward the middle of the island.
 	var me: Dictionary = {}
@@ -146,6 +151,16 @@ func _run() -> bool:
 	if not await _until(func() -> bool: return _turn(_snap_turns()) == 3 and _turn(b_state.get("turns", {})) == 3, "turn 3"):
 		return false
 	await _shot("4-turn3")
+	# The close look comes last: under the software renderer it can outlast a turn.
+	await _closeup(_snap())
+	scene.pause.open()
+	await _shot("7-pause")
+	scene.pause._open_settings()
+	await _shot("8-settings")
+	scene.pause.close()
+	scene.hud._weapon_grid.open()
+	await _shot("9-weapons")
+	scene.hud._weapon_grid.close()
 	if a_patches != b_patches:
 		return _fail("clients saw different patch counts: %d and %d" % [a_patches, b_patches])
 	if not errors.is_empty():
@@ -224,9 +239,7 @@ func _closeup(v: Dictionary) -> void:
 	# Stand the camera in front of the face, a little to one side.
 	var face: Vector3 = rig.global_transform.basis.z
 	scene._rig.yaw_deg = CameraMath.wrap_deg(rad_to_deg(atan2(face.x, face.z)) + 25.0)
-	for i in 12:
-		await get_tree().process_frame
-	await _shot("1b-squirmling", 4)
+	await _shot("1b-squirmling", 5)
 	rig.hurt()
 	await _shot("1c-hurt", 3)
 	rig.fire()
@@ -241,22 +254,15 @@ func _closeup(v: Dictionary) -> void:
 	scene.add_child(twin)
 	twin.drive(0.016, false, Vector3.ZERO, true)
 	twin.set_alive(false)
-	# Timed by the clock, not by frames: headless frames take almost no time.
-	var deadline := Time.get_ticks_msec() + 8000
-	var pictured := false
-	while twin.pop_time >= 0.0 and Time.get_ticks_msec() < deadline:
-		await get_tree().process_frame
-		# The rig takes steps of at most 0.05 s; a software-rendered frame can last much longer.
-		var left := get_process_delta_time()
-		while left > 0.0 and twin.pop_time >= 0.0:
-			twin.drive(minf(left, 0.05), false, Vector3.ZERO, true)
-			left -= 0.05
-		if not pictured and twin.pop_time > 0.3:
-			pictured = true
-			await _shot("1e-pop", 0)
+	# Stepped by hand, not by the clock: headless frames take no time and software ones seconds.
+	for i in 8:
+		twin.drive(0.05, false, Vector3.ZERO, true)
+	await _shot("1e-pop", 1)
+	for i in 60:
+		twin.drive(0.05, false, Vector3.ZERO, true)
 	if twin.pop_time >= 0.0:
 		errors.append("the knocked-out Squirmling never finished popping")
-	await _shot("1f-marker", 6)
+	await _shot("1f-marker", 2)
 	scene.remove_child(twin)
 	twin.queue_free()
 	scene._rig.dist = old_dist
@@ -265,7 +271,7 @@ func _closeup(v: Dictionary) -> void:
 	print("E2E ok: Squirmling close-up")
 
 
-func _shot(shot_name: String, frames := 20) -> void:
+func _shot(shot_name: String, frames := 5) -> void:
 	if shots_dir == "" or DisplayServer.get_name() == "headless":
 		return
 	for i in frames:

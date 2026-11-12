@@ -24,8 +24,6 @@ const LOBBY_SCENE := "res://ui/lobby.tscn"
 const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
 const HINT_WATCH := "Watching. Hold tight."
-const HINT_WALK := "WASD walk - Space jump - Enter backflip - F or Tab aim - Backspace skip"
-const HINT_AIM := "Move the mouse to aim - hold F to charge - release to fire - Esc cancel"
 
 var vm := ViewModel.new()
 var controls := Controls.new()
@@ -34,6 +32,7 @@ var camera: Camera3D
 var env: MatchEnvironment
 var fx: MatchEffects
 var shots: ShotViews
+var pause: PauseMenu
 var terrain_view: Node3D = null
 
 var _critters: Dictionary = {}  # id -> Node3D
@@ -41,6 +40,7 @@ var _rig := CameraMath.RigState.new()
 var _blast_at := Vector3.ZERO
 var _blast_left := 0.0
 var _marker: MeshInstance3D
+var _target_ring: MeshInstance3D
 var _time := 0.0
 var _last_turn := -1
 var _last_tick_second := -1
@@ -72,11 +72,15 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.name = "Hud"
 	add_child(hud)
+	pause = PauseMenu.new()
+	pause.name = "Pause"
+	add_child(pause)
+	pause.leave_pressed.connect(_leave)
 	hud.skip_pressed.connect(controls.skip)
 	hud.leave_pressed.connect(_leave)
 	hud.again_pressed.connect(_back_to_lobby)
 	if hud.has_signal("weapon_picked"):
-		hud.connect("weapon_picked", func(i: int) -> void: controls.weapon = i)
+		hud.connect("weapon_picked", func(i: int) -> void: controls.weapon = clampi(i, 0, controls.weapons.size() - 1))
 	_make_marker()
 	_connect_net()
 
@@ -114,6 +118,11 @@ func handle_match_start(msg: Dictionary) -> void:
 	vm.set_teams(_teams_from_net(msg.get("teamIds", [])))
 	vm.set_local_teams(_local_teams_from_net(msg.get("teamIds", [])))
 	vm.apply_match_start(msg)
+	# The server lists the weapons; nothing about the arsenal is hardcoded on this side.
+	var catalog: Array = msg.get("weapons", [])
+	if not catalog.is_empty():
+		controls.set_catalog(catalog)
+		hud.set_catalog(catalog)
 	var t: Dictionary = msg.get("terrain", {})
 	_world = Vector2(float(t.get("sizeX", 256)), float(t.get("sizeZ", 256)))
 	if terrain_view == null and ResourceLoader.exists(TERRAIN_SCRIPT):
@@ -124,6 +133,9 @@ func handle_match_start(msg: Dictionary) -> void:
 	if terrain_view != null and terrain_view.has_method("load_terrain"):
 		terrain_view.call("load_terrain", t)
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"))
+	var world_env := env.get("_world_env") as WorldEnvironment
+	if world_env != null and world_env.environment != null:
+		world_env.environment.glow_enabled = GameSettings.glow_enabled()
 	_rig.target = Vector3(_world.x * 0.5, vm.sea_y + 25.0, _world.y * 0.5)
 	_rig.dist = 90.0
 	_built = true
@@ -157,7 +169,25 @@ func ground_y(x: float, z: float) -> float:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
-	controls.handle_event(ev)
+	if ev.is_action_pressed("pause") and controls.aim == null:
+		pause.toggle()
+		return
+	if not pause.is_open():
+		controls.handle_event(ev)
+
+
+## Walk and aim hints use whatever keys the player has bound.
+func _hint_walk() -> String:
+	var walk := ""
+	for id in ["move_forward", "move_left", "move_back", "move_right"]:
+		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
+	return walk + " walk - " + GameSettings.hint_for(
+		[["jump", "jump"], ["backflip", "backflip"], ["toggle_aim", "aim"], ["skip", "skip"]]
+	)
+
+
+func _hint_aim() -> String:
+	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
 
 func _process(dt: float) -> void:
@@ -169,6 +199,7 @@ func _process(dt: float) -> void:
 
 	controls.enabled = bool(v["my_turn"]) and v["phase"] != "over"
 	controls.can_fire = controls.enabled and v["phase"] == "control"
+	controls.paused = pause.is_open()
 	if int(v["turn"]) != _last_turn:
 		_last_turn = int(v["turn"])
 		controls.new_turn()
@@ -199,7 +230,7 @@ func _process(dt: float) -> void:
 	env.update(dt, v["wind"])
 	var hint := HINT_WATCH
 	if v["my_turn"] and v["phase"] != "settling":
-		hint = HINT_AIM if aim != null else HINT_WALK
+		hint = _hint_aim() if aim != null else _hint_walk()
 	hud.update(v, aim, "" if v["phase"] == "over" else hint, controls.weapon_name(), _world)
 
 
@@ -327,10 +358,51 @@ func _make_marker() -> void:
 	_marker.material_override = mat
 	_marker.rotation.x = PI  # point down at the critter
 	_marker.visible = false
+	# Where an air strike or a placed item will land.
+	_target_ring = MeshInstance3D.new()
+	_target_ring.name = "TargetRing"
+	var ring := TorusMesh.new()
+	ring.inner_radius = 3.2
+	ring.outer_radius = 4.0
+	_target_ring.mesh = ring
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.albedo_color = Color("ff5a3d")
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.no_depth_test = true
+	_target_ring.material_override = ring_mat
+	_target_ring.visible = false
+	add_child(_target_ring)
 	add_child(_marker)
 
 
+## The spot under the crosshair, found by walking along the view ray until it dips under the
+## ground. Null on the sky or the open sea.
+func _pick_ground() -> Variant:
+	var from := camera.global_position
+	var dir := -camera.global_transform.basis.z
+	var step := 1.0
+	var p := from
+	for i in range(700):
+		p += dir * step
+		if p.x < 0.0 or p.z < 0.0 or p.x >= _world.x or p.z >= _world.y:
+			if i > 40 and p.y < vm.sea_y:
+				return null
+			continue
+		var g := ground_y(p.x, p.z)
+		if p.y <= g:
+			return Vector3(p.x, g, p.z) if g > vm.sea_y else null
+		if p.y < vm.sea_y:
+			return null
+	return null
+
+
 func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState) -> void:
+	var targeting := aim != null and controls.needs("target")
+	controls.target = _pick_ground() if targeting else null
+	_target_ring.visible = controls.target != null
+	if _target_ring.visible:
+		_target_ring.position = (controls.target as Vector3) + Vector3(0, 0.6, 0)
+		_target_ring.scale = Vector3.ONE * (1.0 + 0.12 * sin(_time * 6.0))
 	_marker.visible = not active.is_empty() and v["phase"] == "control" and aim == null
 	if _marker.visible:
 		var p: Vector3 = active["pos"]

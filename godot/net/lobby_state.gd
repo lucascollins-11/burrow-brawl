@@ -31,6 +31,16 @@ func host_id() -> String:
 	return str(room.get("hostId", ""))
 
 
+## The match settings the host has chosen (map theme and size, turn time and so on).
+func settings() -> Dictionary:
+	return room.get("settings", {})
+
+
+## What the server offers for the map: {themes: [{id, name, minSize}], sizes: [int]}.
+func map_options() -> Dictionary:
+	return room.get("mapOptions", {})
+
+
 func members() -> Array:
 	return room.get("members", [])
 

@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type RoomState } from "@burrow-brawl/shared/src/net";
+import { DEFAULT_SETTINGS, mapOptions, type RoomState } from "@burrow-brawl/shared/src/net";
 import { describe, expect, it } from "vitest";
 import {
   applyRoom,
@@ -20,6 +20,7 @@ const room = (over: Partial<RoomState> = {}): RoomState => ({
   hostId: "a",
   version: 1,
   settings: { ...DEFAULT_SETTINGS },
+  mapOptions: mapOptions(),
   members: [
     { id: "a", nickname: "A", teamId: "t1", ready: true, connected: true, pingMs: 0 },
     { id: "b", nickname: "B", teamId: "t2", ready: true, connected: true, pingMs: 0 },

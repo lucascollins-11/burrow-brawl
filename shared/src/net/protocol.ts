@@ -9,6 +9,7 @@ import {
   type MatchSnapshot,
   type TickBatch,
 } from "../match";
+import { MAP_SIZES, THEMES } from "../terrain3d/themes/index";
 
 export const PROTOCOL_VERSION = 3;
 
@@ -110,7 +111,9 @@ export interface TeamSetup {
 }
 
 export interface MatchSettings {
-  mapId: string; // "random" or a map id
+  mapId: string; // legacy (2D maps); the 3D map is mapTheme + mapSize + mapSeed
+  mapTheme: string; // "random" or a theme id from RoomState.mapOptions.themes
+  mapSize: number; // grid edge in voxels, one of RoomState.mapOptions.sizes
   mapSeed: number; // u32
   turnSeconds: number; // 15..90
   retreatSeconds: number; // 0..10
@@ -122,6 +125,20 @@ export interface MatchSettings {
   arsenalPreset: string;
 }
 
+/** What the lobby can pick for the map. Clients show these and never hardcode them. */
+export interface MapOptions {
+  themes: { id: string; name: string; minSize: number }[];
+  /** Grid edges in voxels: small, medium, large. */
+  sizes: number[];
+}
+
+export function mapOptions(): MapOptions {
+  return {
+    themes: THEMES.map((t) => ({ id: t.id, name: t.name, minSize: t.minSize })),
+    sizes: [...MAP_SIZES],
+  };
+}
+
 export interface RoomState {
   code: string;
   phase: RoomPhase;
@@ -129,11 +146,14 @@ export interface RoomState {
   members: Member[];
   teams: TeamSetup[];
   settings: MatchSettings;
+  mapOptions: MapOptions;
   version: number;
 }
 
 export const DEFAULT_SETTINGS: MatchSettings = {
   mapId: "random",
+  mapTheme: "picnic-atoll",
+  mapSize: 384,
   mapSeed: 0,
   turnSeconds: 45,
   retreatSeconds: 3,
@@ -324,6 +344,8 @@ export function validateTeamPatch(p: unknown): Parsed<TeamPatch> {
 
 const SETTINGS_RULES: { [K in keyof MatchSettings]: (v: unknown) => boolean } = {
   mapId: (v) => isStr(v, 32) && /^[a-z0-9-]+$/.test(v),
+  mapTheme: (v) => v === "random" || THEMES.some((t) => t.id === v),
+  mapSize: (v) => (MAP_SIZES as readonly unknown[]).includes(v),
   mapSeed: (v) => isInt(v, 0, 0xffffffff),
   turnSeconds: (v) => isInt(v, 15, 90),
   retreatSeconds: (v) => isInt(v, 0, 10),
