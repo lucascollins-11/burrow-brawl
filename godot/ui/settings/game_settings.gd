@@ -75,6 +75,17 @@ static func key_label(code: int) -> String:
 	return OS.get_keycode_string(code)
 
 
+## "Space jump - Enter backflip": each pair is [action id, what it does], shown with the action's
+## current main key, so hint text stays right after a rebind.
+static func hint_for(pairs: Array) -> String:
+	var parts: PackedStringArray = []
+	for pair in pairs:
+		var id := str(pair[0])
+		var code := int(keys.get(id, action_def(id).get("key", 0)))
+		parts.append("%s %s" % [key_label(code), pair[1]])
+	return " - ".join(parts)
+
+
 ## Mouse movement scaled by the sensitivity setting, with the vertical axis flipped if asked.
 static func scale_mouse(dx: float, dy: float) -> Vector2:
 	return Vector2(dx * sensitivity, dy * sensitivity * (-1.0 if invert_y else 1.0))

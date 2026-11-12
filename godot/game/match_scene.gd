@@ -170,19 +170,15 @@ func _unhandled_input(ev: InputEvent) -> void:
 		controls.handle_event(ev)
 
 
-## "Walk" and "aim" hints use whatever keys the player has bound.
+## Walk and aim hints use whatever keys the player has bound.
 func _hint_walk() -> String:
-	return "%s walk - %s jump - %s backflip - %s aim - %s skip" % [
-		"WASD", _key("jump"), _key("backflip"), _key("toggle_aim"), _key("skip")
-	]
+	return "WASD walk - " + GameSettings.hint_for(
+		[["jump", "jump"], ["backflip", "backflip"], ["toggle_aim", "aim"], ["skip", "skip"]]
+	)
 
 
 func _hint_aim() -> String:
-	return "Move the mouse to aim - hold %s to charge - release to fire - %s cancel" % [_key("fire"), _key("cancel_aim")]
-
-
-func _key(action: String) -> String:
-	return GameSettings.key_label(int(GameSettings.keys.get(action, 0)))
+	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
 
 func _process(dt: float) -> void:
