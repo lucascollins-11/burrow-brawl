@@ -282,6 +282,8 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var hit: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if hit != null:
 				hit.hurt()
+		elif kind == "tracer":
+			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})))
 		elif kind == "fired":
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:

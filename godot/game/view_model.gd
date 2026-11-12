@@ -145,6 +145,11 @@ func render_tick() -> float:
 	return _render_tick
 
 
+## A sim point {x, y, z} in Q16.16 voxels, as Godot units.
+static func point(d: Dictionary) -> Vector3:
+	return Vector3(float(d.get("x", 0)), float(d.get("y", 0)), float(d.get("z", 0))) / FIXED_ONE
+
+
 static func _pos(d: Dictionary) -> Vector3:
 	return Vector3(float(d["x"]), float(d["y"]), float(d["z"])) / FIXED_ONE
 

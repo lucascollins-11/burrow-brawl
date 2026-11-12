@@ -78,6 +78,85 @@ export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
   return FIREABLE.includes(id);
 }
 
+/** Weapons that hit along a line the moment they fire, with no projectile in flight. */
+const HITSCAN: readonly string[] = ["pepper-shotgun"];
+
+export function isHitscanWeapon(id: string): boolean {
+  return HITSCAN.includes(id);
+}
+
+/** A pellet is traced in steps of half a voxel. */
+const SCAN_STEP = FIXED_ONE >> 1;
+
+/**
+ * Fire a hitscan weapon: `shotsPerTurn` pellets at once, fanned across `spreadDegrees` of yaw.
+ * Each flies straight from the muzzle until it meets terrain, another living critter, the edge
+ * of the map or the end of its range, and blasts where it stops on something. Pushes a `tracer`
+ * per pellet (and an `explosion` per hit) and returns the critters after the damage.
+ */
+export function fireHitscan(
+  t: VoxelTerrain,
+  critters: readonly Critter[],
+  c: Critter,
+  cmd: FireCommand,
+  events: SimEvent[],
+): Critter[] {
+  const w = loadWeapons()[cmd.weaponId];
+  const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+  const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
+  const pellets = Math.max(1, Math.trunc(num(w, "shotsPerTurn", 1)));
+  const fan = Math.round((num(w, "spreadDegrees", 0) * YAW_STEPS) / 360);
+  const steps = Math.floor((num(w, "range", 500) * LENGTH_NUM * 2) / LENGTH_DEN);
+  let cs = [...critters];
+  for (let k = 0; k < pellets; k++) {
+    // Pellets are spread evenly from -fan/2 to +fan/2; a single pellet flies dead centre.
+    const off = pellets === 1 ? 0 : Math.round((k * fan) / (pellets - 1) - fan / 2);
+    const dir = aimDir((((yaw + off) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS, pitch);
+    const from = {
+      x: c.pos.x + mulQ(dir.x, MUZZLE_REACH),
+      y: c.pos.y + MUZZLE_HEIGHT + mulQ(dir.y, MUZZLE_REACH),
+      z: c.pos.z + mulQ(dir.z, MUZZLE_REACH),
+    };
+    const step = {
+      x: mulQ(dir.x, SCAN_STEP),
+      y: mulQ(dir.y, SCAN_STEP),
+      z: mulQ(dir.z, SCAN_STEP),
+    };
+    let pos = from;
+    let hit = false;
+    for (let i = 0; i < steps && !hit; i++) {
+      const x = cell(pos.x);
+      const y = cell(pos.y);
+      const z = cell(pos.z);
+      if (x < 0 || y < 0 || z < 0 || x >= t.sizeX || y >= t.sizeY || z >= t.sizeZ) break;
+      hit = isSolid(t, x, y, z) || cs.some((o) => o.id !== c.id && critterHit(o, x, y, z));
+      if (!hit) pos = { x: pos.x + step.x, y: pos.y + step.y, z: pos.z + step.z };
+    }
+    events.push({
+      type: "tracer",
+      critterId: c.id,
+      weaponId: cmd.weaponId,
+      from,
+      to: pos,
+      hit,
+    });
+    if (!hit) continue;
+    const pellet: Projectile = {
+      id: -1,
+      ownerId: c.id,
+      weaponId: cmd.weaponId,
+      pos,
+      vel: { x: 0, y: 0, z: 0 },
+      age: 0,
+      fuseTicks: -1,
+      bounces: 0,
+      resting: false,
+    };
+    cs = explode(t, cs, pellet, cell(pos.x), cell(pos.y), cell(pos.z), events);
+  }
+  return cs;
+}
+
 /** Weapons whose shot in flight pops when its owner sends trigger. */
 const TRIGGERABLE: readonly WeaponId[] = ["pinecone-popper"];
 /** A shot can't be triggered on the tick it leaves the muzzle (or the next few). */
