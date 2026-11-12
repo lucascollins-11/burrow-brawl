@@ -56,6 +56,7 @@ func _ready() -> void:
 func _run() -> bool:
 	print("E2E server: ", NetConfig.server_base())
 	await _preview("res://ui/title.tscn", "0a-title")
+	await _preview("res://ui/how_to_play.tscn", "0c-howto")
 	a.enter_room("create", "Alba")
 	if not await _until(func() -> bool: return a.lobby.code() != "", "A to create a room"):
 		return false
