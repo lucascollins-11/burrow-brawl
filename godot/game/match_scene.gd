@@ -193,6 +193,7 @@ func _process(dt: float) -> void:
 
 	controls.enabled = bool(v["my_turn"]) and v["phase"] != "over"
 	controls.can_fire = controls.enabled and v["phase"] == "control"
+	controls.paused = pause.is_open()
 	if int(v["turn"]) != _last_turn:
 		_last_turn = int(v["turn"])
 		controls.new_turn()
