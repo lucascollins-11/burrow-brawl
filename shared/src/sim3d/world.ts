@@ -6,6 +6,7 @@ import type { VoxelTerrain } from "../terrain3d/api";
 import type {
   Critter,
   CritterInput,
+  FireCommand,
   Projectile,
   Rng,
   Sim3dApi,
@@ -16,7 +17,7 @@ import type {
 import { YAW_STEPS } from "./api";
 import { FALL_DAMAGE_DEN, FALL_DAMAGE_NUM, FALL_SAFE_DISTANCE } from "./constants";
 import { bodyBlocked, cell, createCritter, stepCritter } from "./critter";
-import { spawnShots, stepProjectiles } from "./projectile";
+import { fireHitscan, isHitscanWeapon, spawnShots, stepProjectiles } from "./projectile";
 
 export function createWorld(terrain: VoxelTerrain, critters: readonly Critter[]): SimState {
   return {
@@ -82,10 +83,17 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
 
   const fireEvents: SimEvent[] = [];
   const spawned: Projectile[] = [];
+  const scans: { critterId: number; cmd: FireCommand }[] = [];
   let nextId = state.nextProjectileId;
   critters = critters.map((c) => {
     const cmd = inputFor(inputs, c.id)?.fire;
     if (!cmd || c.status !== "alive") return c;
+    const facing = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+    if (isHitscanWeapon(cmd.weaponId)) {
+      scans.push({ critterId: c.id, cmd });
+      fireEvents.push({ type: "fired", critterId: c.id, projectileId: -1, weaponId: cmd.weaponId });
+      return { ...c, yaw: facing };
+    }
     const shots = spawnShots(t, c, cmd, nextId);
     const p = shots[0];
     if (!p) return c;
@@ -93,8 +101,13 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
     spawned.push(...shots);
     // One "fired" per command, naming the fired weapon and its first projectile.
     fireEvents.push({ type: "fired", critterId: c.id, projectileId: p.id, weaponId: cmd.weaponId });
-    return { ...c, yaw: ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS };
+    return { ...c, yaw: facing };
   });
+  // Hitscan shots land at once, after everyone has moved and turned this tick.
+  for (const scan of scans) {
+    const shooter = critters.find((c) => c.id === scan.critterId);
+    if (shooter) critters = fireHitscan(t, critters, shooter, scan.cmd, fireEvents);
+  }
 
   const triggers = new Set<number>();
   for (const i of inputs) {

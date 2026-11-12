@@ -303,6 +303,49 @@ describe("Firecracker Bundle", () => {
   });
 });
 
+describe("Pepper Shotgun", () => {
+  const shot = (pitch: number): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "pepper-shotgun", yaw: 0, pitch, power: 0 },
+  });
+
+  it("hits the moment it fires: two tracers, no projectile, a hole in the ground", () => {
+    const r = stepWorld(world(), [shot(-20)], rng);
+    expect(r.state.projectiles).toHaveLength(0);
+    const fired = r.events.filter((e) => e.type === "fired");
+    expect(fired).toHaveLength(1);
+    expect((fired[0] as { projectileId: number }).projectileId).toBe(-1);
+    const tracers = r.events.filter((e) => e.type === "tracer");
+    expect(tracers).toHaveLength(2);
+    expect(tracers.every((e) => e.type === "tracer" && e.hit)).toBe(true);
+    expect(explosions([...r.events])).toHaveLength(2);
+    // Aimed along +x and down: both pellets land ahead of the shooter, side by side.
+    for (const e of tracers) {
+      if (e.type !== "tracer") continue;
+      expect(e.to.x).toBeGreaterThan(e.from.x);
+      expect(cell(e.to.y)).toBeLessThan(GROUND + 1);
+    }
+  });
+
+  it("damages a critter standing in the line of fire and not the shooter", () => {
+    const r = stepWorld(world(true), [shot(0)], rng);
+    const hurt = r.events.filter((e) => e.type === "damage");
+    expect(hurt.length).toBeGreaterThan(0);
+    expect(hurt.every((e) => e.type === "damage" && e.critterId === 2)).toBe(true);
+    expect(r.state.critters[1]!.hp).toBeLessThan(100);
+    expect(r.state.critters[0]!.hp).toBe(100);
+  });
+
+  it("misses into the sky without a blast", () => {
+    const r = stepWorld(world(), [shot(60)], rng);
+    const tracers = r.events.filter((e) => e.type === "tracer");
+    expect(tracers).toHaveLength(2);
+    expect(tracers.some((e) => e.type === "tracer" && e.hit)).toBe(false);
+    expect(explosions([...r.events])).toHaveLength(0);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -338,7 +381,9 @@ describe("weapon catalogue", () => {
       "hopper-ball",
       "beehive-strike",
       "firecracker-bundle",
+      "pepper-shotgun",
     ]);
+    expect(byId["pepper-shotgun"]!.needs).toEqual([]);
     expect(byId["firecracker-bundle"]!.needs).toEqual([]);
     expect(byId["acorn-mortar"]!.needs).toEqual(["charge"]);
     expect(byId["pinecone-popper"]!.needs).toEqual(["trigger", "charge"]);

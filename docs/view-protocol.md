@@ -95,8 +95,10 @@ between them (about 50 ms behind the server). Seconds left on the timer are
 ```
 
 The sim's events in order, sent in the same 3-tick batch as the `state` that covers them and
-before it: `jumped`, `landed`, `damage`, `died`, `fired`, `bounced`, `explosion`,
-`projectileLost`. They drive sound, effects and damage numbers. They never change what the client
+before it: `jumped`, `landed`, `damage`, `died`, `fired`, `tracer`, `bounced`, `explosion`,
+`projectileLost`. A hitscan weapon (the Pepper Shotgun) sends `fired` with `projectileId: -1`, then
+one `tracer` `{critterId, weaponId, from, to, hit}` per pellet (`from` and `to` are Q16.16 voxel
+points) and an `explosion` for each pellet that hit. They drive sound, effects and damage numbers. They never change what the client
 believes about positions, health or terrain; `state` and `terrain.patch` do that.
 
 ### `terrain.patch`

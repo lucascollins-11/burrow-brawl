@@ -104,6 +104,41 @@ func _smoke(at: Vector3, radius: float) -> void:
 	get_tree().create_timer(3.2).timeout.connect(smoke.queue_free)
 
 
+## The streak of an instant shot: a bright thin bar from the muzzle to where it stopped, gone in a
+## blink, with a puff at the muzzle.
+func tracer(from: Vector3, to: Vector3) -> void:
+	var span := to - from
+	var length := span.length()
+	if length < 0.01:
+		return
+	var bar := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.22, 0.22, 1.0)
+	bar.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.95, 0.7, 0.95)
+	mat.emission_enabled = true
+	mat.emission = Color("ffd24a")
+	mat.emission_energy_multiplier = 4.0
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bar.material_override = mat
+	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(bar)
+	# The bar's own z axis runs along the shot.
+	var dir := span / length
+	var up := Vector3.UP if absf(dir.y) < 0.99 else Vector3.RIGHT
+	bar.global_transform = Transform3D(Basis.looking_at(dir, up), from + span * 0.5)
+	bar.scale = Vector3(1.0, 1.0, length)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(bar, "scale", Vector3(0.1, 0.1, length), 0.28)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.28)
+	tw.chain().tween_callback(bar.queue_free)
+	puff(from, 1.6)
+	_shake = minf(1.0, _shake + 0.12)
+
+
 ## Small puff for shots that do not explode (muzzle, impacts).
 func puff(at: Vector3, radius := 2.0) -> void:
 	var p := MeshInstance3D.new()
