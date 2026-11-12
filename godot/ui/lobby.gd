@@ -43,11 +43,11 @@ func _build() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 28)
+		margin.add_theme_constant_override(side, 20)
 	add_child(margin)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
+	box.add_theme_constant_override("separation", 10)
 	margin.add_child(box)
 
 	# Header: the room code, big enough to read out to a friend.
@@ -58,7 +58,7 @@ func _build() -> void:
 	code_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(code_col)
 	_code_label = Label.new()
-	_code_label.label_settings = MenuStyle.heading(56, Color("ffd23f"), 12)
+	_code_label.label_settings = MenuStyle.heading(46, Color("ffd23f"), 12)
 	code_col.add_child(_code_label)
 	_phase_label = Label.new()
 	_phase_label.label_settings = MenuStyle.heading(22, Color.WHITE, 6)
@@ -87,7 +87,7 @@ func _build() -> void:
 	_remove_button = _button(team_buttons, "Remove last team", _on_remove_pressed)
 
 	var side := VBoxContainer.new()
-	side.add_theme_constant_override("separation", 16)
+	side.add_theme_constant_override("separation", 10)
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cards.add_child(side)
 	var players_col := MenuStyle.card(side, "Players")
@@ -101,7 +101,7 @@ func _build() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("v_separation", 5)
 	setup.add_child(grid)
 	_theme_pick = _setting(grid, "Map", "mapTheme")
 	_size_pick = _setting(grid, "Size", "mapSize")
@@ -166,6 +166,11 @@ func _setting(grid: GridContainer, title: String, key: String) -> OptionButton:
 	grid.add_child(label)
 	var pick := OptionButton.new()
 	pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Compact rows, so the whole lobby fits a 720p window.
+	pick.add_theme_font_size_override("font_size", 18)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var tint := MenuStyle.CREAM.lightened(0.18) if state == "hover" else MenuStyle.CREAM
+		pick.add_theme_stylebox_override(state, MenuStyle.box(tint, 12, 3, 5, 2))
 	pick.item_selected.connect(
 		func(index: int) -> void: Net.set_settings({key: pick.get_item_metadata(index)})
 	)
