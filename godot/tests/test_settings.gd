@@ -106,6 +106,7 @@ func test_menu_builds_with_a_button_for_every_action() -> void:
 	menu.free()
 
 
+<<<<<<< HEAD
 func test_pause_menu_opens_toggles_and_leaves() -> void:
 	var pause := PauseMenu.new()
 	pause._ready()
@@ -120,3 +121,12 @@ func test_pause_menu_opens_toggles_and_leaves() -> void:
 	pause.toggle()
 	check(pause.is_open() and pause._menu_column.visible, "toggle backs out of settings first")
 	pause.free()
+=======
+func test_hint_text_follows_rebinding() -> void:
+	_reset()
+	var pairs := [["jump", "jump"], ["skip", "skip"]]
+	check_eq(GameSettings.hint_for(pairs), "Space jump - Backspace skip", "defaults")
+	GameSettings.rebind("skip", KEY_K)
+	check_eq(GameSettings.hint_for(pairs), "Space jump - K skip", "skip rebound")
+	_reset()
+>>>>>>> d1-settings
