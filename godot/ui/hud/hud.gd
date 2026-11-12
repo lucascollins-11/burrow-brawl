@@ -27,6 +27,7 @@ var _weapon_grid: WeaponGrid
 var _weapon_menu_button: Button
 var _weapon_buttons: Array[Button] = []
 var _weapon_names: Array[String] = ["Acorn Mortar", "Fizz Grenade"]
+var _weapon_list: Array = Controls.WEAPONS.duplicate(true)
 ## Ammo per weapon id for the grid (-1 is unlimited). Only what the sim can fire today; the match
 ## replaces this with the real table through set_arsenal().
 var _arsenal: Dictionary = {"acorn-mortar": -1, "fizz-grenade": -1}
@@ -192,16 +193,35 @@ func set_arsenal(ammo: Dictionary) -> void:
 		_weapon_grid.set_ammo(ammo)
 
 
+## The server's weapon list (match.start `weapons`). Fireable entries become pickable in the grid,
+## with their ammo; the index sent by weapon_picked counts through them in the same order Controls
+## uses.
+func set_catalog(list: Array) -> void:
+	var fireable: Array = []
+	var ammo := {}
+	for w in list:
+		if w is Dictionary and bool(w.get("fireable", true)):
+			fireable.append({"id": str(w.get("id", "")), "name": str(w.get("name", "?"))})
+			if _weapon_grid != null:
+				_weapon_grid.ensure_item(w)
+			var n: Variant = w.get("ammo", null)
+			ammo[str(w.get("id", ""))] = -1 if n == null else int(n)
+	if fireable.is_empty():
+		return
+	_weapon_list = fireable
+	set_arsenal(ammo)
+
+
 func _weapon_id(index: int) -> String:
-	if index >= 0 and index < Controls.WEAPONS.size():
-		return str(Controls.WEAPONS[index]["id"])
+	if index >= 0 and index < _weapon_list.size():
+		return str(_weapon_list[index]["id"])
 	return ""
 
 
 ## A grid pick becomes the same weapon_picked(index) the quick slots send, when Controls knows it.
 func _on_weapon_id_picked(id: String) -> void:
-	for i in range(Controls.WEAPONS.size()):
-		if Controls.WEAPONS[i]["id"] == id:
+	for i in range(_weapon_list.size()):
+		if _weapon_list[i]["id"] == id:
 			weapon_picked.emit(i)
 			return
 
@@ -256,8 +276,8 @@ func update(
 		_power_bar.value = aim.power
 	for i in range(_weapon_buttons.size()):
 		_weapon_buttons[i].set_pressed_no_signal(_weapon_names[i] == weapon_name)
-	for i in range(_weapon_names.size()):
-		if weapon_name.begins_with(_weapon_names[i]):
+	for i in range(_weapon_list.size()):
+		if weapon_name.begins_with(str(_weapon_list[i]["name"])):
 			_weapon_grid.set_current(_weapon_id(i))
 	_skip.disabled = not (v["my_turn"] and (v["phase"] == "control" or v["phase"] == "retreat"))
 	_hint.text = "" if over else hint

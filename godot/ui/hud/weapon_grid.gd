@@ -14,6 +14,7 @@ var _ammo: Dictionary = {}  # id -> count, -1 is unlimited
 var _current := ""
 var _tiles: Dictionary = {}  # id -> Button
 var _desc: Label
+var _grid: GridContainer
 
 
 func _ready() -> void:
@@ -23,6 +24,7 @@ func _ready() -> void:
 	col.add_theme_constant_override("separation", 8)
 	add_child(col)
 	var grid := GridContainer.new()
+	_grid = grid
 	grid.columns = COLUMNS
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
@@ -93,6 +95,19 @@ static func initials_of(item_name: String) -> String:
 	return out
 
 
+## Make sure a weapon the server offers has a tile, even when the built-in list does not know it.
+## `it` is {id, name, description} from the server's catalogue.
+func ensure_item(it: Dictionary) -> void:
+	var id := str(it.get("id", ""))
+	if id == "" or _tiles.has(id) or _grid == null:
+		return
+	var tile := _make_tile(
+		{"id": id, "name": str(it.get("name", id)), "cat": "artillery", "desc": str(it.get("description", ""))}
+	)
+	_grid.add_child(tile)
+	_tiles[id] = tile
+
+
 ## ammo: item id -> count (-1 unlimited). Items not in the table are unavailable.
 func set_ammo(ammo: Dictionary) -> void:
 	_ammo = ammo
@@ -147,8 +162,9 @@ func _refresh() -> void:
 		var n := int(_ammo.get(id, 0))
 		b.disabled = n == 0
 		b.modulate = Color.WHITE if n != 0 else Color(1, 1, 1, 0.45)
+		# Toggle mode first, or the pressed look of the current weapon would not stick.
+		b.toggle_mode = true
 		b.set_pressed_no_signal(id == _current)
-		b.toggle_mode = false
 		var ammo := b.get_node_or_null("Ammo") as Label
 		if ammo != null:
 			ammo.text = WeaponCatalog.ammo_label(n) if n != 0 or _ammo.has(id) else ""

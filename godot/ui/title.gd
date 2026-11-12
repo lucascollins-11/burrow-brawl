@@ -86,21 +86,27 @@ func _build() -> void:
 	_join_button.pressed.connect(_on_join_pressed)
 	join_row.add_child(_join_button)
 
-	var settings_button := Button.new()
-	settings_button.text = "Settings"
-	settings_button.pressed.connect(_open_settings)
-	box.add_child(settings_button)
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.custom_minimum_size = Vector2(0, 52)
 	box.add_child(_status)
 
+	# Two smaller buttons side by side under the main actions.
+	var extras := HBoxContainer.new()
+	extras.add_theme_constant_override("separation", 10)
+	box.add_child(extras)
 	var help_button := Button.new()
 	help_button.text = "How to play"
+	help_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	MenuStyle.paint(help_button, MenuStyle.GREEN, 20)
 	help_button.pressed.connect(_on_help_pressed)
-	box.add_child(help_button)
+	extras.add_child(help_button)
+	var settings_button := Button.new()
+	settings_button.text = "Settings"
+	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_button.pressed.connect(_open_settings)
+	extras.add_child(settings_button)
 
 	var server_label := Label.new()
 	server_label.text = "Server: " + NetConfig.server_base()
@@ -115,7 +121,6 @@ func _open_settings() -> void:
 	var menu := SettingsMenu.new()
 	menu.closed.connect(menu.queue_free)
 	add_child(menu)
-
 
 
 func _on_help_pressed() -> void:

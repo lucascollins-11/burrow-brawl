@@ -99,6 +99,11 @@ func set_ready(ready: bool) -> void:
 	_send("lobby.ready", {"ready": ready})
 
 
+## Host only: change some match settings. The server answers with a new room state.
+func set_settings(patch: Dictionary) -> void:
+	_send("lobby.setSettings", {"patch": patch})
+
+
 func add_team() -> void:
 	_send("lobby.addTeam")
 

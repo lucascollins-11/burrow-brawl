@@ -3,6 +3,8 @@ extends Control
 
 const TITLE_SCENE := "res://ui/title.tscn"
 const MATCH_SCENE := "res://game/match_scene.tscn"
+const TURN_CHOICES: Array[int] = [20, 30, 45, 60, 90]
+const SIZE_WORDS: Array[String] = ["Small", "Medium", "Large"]
 
 var _code_label: Label
 var _phase_label: Label
@@ -13,6 +15,10 @@ var _add_button: Button
 var _remove_button: Button
 var _start_button: Button
 var _status: Label
+var _theme_pick: OptionButton
+var _size_pick: OptionButton
+var _turn_pick: OptionButton
+var _count_pick: OptionButton
 
 
 func _ready() -> void:
@@ -80,10 +86,33 @@ func _build() -> void:
 	_add_button = _button(team_buttons, "Add team", _on_add_pressed)
 	_remove_button = _button(team_buttons, "Remove last team", _on_remove_pressed)
 
-	var players_col := MenuStyle.card(cards, "Players")
+	var side := VBoxContainer.new()
+	side.add_theme_constant_override("separation", 16)
+	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cards.add_child(side)
+	var players_col := MenuStyle.card(side, "Players")
+	(players_col.get_parent() as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_members_box = VBoxContainer.new()
 	_members_box.add_theme_constant_override("separation", 8)
 	players_col.add_child(_members_box)
+
+	# Match setup: the host picks, everyone sees.
+	var setup := MenuStyle.card(side, "Match")
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 8)
+	setup.add_child(grid)
+	_theme_pick = _setting(grid, "Map", "mapTheme")
+	_size_pick = _setting(grid, "Size", "mapSize")
+	_turn_pick = _setting(grid, "Turn time", "turnSeconds")
+	for secs in TURN_CHOICES:
+		_turn_pick.add_item("%d seconds" % secs)
+		_turn_pick.set_item_metadata(_turn_pick.item_count - 1, secs)
+	_count_pick = _setting(grid, "Squirmlings each", "crittersPerTeam")
+	for n in range(1, 5):
+		_count_pick.add_item(str(n))
+		_count_pick.set_item_metadata(_count_pick.item_count - 1, n)
 
 	# Footer: status on the left, the two big actions on the right.
 	var footer := HBoxContainer.new()
@@ -109,6 +138,7 @@ func _refresh() -> void:
 	_phase_label.text = _phase_text(lobby.phase())
 	_rebuild_members()
 	_rebuild_teams()
+	_refresh_setup()
 
 	var is_ready := bool(lobby.me().get("ready", false))
 	_ready_button.text = "Not ready" if is_ready else "Ready"
@@ -127,6 +157,56 @@ func _refresh() -> void:
 			_status.text = "" if lobby.can_start() else "Everyone needs a team and to press Ready."
 		else:
 			_status.text = "Waiting for the host to start." if is_ready else "Take a seat on a team, then press Ready."
+
+
+## One labelled drop-down in the Match card. Picking an entry sends that setting to the server.
+func _setting(grid: GridContainer, title: String, key: String) -> OptionButton:
+	var label := Label.new()
+	label.text = title
+	grid.add_child(label)
+	var pick := OptionButton.new()
+	pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pick.item_selected.connect(
+		func(index: int) -> void: Net.set_settings({key: pick.get_item_metadata(index)})
+	)
+	grid.add_child(pick)
+	return pick
+
+
+## Fill the map drop-downs from what the server offers, and show the current choices. Only the
+## host can change them.
+func _refresh_setup() -> void:
+	var lobby := Net.lobby
+	var options := lobby.map_options()
+	var themes: Array = options.get("themes", [])
+	var sizes: Array = options.get("sizes", [])
+	if _theme_pick.item_count != themes.size() + 1:
+		_theme_pick.clear()
+		_theme_pick.add_item("Random")
+		_theme_pick.set_item_metadata(0, "random")
+		for t: Dictionary in themes:
+			_theme_pick.add_item(str(t.get("name", t.get("id", "?"))))
+			_theme_pick.set_item_metadata(_theme_pick.item_count - 1, str(t.get("id", "")))
+	if _size_pick.item_count != sizes.size():
+		_size_pick.clear()
+		for i in range(sizes.size()):
+			var edge := int(sizes[i])
+			var word: String = SIZE_WORDS[i] if i < SIZE_WORDS.size() else str(edge)
+			_size_pick.add_item(word)
+			_size_pick.set_item_metadata(i, edge)
+	var current := lobby.settings()
+	var can_edit := lobby.is_host() and lobby.phase() == "lobby"
+	for pair in [[_theme_pick, "mapTheme"], [_size_pick, "mapSize"], [_turn_pick, "turnSeconds"], [_count_pick, "crittersPerTeam"]]:
+		var pick: OptionButton = pair[0]
+		pick.disabled = not can_edit
+		var want: Variant = current.get(pair[1], null)
+		for i in range(pick.item_count):
+			var have: Variant = pick.get_item_metadata(i)
+			# Numbers arrive from JSON as floats; compare as text for ids and as numbers otherwise.
+			var same: bool = str(have) == str(want) if have is String else (want != null and int(have) == int(want))
+			if same:
+				pick.select(i)
+				break
 
 
 func _phase_text(phase: String) -> String:
@@ -266,6 +346,8 @@ func _on_remove_pressed() -> void:
 
 
 func _on_start_pressed() -> void:
+	# A fresh map every match: roll a new seed just before starting.
+	Net.set_settings({"mapSeed": randi()})
 	Net.start_match()
 
 

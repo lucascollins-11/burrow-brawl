@@ -101,7 +101,7 @@ func _ready() -> void:
 	box.add_child(_art)
 
 	_title = Label.new()
-	_title.label_settings = MenuStyle.heading(24, MenuStyle.INK, 0)
+	_title.add_theme_font_size_override("font_size", 26)
 	box.add_child(_title)
 
 	_text = Label.new()

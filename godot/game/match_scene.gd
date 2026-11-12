@@ -40,6 +40,7 @@ var _rig := CameraMath.RigState.new()
 var _blast_at := Vector3.ZERO
 var _blast_left := 0.0
 var _marker: MeshInstance3D
+var _target_ring: MeshInstance3D
 var _time := 0.0
 var _last_turn := -1
 var _last_tick_second := -1
@@ -79,7 +80,7 @@ func _ready() -> void:
 	hud.leave_pressed.connect(_leave)
 	hud.again_pressed.connect(_back_to_lobby)
 	if hud.has_signal("weapon_picked"):
-		hud.connect("weapon_picked", func(i: int) -> void: controls.weapon = i)
+		hud.connect("weapon_picked", func(i: int) -> void: controls.weapon = clampi(i, 0, controls.weapons.size() - 1))
 	_make_marker()
 	_connect_net()
 
@@ -117,6 +118,11 @@ func handle_match_start(msg: Dictionary) -> void:
 	vm.set_teams(_teams_from_net(msg.get("teamIds", [])))
 	vm.set_local_teams(_local_teams_from_net(msg.get("teamIds", [])))
 	vm.apply_match_start(msg)
+	# The server lists the weapons; nothing about the arsenal is hardcoded on this side.
+	var catalog: Array = msg.get("weapons", [])
+	if not catalog.is_empty():
+		controls.set_catalog(catalog)
+		hud.set_catalog(catalog)
 	var t: Dictionary = msg.get("terrain", {})
 	_world = Vector2(float(t.get("sizeX", 256)), float(t.get("sizeZ", 256)))
 	if terrain_view == null and ResourceLoader.exists(TERRAIN_SCRIPT):
@@ -352,10 +358,51 @@ func _make_marker() -> void:
 	_marker.material_override = mat
 	_marker.rotation.x = PI  # point down at the critter
 	_marker.visible = false
+	# Where an air strike or a placed item will land.
+	_target_ring = MeshInstance3D.new()
+	_target_ring.name = "TargetRing"
+	var ring := TorusMesh.new()
+	ring.inner_radius = 3.2
+	ring.outer_radius = 4.0
+	_target_ring.mesh = ring
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.albedo_color = Color("ff5a3d")
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.no_depth_test = true
+	_target_ring.material_override = ring_mat
+	_target_ring.visible = false
+	add_child(_target_ring)
 	add_child(_marker)
 
 
+## The spot under the crosshair, found by walking along the view ray until it dips under the
+## ground. Null on the sky or the open sea.
+func _pick_ground() -> Variant:
+	var from := camera.global_position
+	var dir := -camera.global_transform.basis.z
+	var step := 1.0
+	var p := from
+	for i in range(700):
+		p += dir * step
+		if p.x < 0.0 or p.z < 0.0 or p.x >= _world.x or p.z >= _world.y:
+			if i > 40 and p.y < vm.sea_y:
+				return null
+			continue
+		var g := ground_y(p.x, p.z)
+		if p.y <= g:
+			return Vector3(p.x, g, p.z) if g > vm.sea_y else null
+		if p.y < vm.sea_y:
+			return null
+	return null
+
+
 func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState) -> void:
+	var targeting := aim != null and controls.needs("target")
+	controls.target = _pick_ground() if targeting else null
+	_target_ring.visible = controls.target != null
+	if _target_ring.visible:
+		_target_ring.position = (controls.target as Vector3) + Vector3(0, 0.6, 0)
+		_target_ring.scale = Vector3.ONE * (1.0 + 0.12 * sin(_time * 6.0))
 	_marker.visible = not active.is_empty() and v["phase"] == "control" and aim == null
 	if _marker.visible:
 		var p: Vector3 = active["pos"]

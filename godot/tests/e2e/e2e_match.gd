@@ -68,7 +68,7 @@ func _run() -> bool:
 		return false
 
 	# Short turns and a fixed map, as in the server's own two-player tests.
-	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99}})
+	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": "picnic-atoll", "mapSize": 256}})
 	a.set_ready(true)
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
