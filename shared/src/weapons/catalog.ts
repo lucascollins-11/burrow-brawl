@@ -33,6 +33,7 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "fizz-grenade",
   "hopper-ball",
   "beehive-strike",
+  "firecracker-bundle",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */

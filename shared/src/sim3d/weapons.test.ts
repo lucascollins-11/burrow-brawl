@@ -244,6 +244,65 @@ describe("Beehive Strike", () => {
   });
 });
 
+describe("Firecracker Bundle", () => {
+  const drop: CritterInput = {
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "firecracker-bundle", yaw: 0, pitch: 0, power: 0 },
+  };
+
+  it("is set down next to the critter and goes off after 5 s", () => {
+    let s = stepWorld(world(), [drop], rng).state;
+    expect(s.projectiles).toHaveLength(1);
+    const p = s.projectiles[0]!;
+    const c = s.critters[0]!;
+    expect(Math.abs(cell(p.pos.x) - cell(c.pos.x))).toBeLessThanOrEqual(3);
+    expect(Math.abs(cell(p.pos.z) - cell(c.pos.z))).toBeLessThanOrEqual(3);
+    let blastTick = -1;
+    for (let i = 1; i < 400 && blastTick < 0; i++) {
+      const r = stepWorld(s, [], rng);
+      s = r.state;
+      if (r.events.some((e) => e.type === "explosion")) blastTick = i;
+    }
+    expect(blastTick).toBe(5 * 60 - 1);
+    expect(s.projectiles).toHaveLength(0);
+  });
+
+  it("is lit early by another blast that reaches it", () => {
+    let s = stepWorld(world(), [drop], rng).state;
+    for (let i = 0; i < 30; i++) s = stepWorld(s, [], rng).state;
+    const bundle = s.projectiles[0]!;
+    const grenade = { ...bundle, id: 99, weaponId: "fizz-grenade" as const, fuseTicks: 2 };
+    s = { ...s, projectiles: [bundle, grenade] };
+    const blasts: number[] = [];
+    for (let i = 0; i < 120; i++) {
+      const r = stepWorld(s, [], rng);
+      s = r.state;
+      for (const e of r.events) if (e.type === "explosion") blasts.push(i);
+    }
+    expect(blasts).toHaveLength(2);
+    const chain = loadWeapons()["firecracker-bundle"].params.chainFuseTicks as number;
+    expect(blasts[1]! - blasts[0]!).toBeLessThanOrEqual(chain + 1);
+    expect(blasts[1]! - blasts[0]!).toBeGreaterThan(0);
+  });
+
+  it("is not lit by a blast that is far away", () => {
+    let s = stepWorld(world(), [drop], rng).state;
+    const bundle = s.projectiles[0]!;
+    const far = {
+      ...bundle,
+      id: 99,
+      weaponId: "fizz-grenade" as const,
+      fuseTicks: 2,
+      pos: { ...bundle.pos, x: bundle.pos.x + 60 * FIXED_ONE },
+    };
+    s = { ...s, projectiles: [bundle, far] };
+    for (let i = 0; i < 60; i++) s = stepWorld(s, [], rng).state;
+    expect(s.projectiles).toHaveLength(1);
+    expect(s.projectiles[0]!.fuseTicks).toBeGreaterThan(200);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -278,7 +337,9 @@ describe("weapon catalogue", () => {
       "fizz-grenade",
       "hopper-ball",
       "beehive-strike",
+      "firecracker-bundle",
     ]);
+    expect(byId["firecracker-bundle"]!.needs).toEqual([]);
     expect(byId["acorn-mortar"]!.needs).toEqual(["charge"]);
     expect(byId["pinecone-popper"]!.needs).toEqual(["trigger", "charge"]);
     expect(byId["fizz-grenade"]!.needs).toEqual(["fuse", "charge"]);

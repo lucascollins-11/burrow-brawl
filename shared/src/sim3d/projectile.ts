@@ -58,7 +58,12 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
 export type ProjectileWeaponId =
-  "acorn-mortar" | "fizz-grenade" | "pinecone-popper" | "hopper-ball" | "beehive-strike";
+  | "acorn-mortar"
+  | "fizz-grenade"
+  | "pinecone-popper"
+  | "hopper-ball"
+  | "beehive-strike"
+  | "firecracker-bundle";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -66,6 +71,7 @@ const FIREABLE: readonly string[] = [
   "pinecone-popper",
   "hopper-ball",
   "beehive-strike",
+  "firecracker-bundle",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
