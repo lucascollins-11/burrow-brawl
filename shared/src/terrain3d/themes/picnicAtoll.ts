@@ -97,7 +97,7 @@ function heightField(ctx: ThemeCtx, isl: readonly Island[]): Int32Array {
         if (d2 >= r2) continue;
         const u = Math.floor(((r2 - d2) * 256) / r2);
         const p = ease(Math.min(256, Math.floor((u * 256) / 110)));
-        let h = SEABED * 256 + p * (o.top - SEABED) + ((big >> 7) * p) / 256;
+        let h = SEABED * 256 + p * (o.top - SEABED) + (((big >> 7) * p) >> 8);
         if (o.inner > 0) {
           const ri2 = Math.floor((r2 * 36) / 100);
           if (d2 < ri2) {
