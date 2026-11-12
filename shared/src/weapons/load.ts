@@ -3,6 +3,7 @@ import beehiveBomb from "../../weapons/beehive-bomb.json";
 import beehiveStrike from "../../weapons/beehive-strike.json";
 import boulderOfDoom from "../../weapons/boulder-of-doom.json";
 import drillHat from "../../weapons/drill-hat.json";
+import firecrackerBundle from "../../weapons/firecracker-bundle.json";
 import fizzGrenade from "../../weapons/fizz-grenade.json";
 import hopperBall from "../../weapons/hopper-ball.json";
 import jellyMine from "../../weapons/jelly-mine.json";
@@ -33,7 +34,8 @@ export type WeaponId =
   | "pinecone-popper"
   | "pinecone-seed"
   | "hopper-ball"
-  | "beehive-bomb";
+  | "beehive-bomb"
+  | "firecracker-bundle";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -59,6 +61,7 @@ const registry: WeaponRegistry = Object.freeze({
   "pinecone-seed": toWeaponData(pineconeSeed),
   "hopper-ball": toWeaponData(hopperBall),
   "beehive-bomb": toWeaponData(beehiveBomb),
+  "firecracker-bundle": toWeaponData(firecrackerBundle),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */
