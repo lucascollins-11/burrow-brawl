@@ -21,6 +21,7 @@ import {
   type MatchState,
 } from "@burrow-brawl/shared";
 import type { ServerMessage, ViewServerMessage } from "@burrow-brawl/shared/src/net";
+import { THEMES } from "@burrow-brawl/shared/src/terrain3d";
 import { ViewStream } from "./view";
 
 /** Broadcast a watermark batch every N ticks (20/s). */
@@ -87,11 +88,24 @@ export class MatchRunner {
       startHealth: number;
       mapSeed: number;
       windMax: number;
+      /** "random" or a theme id; absent means the older unthemed island. */
+      mapTheme?: string;
+      mapSize?: number;
     },
     teams: number,
   ): MatchConfig {
     // mapSeed 0 means "random each match".
     const seed = settings.mapSeed !== 0 ? settings.mapSeed : randomInt(1, 0xffffffff);
+    let map = mapRecipeFor(seed, teams);
+    if (settings.mapTheme !== undefined) {
+      const size = settings.mapSize ?? 384;
+      const fits = THEMES.filter((t) => t.minSize <= size);
+      const theme =
+        settings.mapTheme === "random"
+          ? (fits[randomInt(0, fits.length)] ?? THEMES[0]!).id
+          : settings.mapTheme;
+      map = mapRecipeFor(seed, teams, { theme, size });
+    }
     return {
       seed,
       teamSizes: new Array<number>(teams).fill(settings.crittersPerTeam),
@@ -100,7 +114,7 @@ export class MatchRunner {
       settleCapTicks: 15 * TICKS_PER_SECOND,
       startHealth: settings.startHealth,
       windMax: settings.windMax,
-      map: mapRecipeFor(seed, teams),
+      map,
     };
   }
 

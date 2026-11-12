@@ -1,5 +1,6 @@
 import {
   DEFAULT_SETTINGS,
+  mapOptions,
   HAT_COLORS,
   type RoomState,
   type TeamPatch,
@@ -27,6 +28,7 @@ export class MockClient implements LobbyClient {
       hostId: this.me.id,
       version: 1,
       settings: { ...DEFAULT_SETTINGS },
+      mapOptions: mapOptions(),
       members: [
         { id: this.me.id, nickname, teamId: "t1", ready: false, connected: true, pingMs: 30 },
         {

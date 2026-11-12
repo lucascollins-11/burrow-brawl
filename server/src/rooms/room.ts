@@ -2,6 +2,7 @@ import {
   CHAT_MAX,
   CloseCodes,
   DEFAULT_SETTINGS,
+  mapOptions,
   HAT_COLORS,
   HAT_STYLES,
   MAX_CRITTERS,
@@ -113,6 +114,7 @@ export class Room {
         })),
       teams: this.teams.map((t) => ({ ...t, critterNames: [...t.critterNames] })),
       settings: { ...this.settings },
+      mapOptions: mapOptions(),
       version: this.version,
     };
   }

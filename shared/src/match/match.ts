@@ -7,7 +7,15 @@ import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../
 import { PITCH_MAX, PITCH_MIN, YAW_STEPS } from "../sim3d/api";
 import { createCritter, createWorld, stepWorld } from "../sim3d/world";
 import type { MapRecipe, TerrainEdit } from "../terrain3d/api";
-import { GENERATOR_VERSION, generate, hash as hashTerrain, restore } from "../terrain3d/impl";
+import {
+  GENERATOR_VERSION,
+  MAP_SIZES,
+  THEMES,
+  generate,
+  hash as hashTerrain,
+  restore,
+  themedRecipe,
+} from "../terrain3d/impl";
 import type { WeaponId } from "../weapons/load";
 import { basicTurns, type TurnRules, type TurnState } from "./turns";
 
@@ -148,8 +156,22 @@ export function mapSizeFor(teams: number): number {
   return teams <= 2 ? 192 : teams <= 4 ? 256 : teams <= 6 ? 320 : 384;
 }
 
-/** The recipe for a generated island of the right size for `teams`. */
-export function mapRecipeFor(seed: number, teams: number, theme = "picnic"): MapRecipe {
+/**
+ * The recipe for a match map. With `map`, a themed map (generator 3) of that theme and size, made
+ * at least as big as the theme needs. Without it, the older unthemed island sized for `teams`.
+ */
+export function mapRecipeFor(
+  seed: number,
+  teams: number,
+  map?: { theme: string; size: number },
+): MapRecipe {
+  if (map) {
+    const theme = THEMES.find((t) => t.id === map.theme);
+    if (!theme) throw new RangeError(`unknown map theme ${map.theme}`);
+    const size = MAP_SIZES.find((s) => s >= Math.max(map.size, theme.minSize)) ?? map.size;
+    return themedRecipe(theme.id, seed, size);
+  }
+  const theme = "picnic";
   const size = mapSizeFor(teams);
   return {
     generator: GENERATOR_VERSION,
