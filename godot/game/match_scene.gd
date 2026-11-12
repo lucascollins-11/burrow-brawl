@@ -190,7 +190,7 @@ func _process(dt: float) -> void:
 	var aim: CameraMath.AimState = controls.aim
 
 	_handle_events(vm.take_events(), v)
-	_sync_critters(v, active)
+	_sync_critters(v, active, aim, dt)
 	shots.sync(v["projectiles"])
 	_update_marker(v, active, aim)
 	_update_camera(v, active, aim, mouse, dt)
@@ -228,27 +228,40 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var c := _find(v["critters"], int(e.get("critterId", -1)))
 			if not c.is_empty():
 				fx.damage((c["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), int(e.get("amount", 0)))
+			var hit: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
+			if hit != null:
+				hit.hurt()
+		elif kind == "fired":
+			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
+			if shooter != null:
+				shooter.fire()
 
 
-func _sync_critters(v: Dictionary, active: Dictionary) -> void:
+func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState, dt: float) -> void:
 	var seen := {}
 	for c in v["critters"]:
 		var id: int = c["id"]
 		seen[id] = true
-		var node: Node3D = _critters.get(id, null)
+		var node: SquirmlingRig = _critters.get(id, null)
 		if node == null:
 			var look: Dictionary = _look(int(c["team"]))
 			node = CRITTER_MODEL.create(int(c["team"]), str(look["hat"]), look["color"])
+			node.set_seed(id)
 			_critters[id] = node
 			add_child(node)
-		node.visible = c["alive"]
+		node.set_alive(c["alive"])
 		var pos: Vector3 = c["pos"]
-		var moving: bool = _prev_pos.has(id) and (_prev_pos[id] as Vector3).distance_squared_to(pos) > 0.0004
+		# Speed from the change in the (already smoothed) position. A respawn or a teleport must not
+		# read as a huge shove, so it is capped.
+		var vel := Vector3.ZERO
+		if _prev_pos.has(id) and dt > 0.0:
+			vel = ((pos - (_prev_pos[id] as Vector3)) / dt).limit_length(60.0)
 		_prev_pos[id] = pos
 		node.position = pos
 		node.rotation.y = deg_to_rad(float(c["heading_deg"]))
 		var is_active: bool = not active.is_empty() and active["id"] == id
-		CRITTER_MODEL.animate(node, _time + float(id) * 0.37, is_active, moving)
+		var pitch := float(aim.pitch_deg) if is_active and aim != null else 0.0
+		node.drive(dt, is_active, vel, bool(c.get("grounded", true)), pitch)
 		var team_color: Color = _look(int(c["team"]))["color"]
 		CRITTER_MODEL.set_tag(node, "%s  %d" % [c["name"], c["hp"]], team_color.lightened(0.45))
 	for id in _critters.keys():

@@ -110,6 +110,7 @@ func _run() -> bool:
 	if not v["my_turn"]:
 		return _fail("turn 1 should be A's (team 0); local teams are %s" % [scene.vm.local_teams])
 	await _shot("1-start")
+	await _closeup(v)
 
 	# A fires an acorn mortar toward the middle of the island.
 	var me: Dictionary = {}
@@ -205,10 +206,69 @@ func _preview(scene_path: String, shot_name: String) -> void:
 	print("E2E ok: built ", scene_path)
 
 
-func _shot(shot_name: String) -> void:
+## A close look at the active Squirmling: standing, hit, and a stand-in next to it popping apart
+## and leaving its marker. Runs headless too (without pictures) so the animation code is exercised.
+func _closeup(v: Dictionary) -> void:
+	var me: Dictionary = {}
+	for c: Dictionary in v["critters"]:
+		if int(c["id"]) == int(v["active_critter_id"]):
+			me = c
+	var rig: SquirmlingRig = scene._critters.get(int(me.get("id", -1)), null)
+	if rig == null:
+		return
+	var old_dist: float = scene._rig.dist
+	var old_pitch: float = scene._rig.pitch_deg
+	var old_yaw: float = scene._rig.yaw_deg
+	scene._rig.dist = 13.0
+	scene._rig.pitch_deg = 10.0
+	# Stand the camera in front of the face, a little to one side.
+	var face: Vector3 = rig.global_transform.basis.z
+	scene._rig.yaw_deg = CameraMath.wrap_deg(rad_to_deg(atan2(face.x, face.z)) + 25.0)
+	for i in 12:
+		await get_tree().process_frame
+	await _shot("1b-squirmling", 4)
+	rig.hurt()
+	await _shot("1c-hurt", 3)
+	rig.fire()
+	await _shot("1d-fire", 2)
+
+	var twin := Squirmling.create(1, "chef", Color("4aa3df"))
+	var right := Vector3.RIGHT.rotated(Vector3.UP, deg_to_rad(float(me["heading_deg"])))
+	var at: Vector3 = (me["pos"] as Vector3) + right * 5.0
+	at.y = scene.ground_y(at.x, at.z)
+	twin.position = at
+	twin.rotation.y = rig.rotation.y
+	scene.add_child(twin)
+	twin.drive(0.016, false, Vector3.ZERO, true)
+	twin.set_alive(false)
+	# Timed by the clock, not by frames: headless frames take almost no time.
+	var deadline := Time.get_ticks_msec() + 8000
+	var pictured := false
+	while twin.pop_time >= 0.0 and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		# The rig takes steps of at most 0.05 s; a software-rendered frame can last much longer.
+		var left := get_process_delta_time()
+		while left > 0.0 and twin.pop_time >= 0.0:
+			twin.drive(minf(left, 0.05), false, Vector3.ZERO, true)
+			left -= 0.05
+		if not pictured and twin.pop_time > 0.3:
+			pictured = true
+			await _shot("1e-pop", 0)
+	if twin.pop_time >= 0.0:
+		errors.append("the knocked-out Squirmling never finished popping")
+	await _shot("1f-marker", 6)
+	scene.remove_child(twin)
+	twin.queue_free()
+	scene._rig.dist = old_dist
+	scene._rig.pitch_deg = old_pitch
+	scene._rig.yaw_deg = old_yaw
+	print("E2E ok: Squirmling close-up")
+
+
+func _shot(shot_name: String, frames := 20) -> void:
 	if shots_dir == "" or DisplayServer.get_name() == "headless":
 		return
-	for i in 20:
+	for i in frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()

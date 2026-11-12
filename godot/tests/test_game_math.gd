@@ -156,6 +156,58 @@ func test_squirmling_is_five_rings_with_a_head_and_tail_tuft() -> void:
 	s.free()
 
 
+func _ring_y(s: Node, i: int) -> float:
+	return (s.find_child("Ring%d" % i, true, false) as Node3D).position.y
+
+
+func test_squirmling_squashes_when_hit_and_settles_again() -> void:
+	var s := Squirmling.create(0, "cone", Color.RED)
+	for i in range(30):
+		s.drive(1.0 / 60.0, false, Vector3.ZERO, true)
+	var rest := _ring_y(s, 4)
+	s.hurt()
+	var lowest := rest
+	for i in range(20):
+		s.drive(1.0 / 60.0, false, Vector3.ZERO, true)
+		lowest = minf(lowest, _ring_y(s, 4))
+	check(lowest < rest - 0.05, "the head dips when hit (%.3f vs %.3f)" % [lowest, rest])
+	check((s.find_child("MouthOpen", true, false) as Node3D).visible, "the mouth opens while hurt")
+	for i in range(240):
+		s.drive(1.0 / 60.0, false, Vector3.ZERO, true)
+	check(absf(_ring_y(s, 4) - rest) < 0.15, "and it settles back")
+	check(not (s.find_child("MouthOpen", true, false) as Node3D).visible, "the mouth closes again")
+	s.free()
+
+
+func test_squirmling_head_trails_behind_when_walking() -> void:
+	var s := Squirmling.create(0, "cone", Color.RED)
+	for i in range(60):
+		s.drive(1.0 / 60.0, true, Vector3(0, 0, 8.0), true)
+	var head := s.find_child("Ring4", true, false) as Node3D
+	var tail := s.find_child("Ring0", true, false) as Node3D
+	check(head.position.z < tail.position.z - 0.02, "the head lags behind the tail in the walk direction")
+	s.free()
+
+
+func test_squirmling_pops_apart_and_leaves_a_marker() -> void:
+	var s := Squirmling.create(0, "cone", Color.RED)
+	s.drive(1.0 / 60.0, false, Vector3.ZERO, true)
+	s.set_alive(false)
+	check(s.pop_time >= 0.0, "the rings start flying")
+	for i in range(200):
+		s.drive(1.0 / 60.0, false, Vector3.ZERO, true)
+	check(s.pop_time < 0.0, "the pop ends")
+	check((s.get_node("Marker") as Node3D).visible, "the marker is left behind")
+	check(not (s.get_node("Model") as Node3D).visible, "the body is gone")
+	s.set_alive(true)
+	check((s.get_node("Model") as Node3D).visible and not (s.get_node("Marker") as Node3D).visible, "a revived Squirmling stands again")
+	var late := Squirmling.create(0, "cone", Color.RED)
+	late.set_alive(false)
+	check(late.pop_time < 0.0 and (late.get_node("Marker") as Node3D).visible, "first seen knocked out: marker straight away")
+	late.free()
+	s.free()
+
+
 func test_standings_put_the_winner_first_then_survivors_by_health() -> void:
 	var teams: Array = []
 	for i in range(3):
