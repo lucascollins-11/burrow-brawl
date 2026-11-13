@@ -132,6 +132,14 @@ jobs:
             res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots" 2>&1 | tee render.log
           ls -la shots
 
+      - name: Map tour, Bathtub Bay (software renderer, best effort)
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
+            godot --path godot --rendering-driver vulkan --resolution 1280x720 \
+            res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots" --theme=bathtub-bay --tour 2>&1 | tail -n 20
+
       - name: Shaders compiled in the rendered run
         run: |
           if [ ! -f render.log ]; then echo "no rendered run"; exit 0; fi

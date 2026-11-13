@@ -77,6 +77,8 @@ const THEME_CASES = [
   {
     id: "garden-patch",
     golden: { 256: 3559672557, 384: 774145394, 512: 1649571672 } as Record<number, number>,
+    id: "bathtub-bay",
+    golden: { 256: 870537865, 384: 705710305, 512: 1361670801 } as Record<number, number>,
   },
 ];
 

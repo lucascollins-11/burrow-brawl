@@ -46,6 +46,8 @@ export interface ViewProjectile {
   z: number;
   /** Ticks until detonation, or -1 for impact-only weapons. */
   fuseTicks: number;
+  /** Facing in yaw steps, for walkers and steered shots (Wind-up Robot, RC Racer, Kite Bomber). */
+  heading?: number;
 }
 
 /** A puddle on the ground, in whole voxels: a disc of radius `r` centred on (x, y, z). */

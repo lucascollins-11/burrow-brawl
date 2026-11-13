@@ -28,6 +28,8 @@ import {
   WIND_ACCEL_PER_UNIT,
 } from "./constants";
 import { bodyBlocked, cell } from "./critter";
+import { TRIGGERED_WEAPONS } from "../weapons/catalog";
+import { steerStep, type SteerFlight } from "./steer";
 import { isGearWeapon, speedPerTick, startGear, wearingGear } from "./gear";
 import { dropShield, fireUtility, isUtilityWeapon, popShield } from "./utility";
 import { zoneFrom } from "./zones";
@@ -47,9 +49,11 @@ import {
 
 /**
  * How a shot flies: "impact" detonates on terrain or a critter, "bounce" waits for its fuse,
- * "stick" clings to the first thing it touches and then lights its `stickFuseSeconds` fuse.
+ * "stick" clings to the first thing it touches and then lights its `stickFuseSeconds` fuse,
+ * "roll" slides along the ground under gravity until its fuse; "walk", "drive" and "kite" are
+ * moved by steer.ts.
  */
-type Flight = "impact" | "bounce" | "stick";
+type Flight = "impact" | "bounce" | "stick" | "roll" | SteerFlight;
 
 /** Every weapon that exists as a projectile in flight, sub-munitions included. */
 const FLIGHT: Partial<Record<WeaponId, Flight>> = {
@@ -69,6 +73,11 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "snow-globe": "bounce",
   "hot-sauce-flask": "impact",
   "glue-puddle": "impact",
+  "wind-up-robot": "walk",
+  "marble-roller": "roll",
+  "rc-racer": "drive",
+  "kite-bomber": "kite",
+  "kite-charge": "impact",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -86,7 +95,11 @@ export type ProjectileWeaponId =
   | "gumball-cluster"
   | "snow-globe"
   | "hot-sauce-flask"
-  | "glue-puddle";
+  | "glue-puddle"
+  | "wind-up-robot"
+  | "marble-roller"
+  | "rc-racer"
+  | "kite-bomber";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -103,6 +116,10 @@ const FIREABLE: readonly string[] = [
   "snow-globe",
   "hot-sauce-flask",
   "glue-puddle",
+  "wind-up-robot",
+  "marble-roller",
+  "rc-racer",
+  "kite-bomber",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -335,7 +352,7 @@ function burrow(
 }
 
 /** Weapons whose shot in flight pops when its owner sends trigger. */
-const TRIGGERABLE: readonly WeaponId[] = ["pinecone-popper"];
+const TRIGGERABLE: readonly WeaponId[] = TRIGGERED_WEAPONS;
 /** A shot can't be triggered on the tick it leaves the muzzle (or the next few). */
 export const TRIGGER_MIN_AGE = 6;
 
@@ -383,6 +400,9 @@ export function spawnShots(
   if (cmd.weaponId === "beehive-strike") return dropStrike(t, c, w, yaw, cmd.target, firstId);
   if (cmd.weaponId === "firecracker-bundle" || cmd.weaponId === "jelly-mine")
     return [dropCharge(c, w, yaw, firstId)];
+  // Walkers are set down ahead and head off along the aim.
+  if (FLIGHT[cmd.weaponId] === "walk" || FLIGHT[cmd.weaponId] === "drive")
+    return [{ ...dropCharge(c, w, yaw, firstId), heading: yaw }];
 
   const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
   const power = clampInt(cmd.power, 0, 100);
@@ -390,12 +410,13 @@ export function spawnShots(
   // A seeker needs a mark and leaves at a fixed speed; everything else is charged.
   const homing = isHoming(w);
   if (homing && !cmd.target) return [];
-  const speed = homing
+  const fixedLaunch = homing || num(w, "launchSpeed", 0) > 0;
+  const speed = fixedLaunch
     ? speedPerTick(num(w, "launchSpeed", 400))
     : mulDiv(speedPerTick(num(w, "maxSpeed", 600)), power, 100);
 
   let fuseTicks = -1;
-  if (FLIGHT[cmd.weaponId] === "bounce") {
+  if (FLIGHT[cmd.weaponId] !== "impact" || w.params.fuseSeconds !== undefined) {
     const r = fuseRange(w);
     fuseTicks = clampInt(cmd.fuseSeconds ?? r.def, r.min, r.max) * TICK_RATE;
   }
@@ -415,6 +436,7 @@ export function spawnShots(
       fuseTicks,
       bounces: 0,
       resting: false,
+      ...(FLIGHT[cmd.weaponId] === "kite" ? { heading: yaw } : {}),
       ...(homing && cmd.target
         ? {
             target: {
@@ -426,6 +448,11 @@ export function spawnShots(
         : {}),
     },
   ];
+}
+
+/** Shots their owner drives with the walk input (RC Racer, Kite Bomber). */
+export function isSteeredByOwner(id: WeaponId): boolean {
+  return FLIGHT[id] === "drive" || FLIGHT[id] === "kite";
 }
 
 /** Weapons that steer toward their `target` in flight. */
@@ -659,7 +686,7 @@ export function explode(
   const edit = { op: "carve", x, y, z, r } as const;
   // A Snow Globe's flurry freezes critters and leaves the ground alone.
   const freeze = w.params.freeze === true;
-  if (!freeze) applyEdit(t, edit);
+  if (!freeze && r > 0) applyEdit(t, edit);
   events.push({ type: "explosion", projectileId: p.id, weaponId: p.weaponId, edit });
   if (r === 0) return [...critters];
 
@@ -765,6 +792,8 @@ export function stepProjectiles(
   earlier: readonly SimEvent[] = [],
   /** Current soda row (SimState.seaY, which rises in sudden death); dormant mines below it sink. */
   seaY = t.seaY,
+  /** Owner id -> walk heading (or -1) for owners steering an RC Racer or Kite Bomber. */
+  steering: ReadonlyMap<number, number> = new Map(),
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
@@ -785,6 +814,9 @@ export function stepProjectiles(
     const flight = FLIGHT[p.weaponId] ?? "impact";
     const impact = flight === "impact";
     const stick = flight === "stick";
+    const roll = flight === "roll";
+    const steered = flight === "walk" || flight === "drive" || flight === "kite";
+    let heading = p.heading;
     const stickFuse = Math.max(1, Math.trunc(num(w, "stickFuseSeconds", 2) * TICK_RATE));
     let blast: { x: number; y: number; z: number } | null = null;
     let midAir = false;
@@ -798,7 +830,53 @@ export function stepProjectiles(
     if (resting && !(stick ? touchesSolid : isSolidBelow)(t, cell(x), cell(y), cell(z)))
       resting = false;
 
-    if (!resting && blast === null) {
+    if (steered && blast === null) {
+      const m = steerStep(
+        t,
+        flight,
+        { x, y, z },
+        { x: vx, y: vy, z: vz },
+        heading ?? 0,
+        steering.get(p.ownerId) ?? -1,
+        speedPerTick(
+          num(
+            w,
+            flight === "kite" ? "flySpeed" : flight === "drive" ? "driveSpeed" : "walkSpeed",
+            40,
+          ),
+        ),
+        accelPerTick(num(w, "gravity", 600)),
+        w.windAffected
+          ? {
+              x:
+                clampInt(windX, -100, 100) *
+                WIND_ACCEL_PER_UNIT *
+                Math.trunc(num(w, "windScale", 1)),
+              z:
+                clampInt(windZ, -100, 100) *
+                WIND_ACCEL_PER_UNIT *
+                Math.trunc(num(w, "windScale", 1)),
+            }
+          : { x: 0, z: 0 },
+        2 * TERMINAL_VELOCITY,
+      );
+      ({ x, y, z, vx, vy, vz, heading } = m);
+      if (m.crashed) {
+        blast = { x: cell(x), y: cell(y), z: cell(z) };
+        midAir = true;
+      } else if (
+        cell(y) < seaY ||
+        cell(x) < -LOST_MARGIN ||
+        cell(x) > t.sizeX + LOST_MARGIN ||
+        cell(z) < -LOST_MARGIN ||
+        cell(z) > t.sizeZ + LOST_MARGIN
+      ) {
+        events.push({ type: "projectileLost", projectileId: p.id });
+        continue;
+      }
+    }
+
+    if (!steered && !resting && blast === null) {
       if (p.target && p.age >= Math.trunc(num(w, "homingDelaySeconds", 0) * TICK_RATE))
         ({ x: vx, y: vy, z: vz } = steer(w, p.target, x, y, z, { x: vx, y: vy, z: vz }));
       // A rocket flies flat for `flatSeconds`; a shot under a Feather Charm falls at half gravity.
@@ -835,6 +913,39 @@ export function stepProjectiles(
           }
           const normal = bounceNormal(t, hx, hy, hz, cell(x), cell(y), cell(z));
           const v = { x: vx, y: vy, z: vz };
+          if (roll) {
+            // Slide along the surface: drop the part of the speed going into it, keep the rest
+            // (gravity's pull along a slope is what rolls it downhill), and try again.
+            const into = dot(v, normal);
+            const friction = Math.floor(num(w, "rollFriction", 0.995) * FIXED_ONE);
+            if (into < 0) {
+              vx = mulQ(vx - mulQ(normal.x, into), friction);
+              vy = mulQ(vy - mulQ(normal.y, into), friction);
+              vz = mulQ(vz - mulQ(normal.z, into), friction);
+            }
+            // A marble keeps rolling far slower than a grenade would settle.
+            const slow = Math.abs(vx) + Math.abs(vy) + Math.abs(vz) < REST_SPEED >> 2;
+            if (slow && isSolid(t, cell(x), cell(y) - 1, cell(z))) {
+              vx = 0;
+              vy = 0;
+              vz = 0;
+              resting = true;
+              break;
+            }
+            // Take this sub-step along the surface instead, if that is clear.
+            const sx = x + idiv(vx, n);
+            const sy = y + idiv(vy, n);
+            const sz = z + idiv(vz, n);
+            if (!isSolid(t, cell(sx), cell(sy), cell(sz))) {
+              x = sx;
+              y = sy;
+              z = sz;
+            } else if (!isSolid(t, cell(sx), cell(y), cell(sz))) {
+              x = sx;
+              z = sz;
+            }
+            continue;
+          }
           if (dot(v, normal) < 0) {
             const bounce = Math.floor(num(w, "bounciness", 0.45) * FIXED_ONE);
             const r = reflect(v, normal);
@@ -918,6 +1029,7 @@ export function stepProjectiles(
       fuseTicks: fuse,
       bounces,
       resting,
+      ...(heading !== undefined ? { heading } : {}),
     });
   }
   return {

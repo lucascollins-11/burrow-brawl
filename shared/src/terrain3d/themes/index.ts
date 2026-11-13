@@ -4,6 +4,7 @@ import { BEDROCK_Y, SEA_Y } from "../generate.js";
 import { findSpawns } from "../spawns.js";
 import { keepWalkableSpawns, makeCtx, type Theme } from "./kit.js";
 import { gardenPatch } from "./gardenPatch.js";
+import { bathtubBay } from "./bathtubBay.js";
 import { frostedBakery } from "./frostedBakery.js";
 import { picnicAtoll } from "./picnicAtoll.js";
 import { clockworkMesa } from "./clockworkMesa.js";
@@ -19,8 +20,10 @@ const ALL: readonly Theme[] = [
   toyboxHarbor,
   clockworkMesa,
   frostedBakery,
+  bathtubBay,
   gardenPatch,
 ];
+const ALL: readonly Theme[] = [picnicAtoll, toyboxHarbor, clockworkMesa, frostedBakery, bathtubBay];
 
 /** Themes the lobby can offer. */
 export const THEMES: readonly {

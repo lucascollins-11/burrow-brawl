@@ -18,6 +18,7 @@ import { YAW_STEPS } from "./api";
 import { FALL_DAMAGE_DEN, FALL_DAMAGE_NUM, FALL_SAFE_DISTANCE } from "./constants";
 import { bodyBlocked, cell, createCritter, stepCritter } from "./critter";
 import { inGlue } from "./zones";
+import { isSteeredByOwner } from "./projectile";
 import { fireInstant, isDormant, isInstantWeapon, spawnShots, stepProjectiles } from "./projectile";
 
 export function createWorld(terrain: VoxelTerrain, critters: readonly Critter[]): SimState {
@@ -78,7 +79,7 @@ function resolve(
  */
 export function stepWorld(state: SimState, given: readonly CritterInput[], rng: Rng): StepResult {
   void rng;
-  const inputs = restrain(state, given);
+  const { inputs, steering } = restrain(state, given);
   const t = state.terrain;
   const moveEvents: SimEvent[] = [];
   let critters = state.critters.map((c) => stepCritter(t, c, inputFor(inputs, c.id), moveEvents));
@@ -140,6 +141,7 @@ export function stepWorld(state: SimState, given: readonly CritterInput[], rng: 
     nextId,
     fireEvents,
     state.seaY,
+    steering,
   );
 
   const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
@@ -159,22 +161,36 @@ export function stepWorld(state: SimState, given: readonly CritterInput[], rng: 
 
 /**
  * Inputs after statuses: a frozen critter does nothing at all; one standing in glue can still
- * aim and fire but not walk or jump.
+ * aim and fire but not walk or jump; one steering an RC Racer or Kite Bomber stands still while
+ * its walk heading drives the shot instead (returned in `steering`).
  */
-function restrain(state: SimState, inputs: readonly CritterInput[]): readonly CritterInput[] {
-  if (!state.zones && !state.critters.some((c) => c.frozen)) return inputs;
+function restrain(
+  state: SimState,
+  inputs: readonly CritterInput[],
+): { inputs: readonly CritterInput[]; steering: Map<number, number> } {
+  const steering = new Map<number, number>();
+  const drivers = new Set(
+    state.projectiles.filter((p) => isSteeredByOwner(p.weaponId)).map((p) => p.ownerId),
+  );
+  if (!state.zones && drivers.size === 0 && !state.critters.some((c) => c.frozen))
+    return { inputs, steering };
   const out: CritterInput[] = [];
   for (const i of inputs) {
     const c = state.critters.find((k) => k.id === i.critterId);
     if (!c) continue;
     if (c.frozen) continue;
-    if (c.grounded && inGlue(state.zones, c)) {
+    if (drivers.has(c.id)) {
+      steering.set(c.id, i.moveYaw);
+      const { jump: _j, backflip: _b, ...rest } = i;
+      void [_j, _b];
+      out.push({ ...rest, moveYaw: -1 });
+    } else if (c.grounded && inGlue(state.zones, c)) {
       const { jump: _j, backflip: _b, ...rest } = i;
       void [_j, _b];
       out.push({ ...rest, moveYaw: -1 });
     } else out.push(i);
   }
-  return out;
+  return { inputs: out, steering };
 }
 
 /**

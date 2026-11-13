@@ -29,6 +29,11 @@ import snowGlobe from "../../weapons/snow-globe.json";
 import hotSauceFlask from "../../weapons/hot-sauce-flask.json";
 import gluePuddle from "../../weapons/glue-puddle.json";
 import featherCharm from "../../weapons/feather-charm.json";
+import windUpRobot from "../../weapons/wind-up-robot.json";
+import marbleRoller from "../../weapons/marble-roller.json";
+import rcRacer from "../../weapons/rc-racer.json";
+import kiteBomber from "../../weapons/kite-bomber.json";
+import kiteCharge from "../../weapons/kite-charge.json";
 import type { WeaponData } from "./types";
 
 /** Every weapon id, sub-munitions included. The keys of the registry are exactly these. */
@@ -63,7 +68,12 @@ export type WeaponId =
   | "snow-globe"
   | "hot-sauce-flask"
   | "glue-puddle"
-  | "feather-charm";
+  | "feather-charm"
+  | "wind-up-robot"
+  | "marble-roller"
+  | "rc-racer"
+  | "kite-bomber"
+  | "kite-charge";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -104,6 +114,11 @@ const registry: WeaponRegistry = Object.freeze({
   "hot-sauce-flask": toWeaponData(hotSauceFlask),
   "glue-puddle": toWeaponData(gluePuddle),
   "feather-charm": toWeaponData(featherCharm),
+  "wind-up-robot": toWeaponData(windUpRobot),
+  "marble-roller": toWeaponData(marbleRoller),
+  "rc-racer": toWeaponData(rcRacer),
+  "kite-bomber": toWeaponData(kiteBomber),
+  "kite-charge": toWeaponData(kiteCharge),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

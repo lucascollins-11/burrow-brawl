@@ -982,6 +982,118 @@ describe("status and zones", () => {
   });
 });
 
+describe("walkers and steerables", () => {
+  const send = (fire: FireCommand, extra: (tick: number) => Partial<CritterInput> = () => ({})) =>
+    fireOnce(fire, extra);
+
+  it("Wind-up Robot marches along the aim, climbs a small step, turns at a wall, blows at 8 s", () => {
+    const s = world();
+    applyEdit(s.terrain, { op: "box", x0: 50, y0: GROUND, z0: 54, x1: 54, y1: GROUND + 1, z1: 74 });
+    applyEdit(s.terrain, {
+      op: "box",
+      x0: 70,
+      y0: GROUND,
+      z0: 54,
+      x1: 72,
+      y1: GROUND + 15,
+      z1: 74,
+    });
+    let maxX = 0;
+    let maxY = 0;
+    const r = run(s, 8 * 60 + 5, (tick, st) => {
+      const p = st.projectiles[0];
+      if (p) {
+        maxX = Math.max(maxX, cell(p.pos.x));
+        maxY = Math.max(maxY, cell(p.pos.y));
+      }
+      return send({ weaponId: "wind-up-robot", yaw: 0, pitch: 0, power: 0 })(tick);
+    });
+    expect(maxY).toBe(GROUND + 2); // up the step
+    expect(maxX).toBeLessThan(70); // never through the wall
+    expect(maxX).toBeGreaterThan(60);
+    const ex = explosions(r.events);
+    expect(ex).toHaveLength(1);
+    expect((ex[0]!.edit as { x: number }).x).toBeLessThan(maxX); // came back from the wall
+  });
+
+  it("Wind-up Robot blows early on a click", () => {
+    const r = run(
+      world(),
+      60,
+      send({ weaponId: "wind-up-robot", yaw: 0, pitch: 0, power: 0 }, (t) =>
+        t === 30 ? { trigger: true } : {},
+      ),
+    );
+    expect(explosions(r.events)).toHaveLength(1);
+  });
+
+  it("Marble Roller rolls down the stairs and keeps going on the flat", () => {
+    const s = world();
+    // Stairs falling toward +x: one voxel down every three.
+    for (let i = 0; i < 8; i++)
+      applyEdit(s.terrain, {
+        op: "box",
+        x0: 30,
+        y0: GROUND,
+        z0: 54,
+        x1: 33 + i * 3,
+        y1: GROUND + 7 - i,
+        z1: 74,
+      });
+    const placed = {
+      ...s,
+      critters: s.critters.map((c) => ({ ...c, pos: { ...c.pos, x: 20 * FIXED_ONE } })),
+      projectiles: [
+        {
+          id: 1,
+          ownerId: 1,
+          weaponId: "marble-roller" as const,
+          pos: { x: 31 * FIXED_ONE, y: (GROUND + 9) * FIXED_ONE, z: 64 * FIXED_ONE },
+          vel: { x: FIXED_ONE >> 1, y: 0, z: 0 },
+          age: 0,
+          fuseTicks: 6 * 60,
+          bounces: 0,
+          resting: false,
+        },
+      ],
+      nextProjectileId: 2,
+    };
+    const r = run(placed, 6 * 60 + 2);
+    const ex = explosions(r.events);
+    expect(ex).toHaveLength(1);
+    const end = ex[0]!.edit as { x: number; y: number };
+    expect(end.x).toBeGreaterThan(70); // down the stairs and on across the flat
+    expect(end.y).toBeLessThanOrEqual(GROUND + 1);
+  });
+
+  it("RC Racer follows its driver's walk keys while the driver stands still", () => {
+    const go = send({ weaponId: "rc-racer", yaw: 0, pitch: 0, power: 0 }, (t) =>
+      t >= 1 ? { moveYaw: 256 } : {},
+    );
+    const r = run(world(), 120, go);
+    const car = r.state.projectiles[0]!;
+    expect(cell(car.pos.z)).toBeGreaterThan(64 + 10); // drove toward +z
+    expect(cell(r.state.critters[0]!.pos.x)).toBe(40);
+    expect(cell(r.state.critters[0]!.pos.z)).toBe(64);
+    const r2 = run(r.state, 8 * 60);
+    expect(explosions(r2.events)).toHaveLength(1);
+  });
+
+  it("Kite Bomber flies where it is steered, with the wind, and drops its charge on a click", () => {
+    const fly = send({ weaponId: "kite-bomber", yaw: 0, pitch: 30, power: 0 }, (t) => ({
+      ...(t >= 1 ? { moveYaw: 0 } : {}),
+      ...(t === 120 ? { trigger: true } : {}),
+    }));
+    const calm = run(world(), 400, fly);
+    const windy = run({ ...world(), windX: 100, windZ: 0 }, 400, fly);
+    const at = (r: typeof calm) =>
+      (explosions(r.events).find((e) => e.weaponId === "kite-charge")!.edit as { x: number }).x;
+    expect(explosions(calm.events).map((e) => e.weaponId)).toEqual(["kite-bomber", "kite-charge"]);
+    expect(at(windy)).toBeGreaterThan(at(calm));
+    expect(calm.state.projectiles).toHaveLength(0);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -1037,6 +1149,10 @@ describe("weapon catalogue", () => {
       "hot-sauce-flask",
       "glue-puddle",
       "feather-charm",
+      "wind-up-robot",
+      "marble-roller",
+      "rc-racer",
+      "kite-bomber",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);

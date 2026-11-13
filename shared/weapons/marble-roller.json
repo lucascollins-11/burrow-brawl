@@ -1,0 +1,27 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "marble-roller",
+  "name": "Marble Roller",
+  "description": "A big glass marble that rolls downhill along the ground, picking up speed, and pops after six seconds.",
+  "category": "projectile",
+  "behavior": "roller",
+  "targeting": "aim-angle-power",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 40,
+  "blastRadius": 35,
+  "knockback": 280,
+  "params": {
+    "fuseSeconds": {
+      "min": 6,
+      "max": 6,
+      "default": 6
+    },
+    "maxSpeed": 500,
+    "gravity": 600,
+    "rollFriction": 0.995,
+    "damageFalloff": "linear"
+  }
+}
