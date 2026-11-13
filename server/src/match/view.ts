@@ -21,10 +21,11 @@ type Patch = Extract<ViewServerMessage, { t: "terrain.patch" }>;
 type StateMsg = Extract<ViewServerMessage, { t: "state" }>;
 
 /** What utility the critter is busy with, for animation. At most one at a time. */
-function critterAct(c: Critter): Pick<ViewCritter, "act" | "fuel"> {
+function critterAct(c: Critter): Pick<ViewCritter, "act" | "fuel" | "anchor"> {
   if (c.drillTicks !== undefined) return { act: "drill" };
   if (c.jetFuel !== undefined) return { act: "jetpack", fuel: c.jetFuel };
   if (c.umbrella) return { act: "umbrella" };
+  if (c.rope) return { act: "rope", anchor: { ...c.rope.anchor } };
   if (c.safeFall !== undefined) return { act: "boots" };
   return {};
 }

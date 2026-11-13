@@ -2,7 +2,7 @@
   "$schema": "./weapon.schema.json",
   "id": "rope-claw",
   "name": "Rope Claw",
-  "description": "Fire a grappling claw, swing on the rope, and let go whenever you like.",
+  "description": "Fire a grappling claw at the terrain and swing on the rope; jump to let go.",
   "category": "utility",
   "behavior": "rope-swing",
   "targeting": "aim-angle",
@@ -16,8 +16,8 @@
   "params": {
     "maxRopeLength": 300,
     "minRopeLength": 30,
-    "claimSpeed": 1200,
-    "releaseAnytime": true,
-    "pendulumGravity": 600
+    "yankSpeed": 200,
+    "pumpAccel": 300,
+    "maxSeconds": 10
   }
 }

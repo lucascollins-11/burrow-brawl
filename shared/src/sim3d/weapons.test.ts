@@ -653,6 +653,70 @@ describe("movement gear", () => {
   });
 });
 
+describe("Rope Claw", () => {
+  const claw = (pitch: number): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "rope-claw", yaw: 0, pitch, power: 0 },
+  });
+  /** A slab hanging over +x of critter 1, 20 to 24 voxels up. */
+  const roofed = (): SimState => {
+    const s = world();
+    applyEdit(s.terrain, {
+      op: "box",
+      x0: 50,
+      y0: GROUND + 20,
+      z0: 44,
+      x1: 100,
+      y1: GROUND + 24,
+      z1: 84,
+    });
+    return s;
+  };
+  const dist = (c: SimState["critters"][number]) => {
+    const a = c.rope!.anchor;
+    const d = [c.pos.x - a.x, c.pos.y - a.y, c.pos.z - a.z].map((v) => v / FIXED_ONE);
+    return Math.hypot(d[0]!, d[1]!, d[2]!);
+  };
+
+  it("grips the overhang, lifts the critter and holds it on the rope", () => {
+    const r0 = stepWorld(roofed(), [claw(45)], rng);
+    expect(r0.events.filter((e) => e.type === "fired")).toHaveLength(1);
+    const rope = r0.state.critters[0]!.rope!;
+    expect(cell(rope.anchor.y)).toBe(GROUND + 20);
+    const r = run(r0.state, 120);
+    const c = r.state.critters[0]!;
+    expect(c.rope).toBeDefined();
+    expect(c.grounded).toBe(false);
+    expect(cell(c.pos.y)).toBeGreaterThan(GROUND + 2);
+    expect(dist(c)).toBeLessThanOrEqual(rope.len / FIXED_ONE + 0.01);
+    expect(c.hp).toBe(100);
+  });
+
+  it("lets go on jump and lands unhurt; misses with nothing in reach", () => {
+    let s = run(stepWorld(roofed(), [claw(45)], rng).state, 60).state;
+    s = stepWorld(s, [{ critterId: 1, moveYaw: -1, jump: true }], rng).state;
+    expect(s.critters[0]!.rope).toBeUndefined();
+    const down = run(s, 300);
+    expect(down.state.critters[0]!.grounded).toBe(true);
+    expect(down.state.critters[0]!.hp).toBe(100);
+    const miss = stepWorld(world(), [claw(80)], rng);
+    expect(miss.events.filter((e) => e.type === "fired")).toEqual([]);
+  });
+
+  it("swings further along the heading when pumped", () => {
+    const s = run(stepWorld(roofed(), [claw(45)], rng).state, 30).state;
+    const still = run(s, 90).state.critters[0]!;
+    const pumped = run(s, 90, () => [{ critterId: 1, moveYaw: 0 }]).state.critters[0]!;
+    expect(pumped.pos.x).toBeGreaterThan(still.pos.x);
+  });
+
+  it("lets go by itself after ten seconds", () => {
+    const r = run(stepWorld(roofed(), [claw(45)], rng).state, 60 * 10 + 5);
+    expect(r.state.critters[0]!.rope).toBeUndefined();
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -696,6 +760,7 @@ describe("weapon catalogue", () => {
       "spring-boots",
       "soda-jetpack",
       "umbrella-glide",
+      "rope-claw",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);
