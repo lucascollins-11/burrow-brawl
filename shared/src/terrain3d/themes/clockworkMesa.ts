@@ -1,6 +1,8 @@
 import { cosDeg, isqrt, sinDeg } from "../../fixed.js";
 import {
+  ease,
   fillFromHeightField,
+  pseudoAngle,
   scatterObjects,
   type Rect,
   type Theme,
@@ -21,20 +23,6 @@ interface Gear {
   teeth: number;
   /** The big one gets two more tiers on top. */
   main: boolean;
-}
-
-/** Smooth 0..256 ramp (smoothstep) for a 0..256 input. */
-function ease(p: number): number {
-  return (p * p * (768 - 2 * p)) >> 16;
-}
-
-/** A monotone stand-in for the angle, 0..4095 around the circle, from integers only. */
-function pseudoAngle(dx: number, dz: number): number {
-  const s = Math.abs(dx) + Math.abs(dz);
-  if (s === 0) return 0;
-  const q = Math.floor((1024 * dz) / s); // -1024..1024
-  if (dx >= 0) return dz >= 0 ? q : 4096 + q;
-  return 2048 - q;
 }
 
 function placeGears(ctx: ThemeCtx): Gear[] {
