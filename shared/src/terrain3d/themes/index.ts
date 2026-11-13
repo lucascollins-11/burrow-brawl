@@ -3,6 +3,7 @@ import { createTerrain } from "../grid.js";
 import { BEDROCK_Y, SEA_Y } from "../generate.js";
 import { findSpawns } from "../spawns.js";
 import { keepWalkableSpawns, makeCtx, type Theme } from "./kit.js";
+import { frostedBakery } from "./frostedBakery.js";
 import { picnicAtoll } from "./picnicAtoll.js";
 import { clockworkMesa } from "./clockworkMesa.js";
 import { toyboxHarbor } from "./toyboxHarbor.js";
@@ -12,7 +13,7 @@ export { type Theme, type ThemeCtx } from "./kit.js";
 /** Generator version that dispatches on `recipe.theme`. Version 2 is the older unthemed map. */
 export const THEMED_GENERATOR = 3;
 
-const ALL: readonly Theme[] = [picnicAtoll, toyboxHarbor, clockworkMesa];
+const ALL: readonly Theme[] = [picnicAtoll, toyboxHarbor, clockworkMesa, frostedBakery];
 
 /** Themes the lobby can offer. */
 export const THEMES: readonly {
