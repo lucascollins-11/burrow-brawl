@@ -34,6 +34,15 @@ const LOOKS := {
 		"sun": "ffc48a", "sun_energy": 1.45, "sun_pitch": -28.0, "fog": "e8a6a0",
 		"cloud": "ffd9c9", "debris": "9c7a2b",
 	},
+	# A sunny vegetable patch: bright lawn, dark soil, terracotta pots, a green pond.
+	"garden-patch": {
+		"grass": "62c24a", "grass_dark": "2f8f3a", "soil": "7a4a2e", "rock": "b8663f",
+		"sand": "e8d6a0", "bedrock": "3e3b34",
+		"sea_shallow": "8fe0b0", "sea_deep": "1f7a6a", "sea_horizon": "d8f2c8",
+		"sky_top": "5aa8e8", "sky_horizon": "ffe9b0", "sky_bottom": "a8d08a",
+		"sun": "fff2c0", "sun_energy": 1.6, "sun_pitch": -42.0, "fog": "e6f2c8",
+		"cloud": "ffffff", "debris": "7a4a2e",
+	},
 	# Icing on sponge cake in strawberry soda.
 	"frosted-bakery": {
 		"grass": "fff6f0", "grass_dark": "ffd6e3", "soil": "e8b56b", "rock": "b5763f",

@@ -141,6 +141,14 @@ jobs:
           fi
           echo "no shader errors"
 
+      - name: Map tour, Garden Patch (software renderer, best effort)
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
+            godot --path godot --rendering-driver vulkan --resolution 1280x720 \
+            res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots" --theme=garden-patch --tour 2>&1 | tail -n 20
+
       - name: Server log
         if: always()
         run: tail -n 60 server.log || true
