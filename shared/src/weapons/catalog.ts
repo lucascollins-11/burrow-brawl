@@ -37,6 +37,7 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "pepper-shotgun",
   "root-punch",
   "teleport-burrow",
+  "jelly-mine",
   "drill-hat",
 ];
 

@@ -54,6 +54,7 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "fizz-grenade": "bounce",
   "hopper-ball": "bounce",
   "firecracker-bundle": "bounce",
+  "jelly-mine": "bounce",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -63,7 +64,8 @@ export type ProjectileWeaponId =
   | "pinecone-popper"
   | "hopper-ball"
   | "beehive-strike"
-  | "firecracker-bundle";
+  | "firecracker-bundle"
+  | "jelly-mine";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -72,6 +74,7 @@ const FIREABLE: readonly string[] = [
   "hopper-ball",
   "beehive-strike",
   "firecracker-bundle",
+  "jelly-mine",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -345,7 +348,8 @@ export function spawnShots(
   const w = loadWeapons()[cmd.weaponId];
   const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
   if (cmd.weaponId === "beehive-strike") return dropStrike(t, c, w, yaw, cmd.target, firstId);
-  if (cmd.weaponId === "firecracker-bundle") return [dropCharge(c, w, yaw, firstId)];
+  if (cmd.weaponId === "firecracker-bundle" || cmd.weaponId === "jelly-mine")
+    return [dropCharge(c, w, yaw, firstId)];
 
   const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
   const power = clampInt(cmd.power, 0, 100);
@@ -381,7 +385,20 @@ export function spawnShots(
 const DROP_REACH = 2 * FIXED_ONE;
 const DROP_HEIGHT = FIXED_ONE;
 
-/** A dropped charge (the Firecracker Bundle): set down just ahead with a nudge, fuse lit. */
+/** True for weapons that lie in wait (the Jelly Mine): no fuse until a critter comes close. */
+function isMine(w: WeaponData): boolean {
+  return num(w, "triggerRadius", 0) > 0;
+}
+
+/** A mine lying armed or arming on the ground with no fuse running. It does not hold up a turn. */
+export function isDormant(p: Projectile): boolean {
+  return p.resting && p.fuseTicks < 0 && isMine(loadWeapons()[p.weaponId]);
+}
+
+/**
+ * A dropped charge: set down just ahead with a nudge. The Firecracker Bundle's fuse is lit; a
+ * mine has none.
+ */
 function dropCharge(c: Critter, w: WeaponData, yaw: number, id: number): Projectile {
   const dir = yawDir(yaw);
   const nudge = speedPerTick(num(w, "dropSpeed", 30));
@@ -396,7 +413,7 @@ function dropCharge(c: Critter, w: WeaponData, yaw: number, id: number): Project
     },
     vel: { x: mulQ(dir.x, nudge), y: 0, z: mulQ(dir.z, nudge) },
     age: 0,
-    fuseTicks: fuseRange(w).def * TICK_RATE,
+    fuseTicks: isMine(w) ? -1 : fuseRange(w).def * TICK_RATE,
     bounces: 0,
     resting: false,
   };
@@ -504,6 +521,20 @@ function critterHit(c: Critter, px: number, py: number, pz: number): boolean {
     Math.abs(pz - cell(c.pos.z)) <= 1 &&
     dy >= 0 &&
     dy < CRITTER_HEIGHT
+  );
+}
+
+/** True if a living critter's body centre is within `units` (2D units) of the point. */
+function critterNear(cs: readonly Critter[], x: Fixed, y: Fixed, z: Fixed, units: number): boolean {
+  const reach = Math.floor((units * LENGTH_NUM * FIXED_ONE) / LENGTH_DEN);
+  return cs.some(
+    (c) =>
+      c.status === "alive" &&
+      length({
+        x: c.pos.x - x,
+        y: c.pos.y + (CRITTER_HEIGHT * FIXED_ONE) / 2 - y,
+        z: c.pos.z - z,
+      }) <= reach,
   );
 }
 
@@ -617,6 +648,8 @@ export function stepProjectiles(
   events: SimEvent[],
   triggers: ReadonlySet<number> = new Set(),
   nextId = 0,
+  /** Events from earlier this tick whose blasts (hitscan hits) can also set off charges. */
+  earlier: readonly SimEvent[] = [],
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
@@ -630,7 +663,9 @@ export function stepProjectiles(
     let vy = p.vel.y;
     let vz = p.vel.z;
     let { bounces, resting } = p;
-    const fuse = p.fuseTicks < 0 ? -1 : p.fuseTicks - 1;
+    let fuse = p.fuseTicks < 0 ? -1 : p.fuseTicks - 1;
+    const mine = isMine(w);
+    const armTicks = Math.trunc(num(w, "armSeconds", 0) * TICK_RATE);
     const impact = FLIGHT[p.weaponId] !== "bounce";
     let blast: { x: number; y: number; z: number } | null = null;
     let midAir = false;
@@ -710,6 +745,16 @@ export function stepProjectiles(
       }
     }
 
+    if (mine && blast === null) {
+      if (cell(y) < t.seaY) {
+        events.push({ type: "projectileLost", projectileId: p.id }); // sank
+        continue;
+      }
+      if (fuse < 0 && p.age >= armTicks && critterNear(cs, x, y, z, num(w, "triggerRadius", 0))) {
+        fuse = Math.max(1, Math.trunc(num(w, "triggerDelayTicks", 15)));
+        events.push({ type: "mineTriggered", projectileId: p.id });
+      }
+    }
     if (blast === null && fuse === 0) blast = { x: cell(x), y: cell(y), z: cell(z) };
     if (blast !== null) {
       cs = explode(t, cs, p, blast.x, blast.y, blast.z, events);
@@ -722,13 +767,18 @@ export function stepProjectiles(
       ...p,
       pos: { x, y, z },
       vel: { x: vx, y: vy, z: vz },
-      age: p.age + 1,
+      // A mine's age only counts up to armed, so one shaken loose years later still falls.
+      age: mine ? Math.min(p.age + 1, armTicks) : p.age + 1,
       fuseTicks: fuse,
       bounces,
       resting,
     });
   }
-  return { projectiles: chain([...next, ...spawned], events), critters: cs, nextId: id };
+  return {
+    projectiles: chain([...next, ...spawned], [...earlier, ...events]),
+    critters: cs,
+    nextId: id,
+  };
 }
 
 /**
@@ -743,7 +793,7 @@ function chain(ps: Projectile[], events: readonly SimEvent[]): Projectile[] {
   if (blasts.length === 0) return ps;
   return ps.map((p) => {
     const cut = num(loadWeapons()[p.weaponId], "chainFuseTicks", 0);
-    if (cut <= 0 || p.fuseTicks <= cut) return p;
+    if (cut <= 0 || (p.fuseTicks >= 0 && p.fuseTicks <= cut)) return p;
     const px = cell(p.pos.x);
     const py = cell(p.pos.y);
     const pz = cell(p.pos.z);
