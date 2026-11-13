@@ -29,6 +29,10 @@ export interface ViewCritter {
   anchor?: { x: number; y: number; z: number };
   /** Wearing a Bubble Shield (it pops on the next hit). */
   shield?: true;
+  /** Frozen by a Snow Globe (draw it in ice); thaws when its turn comes round. */
+  frozen?: true;
+  /** Under a Feather Charm this turn. */
+  feather?: true;
   /** Soda Jetpack bursts left, while `act` is "jetpack". */
   fuel?: number;
 }
@@ -42,6 +46,18 @@ export interface ViewProjectile {
   z: number;
   /** Ticks until detonation, or -1 for impact-only weapons. */
   fuseTicks: number;
+}
+
+/** A puddle on the ground, in whole voxels: a disc of radius `r` centred on (x, y, z). */
+export interface ViewZone {
+  id: number;
+  kind: "fire" | "glue";
+  x: number;
+  y: number;
+  z: number;
+  r: number;
+  /** Turn ends left before it dries up. */
+  turns: number;
 }
 
 /** A placed Jelly Mine. Mines are not in `projectiles`. */
@@ -70,6 +86,8 @@ export interface ViewState {
   projectiles: ViewProjectile[];
   /** Placed mines: always the full list; a missing id went off or sank. Absent from older servers. */
   mines?: ViewMine[];
+  /** Fire and glue puddles: always the full list; a missing id dried up. Absent from older servers. */
+  zones?: ViewZone[];
   /**
    * Shots left per sim team, by weapon id, for weapons with limited ammo; a weapon not listed is
    * unlimited. Always complete. Absent from servers older than ammo.

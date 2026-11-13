@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { FIXED_ONE } from "../fixed";
 import { weaponCatalog } from "../weapons/catalog";
 import { loadWeapons } from "../weapons/load";
-import type { CritterInput, FireCommand, SimEvent, SimState } from "./api";
+import type { CritterInput, FireCommand, Projectile, SimEvent, SimState } from "./api";
+import { zonesTurnEnd } from "./zones";
 import { cell } from "./critter";
 import { TRIGGER_MIN_AGE, blastRadius, explode } from "./projectile";
 import { applyEdit, flatSlab, isSolid } from "./terrainOps";
@@ -880,6 +881,107 @@ describe("rockets and seekers", () => {
   });
 });
 
+describe("status and zones", () => {
+  const shoot = (fire: FireCommand) => fireOnce(fire);
+  /** Put a projectile of `weaponId` right on top of critter `id` (impact at once). */
+  const dropOn = (s: SimState, weaponId: Projectile["weaponId"], id = 2): SimState => {
+    const c = s.critters.find((k) => k.id === id)!;
+    return {
+      ...s,
+      projectiles: [
+        {
+          id: 50,
+          ownerId: 1,
+          weaponId,
+          pos: { ...c.pos, y: c.pos.y + 8 * FIXED_ONE },
+          vel: { x: 0, y: -FIXED_ONE, z: 0 },
+          age: 30,
+          fuseTicks: weaponId === "snow-globe" ? 1 : -1,
+          bounces: 0,
+          resting: false,
+        },
+      ],
+      nextProjectileId: 51,
+    };
+  };
+
+  it("Snow Globe freezes without damage or a crater, and a frozen critter does nothing", () => {
+    const before = world(true);
+    const r = run(dropOn(before, "snow-globe"), 10);
+    expect(r.events.filter((e) => e.type === "frozen").map((e) => e.critterId)).toEqual([2]);
+    const c = r.state.critters[1]!;
+    expect(c.frozen).toBe(true);
+    expect(c.hp).toBe(100);
+    expect(isSolid(r.state.terrain, 100, GROUND - 1, 64)).toBe(true);
+    const tried = run(r.state, 30, () => [
+      {
+        critterId: 2,
+        moveYaw: 0,
+        fire: { weaponId: "acorn-mortar", yaw: 0, pitch: 45, power: 50 },
+      },
+    ]);
+    expect(tried.events.filter((e) => e.type === "fired")).toEqual([]);
+    expect(tried.state.critters[1]!.pos.x).toBe(c.pos.x);
+  });
+
+  it("Hot Sauce Flask and Glue Puddle leave puddles; glue stops walking but not firing", () => {
+    const fire = run(dropOn(world(true), "hot-sauce-flask"), 10).state;
+    expect(fire.zones).toHaveLength(1);
+    expect(fire.zones![0]).toMatchObject({ kind: "fire", turns: 3, r: 12 });
+    const glued = run(dropOn(world(true), "glue-puddle"), 10).state;
+    expect(glued.zones![0]).toMatchObject({ kind: "glue", turns: 2 });
+    expect(glued.critters[1]!.hp).toBe(100);
+    const r = run(glued, 30, (t) => [
+      {
+        critterId: 2,
+        moveYaw: 0,
+        ...(t === 0
+          ? { fire: { weaponId: "acorn-mortar" as const, yaw: 0, pitch: 45, power: 50 } }
+          : {}),
+      },
+    ]);
+    expect(r.state.critters[1]!.pos.x).toBe(glued.critters[1]!.pos.x);
+    expect(r.events.filter((e) => e.type === "fired")).toHaveLength(1);
+  });
+
+  it("zonesTurnEnd scorches critters in fire, dries puddles and lifts the Feather Charm", () => {
+    let s = run(dropOn(world(true), "hot-sauce-flask"), 10).state;
+    s = {
+      ...s,
+      critters: s.critters.map((c) => (c.id === 1 ? { ...c, feather: true as const } : c)),
+    };
+    const hp = s.critters[1]!.hp;
+    for (let turn = 0; turn < 3; turn++) {
+      const ev: SimEvent[] = [];
+      s = zonesTurnEnd(s, ev);
+      expect(ev).toEqual([{ type: "damage", critterId: 2, amount: 10, cause: "fire" }]);
+    }
+    expect(s.critters[1]!.hp).toBe(hp - 30);
+    expect(s.zones).toBeUndefined();
+    expect(s.critters[0]!.feather).toBeUndefined();
+  });
+
+  it("Feather Charm halves gravity for the critter and its shots", () => {
+    const lob: FireCommand = { weaponId: "acorn-mortar", yaw: 0, pitch: 45, power: 30 };
+    const plain = run(world(), 400, shoot(lob));
+    const charm = stepWorld(
+      world(),
+      [
+        {
+          critterId: 1,
+          moveYaw: -1,
+          fire: { weaponId: "feather-charm", yaw: 0, pitch: 0, power: 0 },
+        },
+      ],
+      rng,
+    ).state;
+    expect(charm.critters[0]!.feather).toBe(true);
+    const light = run(charm, 600, shoot(lob));
+    const far = (r: typeof plain) => (explosions(r.events)[0]!.edit as { x: number }).x;
+    expect(far(light)).toBeGreaterThan(far(plain) + 10);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -931,6 +1033,10 @@ describe("weapon catalogue", () => {
       "paper-plane-seeker",
       "slingshot",
       "gumball-cluster",
+      "snow-globe",
+      "hot-sauce-flask",
+      "glue-puddle",
+      "feather-charm",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);

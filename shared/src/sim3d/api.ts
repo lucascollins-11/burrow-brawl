@@ -76,6 +76,10 @@ export interface Critter {
   };
   /** Bubble Shield: the next explosion or punch on this critter is absorbed. */
   readonly shield?: true;
+  /** Snow Globe: frozen solid; takes no input, and its next turn is skipped (which thaws it). */
+  readonly frozen?: true;
+  /** Feather Charm: this critter and the shots it fires fall at half gravity until the turn ends. */
+  readonly feather?: true;
 }
 
 export interface Projectile {
@@ -89,6 +93,8 @@ export interface Projectile {
   readonly fuseTicks: number;
   readonly bounces: number;
   readonly resting: boolean;
+  /** Fired under a Feather Charm: falls at half gravity. */
+  readonly light?: true;
   /** Homing target voxel (Paper Plane Seeker). Absent for everything else. */
   readonly target?: { readonly x: number; readonly y: number; readonly z: number };
 }
@@ -133,9 +139,27 @@ export interface SimState {
   readonly windZ: number;
   /** Soda surface row for the sim (starts at terrain.seaY, rises in sudden death). */
   readonly seaY: number;
+  /** Fire and glue puddles on the map. Absent (never empty) when there are none. */
+  readonly zones?: readonly Zone[];
 }
 
-export type DamageCause = "fall" | "explosion" | "hit" | "water";
+/**
+ * A puddle on the ground: fire hurts critters standing in it as each turn ends; glue stops
+ * critters in it walking or jumping. Lasts `turns` more turn ends.
+ */
+export interface Zone {
+  readonly id: number;
+  readonly kind: "fire" | "glue";
+  /** Centre voxel, on the ground. */
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** Radius in voxels. */
+  readonly r: number;
+  readonly turns: number;
+}
+
+export type DamageCause = "fall" | "explosion" | "hit" | "water" | "fire";
 
 export type SimEvent =
   | { readonly type: "jumped"; readonly critterId: number; readonly backflip: boolean }
@@ -211,6 +235,10 @@ export type SimEvent =
     }
   /** A Cookie Snack: `critterId` gained `amount` health (0 when already full). */
   | { readonly type: "healed"; readonly critterId: number; readonly amount: number }
+  /** A Snow Globe froze `critterId`. */
+  | { readonly type: "frozen"; readonly critterId: number }
+  /** A frozen critter's turn came round: it was skipped and the critter thawed. */
+  | { readonly type: "thawed"; readonly critterId: number }
   /** A Bubble Shield took a hit for `critterId` and popped. */
   | { readonly type: "shieldPopped"; readonly critterId: number }
   /** A crate sank into the soda. */

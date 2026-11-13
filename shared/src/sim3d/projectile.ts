@@ -10,7 +10,7 @@ import type { VoxelTerrain } from "../terrain3d/api";
 import { loadWeapons } from "../weapons/load";
 import type { WeaponData } from "../weapons/types";
 import type { WeaponId } from "../weapons/load";
-import type { Critter, FireCommand, Projectile, SimEvent } from "./api";
+import type { Critter, FireCommand, Projectile, SimEvent, Zone } from "./api";
 import { CRITTER_HEIGHT, PITCH_MAX, PITCH_MIN, YAW_STEPS } from "./api";
 import {
   LENGTH_DEN,
@@ -30,6 +30,7 @@ import {
 import { bodyBlocked, cell } from "./critter";
 import { isGearWeapon, speedPerTick, startGear, wearingGear } from "./gear";
 import { dropShield, fireUtility, isUtilityWeapon, popShield } from "./utility";
+import { zoneFrom } from "./zones";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
 import {
   aimDir,
@@ -65,6 +66,9 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   slingshot: "impact",
   "gumball-cluster": "bounce",
   gumball: "stick",
+  "snow-globe": "bounce",
+  "hot-sauce-flask": "impact",
+  "glue-puddle": "impact",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -79,7 +83,10 @@ export type ProjectileWeaponId =
   | "fizz-rocket"
   | "paper-plane-seeker"
   | "slingshot"
-  | "gumball-cluster";
+  | "gumball-cluster"
+  | "snow-globe"
+  | "hot-sauce-flask"
+  | "glue-puddle";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -93,6 +100,9 @@ const FIREABLE: readonly string[] = [
   "paper-plane-seeker",
   "slingshot",
   "gumball-cluster",
+  "snow-globe",
+  "hot-sauce-flask",
+  "glue-puddle",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -647,7 +657,9 @@ export function explode(
   );
   const r = blastRadius(w) + Math.max(0, grow);
   const edit = { op: "carve", x, y, z, r } as const;
-  applyEdit(t, edit);
+  // A Snow Globe's flurry freezes critters and leaves the ground alone.
+  const freeze = w.params.freeze === true;
+  if (!freeze) applyEdit(t, edit);
   events.push({ type: "explosion", projectileId: p.id, weaponId: p.weaponId, edit });
   if (r === 0) return [...critters];
 
@@ -669,7 +681,12 @@ export function explode(
     const falloff = rq - dist; // (0, rq]
     const amount = mulDiv(w.damage, falloff, rq);
     const mag = mulDiv(knock, falloff, rq);
-    if ((amount > 0 || mag > 0) && popShield(c, events)) return dropShield(c);
+    if ((amount > 0 || mag > 0 || freeze) && popShield(c, events)) return dropShield(c);
+    if (freeze) {
+      if (c.frozen) return c;
+      events.push({ type: "frozen", critterId: c.id });
+      return { ...c, frozen: true as const };
+    }
     const push = dist === 0 ? { x: 0, y: mag, z: 0 } : withLength(d, mag);
 
     let hp = c.hp;
@@ -726,6 +743,8 @@ export interface ProjectileStep {
   readonly critters: Critter[];
   /** The next free projectile id (bursts allocate ids). */
   readonly nextId: number;
+  /** Puddles left by this tick's blasts (Hot Sauce Flask, Glue Puddle). */
+  readonly zones: Zone[];
 }
 
 /**
@@ -750,6 +769,7 @@ export function stepProjectiles(
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
   const spawned: Projectile[] = [];
+  const zones: Zone[] = [];
   let id = nextId;
 
   for (const p of projectiles) {
@@ -781,9 +801,10 @@ export function stepProjectiles(
     if (!resting && blast === null) {
       if (p.target && p.age >= Math.trunc(num(w, "homingDelaySeconds", 0) * TICK_RATE))
         ({ x: vx, y: vy, z: vz } = steer(w, p.target, x, y, z, { x: vx, y: vy, z: vz }));
-      // A rocket flies flat for `flatSeconds` before gravity takes hold.
+      // A rocket flies flat for `flatSeconds`; a shot under a Feather Charm falls at half gravity.
+      const g = accelPerTick(num(w, "gravity", 600));
       if (p.age >= Math.trunc(num(w, "flatSeconds", 0) * TICK_RATE))
-        vy = Math.max(vy - accelPerTick(num(w, "gravity", 600)), -2 * TERMINAL_VELOCITY);
+        vy = Math.max(vy - (p.light ? g >> 1 : g), -2 * TERMINAL_VELOCITY);
       if (w.windAffected) {
         vx += clampInt(windX, -100, 100) * WIND_ACCEL_PER_UNIT;
         vz += clampInt(windZ, -100, 100) * WIND_ACCEL_PER_UNIT;
@@ -881,6 +902,8 @@ export function stepProjectiles(
     if (blast === null && fuse === 0) blast = { x: cell(x), y: cell(y), z: cell(z) };
     if (blast !== null) {
       cs = explode(t, cs, p, blast.x, blast.y, blast.z, events);
+      const puddle = zoneFrom(t, p, blast.x, blast.y, blast.z);
+      if (puddle) zones.push(puddle);
       const subs = burst(p, w, blast.x, blast.y, blast.z, midAir, id);
       id += subs.length;
       spawned.push(...subs);
@@ -901,6 +924,7 @@ export function stepProjectiles(
     projectiles: chain([...next, ...spawned], [...earlier, ...events]),
     critters: cs,
     nextId: id,
+    zones,
   };
 }
 

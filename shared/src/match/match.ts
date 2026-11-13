@@ -6,6 +6,7 @@ import { Prng, StateHasher, type PrngState } from "../determinism";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim3d/api";
 import { PITCH_MAX, PITCH_MIN, YAW_STEPS } from "../sim3d/api";
 import { MAX_HEALTH } from "../sim3d/constants";
+import { zonesTurnEnd } from "../sim3d/zones";
 import { createCritter, createWorld, stepWorld } from "../sim3d/world";
 import type { MapRecipe, TerrainEdit } from "../terrain3d/api";
 import {
@@ -78,6 +79,10 @@ const WEAPON_IDS = [
   "paper-plane-seeker",
   "slingshot",
   "gumball-cluster",
+  "snow-globe",
+  "hot-sauce-flask",
+  "glue-puddle",
+  "feather-charm",
 ] as const satisfies readonly WeaponId[];
 
 const isIntIn = (v: unknown, min: number, max: number): v is number =>
@@ -315,8 +320,29 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
   let moveYaw = state.moveYaw;
   const controlling = turns.activeTeam(ts) !== null && ts.activeCritter !== null;
 
+  // A frozen critter's turn is skipped as it starts, which thaws it (Snow Globe).
+  const thawed: SimEvent[] = [];
+  let simIn = state.sim;
+  const ice =
+    controlling && ts.phase === "control"
+      ? simIn.critters.find((c) => c.id === ts.activeCritter && c.frozen)
+      : undefined;
+  if (ice) {
+    thawed.push({ type: "thawed", critterId: ice.id });
+    simIn = {
+      ...simIn,
+      critters: simIn.critters.map((c) => {
+        if (c.id !== ice.id) return c;
+        const { frozen: _f, ...rest } = c;
+        void _f;
+        return rest;
+      }),
+    };
+    ts = turns.endTurn(ts, rules, "skip", tick);
+  }
+
   const inputs: CritterInput[] = [];
-  if (controlling) {
+  if (controlling && !ice) {
     for (const c of cmds) if (c.k === "move") moveYaw = c.yaw;
     inputs.push(inputFor(ts.activeCritter!, moveYaw, cmds));
     if (cmds.some((c) => c.k === "skip")) ts = turns.endTurn(ts, rules, "skip", tick);
@@ -342,7 +368,7 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
 
   const rng = Prng.fromState(state.rng);
   // The turn controller owns wind; the sim reads it from SimState.
-  const sim: SimState = { ...state.sim, windX: ts.windX, windZ: ts.windZ };
+  const sim: SimState = { ...simIn, windX: ts.windX, windZ: ts.windZ };
   const r = stepWorld(sim, inputs, rng);
   let ammo = state.ammo;
   for (const e of r.events) {
@@ -367,7 +393,9 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
   }
   // Crates: fall with the ground, get taken by whoever walks into them, and a new one may drop
   // as each turn starts.
-  const events: SimEvent[] = [...r.events];
+  const events: SimEvent[] = [...thawed, ...r.events];
+  // Fire puddles scorch, puddles dry, Feather Charms wear off.
+  if (turnChanged && next.phase !== "over") simOut = zonesTurnEnd(simOut, events);
   const settled = settleCrates(simOut.terrain, simOut.seaY, state.crates);
   for (const c of settled.lost) events.push({ type: "crateLost", crateId: c.id });
   const got = collectCrates(settled.crates, simOut.critters);

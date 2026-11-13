@@ -1,0 +1,28 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "snow-globe",
+  "name": "Snow Globe",
+  "description": "A shaken snow globe: no damage, but critters in its flurry freeze solid and miss their next turn.",
+  "category": "projectile",
+  "behavior": "freeze-grenade",
+  "targeting": "aim-angle-power",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 40,
+  "knockback": 0,
+  "params": {
+    "fuseSeconds": {
+      "min": 3,
+      "max": 3,
+      "default": 3
+    },
+    "maxBounces": 3,
+    "bounciness": 0.45,
+    "maxSpeed": 700,
+    "gravity": 600,
+    "freeze": true
+  }
+}
