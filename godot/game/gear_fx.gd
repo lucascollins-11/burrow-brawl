@@ -245,6 +245,10 @@ func _aura(g: Dictionary, key: String, on: bool) -> void:
 		node = _ice() if key == "ice" else _glow()
 		(g["root"] as Node3D).add_child(node)
 		g[key] = node
+		# Switch the sparkles on only now: starting an emitter outside the tree reads its transform.
+		var sparkles := node.get_node_or_null("Sparkles") as CPUParticles3D
+		if sparkles != null:
+			sparkles.emitting = true
 	if key == "glow":
 		node.scale = Vector3.ONE * (1.0 + 0.06 * sin(_t * 4.0))
 
@@ -311,7 +315,6 @@ static func _glow() -> Node3D:
 	spark.initial_velocity_max = 4.0
 	spark.lifetime = 1.2
 	spark.amount = 14
-	spark.emitting = true
 	var fade := Gradient.new()
 	fade.set_color(0, Color(1.0, 0.95, 0.6, 0.9))
 	fade.set_color(1, Color(1.0, 0.95, 0.6, 0.0))
