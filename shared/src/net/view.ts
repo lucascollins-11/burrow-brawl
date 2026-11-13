@@ -27,6 +27,8 @@ export interface ViewCritter {
   act?: "drill" | "boots" | "jetpack" | "umbrella" | "rope";
   /** Where the rope is gripped (Q16.16 voxels, like x/y/z), while `act` is "rope". */
   anchor?: { x: number; y: number; z: number };
+  /** Wearing a Bubble Shield (it pops on the next hit). */
+  shield?: true;
   /** Soda Jetpack bursts left, while `act` is "jetpack". */
   fuel?: number;
 }

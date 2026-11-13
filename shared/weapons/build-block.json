@@ -1,0 +1,21 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "build-block",
+  "name": "Build Block",
+  "description": "Drop a big toy block as new terrain: a bridge, a step or a wall.",
+  "category": "utility",
+  "behavior": "place-block",
+  "targeting": "placement",
+  "ammo": 3,
+  "crateOnly": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "blockSize": 20,
+    "blockHeight": 14,
+    "maxRange": 250
+  }
+}

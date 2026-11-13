@@ -29,6 +29,7 @@ import {
 } from "./constants";
 import { bodyBlocked, cell } from "./critter";
 import { isGearWeapon, speedPerTick, startGear, wearingGear } from "./gear";
+import { dropShield, fireUtility, isUtilityWeapon, popShield } from "./utility";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
 import {
   aimDir,
@@ -166,6 +167,7 @@ export function isInstantWeapon(id: string): boolean {
   return (
     isHitscanWeapon(id) ||
     isGearWeapon(id) ||
+    isUtilityWeapon(id) ||
     id === "root-punch" ||
     id === "teleport-burrow" ||
     id === "drill-hat"
@@ -187,6 +189,8 @@ export function fireInstant(
   if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
   if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
   if (cmd.weaponId === "drill-hat") return startDrill(critters, c, cmd);
+  if (isUtilityWeapon(cmd.weaponId))
+    return fireUtility(t, critters, c, { ...cmd, weaponId: cmd.weaponId }, events);
   if (isGearWeapon(cmd.weaponId))
     return startGear(t, critters, c, { ...cmd, weaponId: cmd.weaponId });
   return fireHitscan(t, critters, c, cmd, events);
@@ -250,6 +254,7 @@ function punch(
   });
   return critters.map((o) => {
     if (!hit(o)) return o;
+    if (popShield(o, events)) return dropShield(o);
     const dealt = Math.min(o.hp, w.damage);
     const hp = o.hp - dealt;
     if (dealt > 0) events.push({ type: "damage", critterId: o.id, amount: dealt, cause: "hit" });
@@ -593,6 +598,7 @@ export function explode(
     const falloff = rq - dist; // (0, rq]
     const amount = mulDiv(w.damage, falloff, rq);
     const mag = mulDiv(knock, falloff, rq);
+    if ((amount > 0 || mag > 0) && popShield(c, events)) return dropShield(c);
     const push = dist === 0 ? { x: 0, y: mag, z: 0 } : withLength(d, mag);
 
     let hp = c.hp;

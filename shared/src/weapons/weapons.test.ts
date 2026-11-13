@@ -21,8 +21,8 @@ function readWeapon(file: string): Record<string, unknown> {
 }
 
 describe("weapon data files", () => {
-  it("found the 19 weapon files (12 starting weapons, waves 1 and 2, sub-munitions)", () => {
-    expect(weaponFiles).toHaveLength(19);
+  it("found the 22 weapon files (12 starting weapons, waves 1 and 2, sub-munitions)", () => {
+    expect(weaponFiles).toHaveLength(22);
   });
 
   it.each(weaponFiles)("%s validates against weapon.schema.json", (file) => {
