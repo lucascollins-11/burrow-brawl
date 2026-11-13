@@ -17,6 +17,9 @@ var a: Node
 var b: Node
 var scene: Node
 var shots_dir := ""
+## --theme=<id> picks the map theme; --tour stops after the first-turn screenshots (a map preview).
+var theme := "toybox-harbor"
+var tour := false
 var b_state: Dictionary = {}
 var a_patches := 0
 var b_patches := 0
@@ -29,6 +32,10 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shots="):
 			shots_dir = arg.trim_prefix("--shots=")
+		if arg.begins_with("--theme="):
+			theme = arg.trim_prefix("--theme=")
+		if arg == "--tour":
+			tour = true
 	if shots_dir != "":
 		DirAccess.make_dir_recursive_absolute(shots_dir)
 	a = get_node("/root/Net")
@@ -68,7 +75,7 @@ func _run() -> bool:
 		return false
 
 	# Short turns and a fixed map, as in the server's own two-player tests.
-	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": "toybox-harbor", "mapSize": 256}})
+	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": theme, "mapSize": 256}})
 	a.set_ready(true)
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
@@ -116,6 +123,13 @@ func _run() -> bool:
 	if not v["my_turn"]:
 		return _fail("turn 1 should be A's (team 0); local teams are %s" % [scene.vm.local_teams])
 	await _shot("1-start")
+	if tour:
+		# A look from above at the whole island, then done.
+		scene._rig.dist = 160.0
+		scene._rig.pitch_deg = 50.0
+		await _shot("overview", 6)
+		print("E2E ok: tour of ", theme)
+		return true
 
 	# A fires an acorn mortar toward the middle of the island.
 	var me: Dictionary = {}
@@ -232,6 +246,8 @@ func _fail(why: String) -> bool:
 ## Build a menu screen on top of the test for a few frames (and a screenshot), then remove it
 ## before the next step, so its own scene changes never fire.
 func _preview(scene_path: String, shot_name: String) -> void:
+	if tour:
+		return
 	var screen: Node = (load(scene_path) as PackedScene).instantiate()
 	add_child(screen)
 	for i in 5:
@@ -301,7 +317,7 @@ func _shot(shot_name: String, frames := 5) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
-	var path := shots_dir.path_join(shot_name + ".png")
+	var path := shots_dir.path_join((theme + "-" if tour else "") + shot_name + ".png")
 	if img == null or img.save_png(path) != OK:
 		print("E2E could not save ", path)
 	else:

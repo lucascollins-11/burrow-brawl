@@ -74,6 +74,10 @@ const THEME_CASES = [
     id: "frosted-bakery",
     golden: { 256: 3991439380, 384: 879165735, 512: 774246827 } as Record<number, number>,
   },
+  {
+    id: "bathtub-bay",
+    golden: { 256: 870537865, 384: 705710305, 512: 1361670801 } as Record<number, number>,
+  },
 ];
 
 describe.each(THEME_CASES)("$id", ({ id, golden }) => {
