@@ -77,6 +77,7 @@ func _ready() -> void:
 	add_child(shots)
 	crates = CrateViews.new()
 	crates.name = "Crates"
+	crates.landed.connect(func(at: Vector3) -> void: fx.dust(at, 2.4))
 	add_child(crates)
 	controls.name = "Controls"
 	add_child(controls)
@@ -319,9 +320,11 @@ func _send_input(turn: int, cmds: Array) -> void:
 
 
 ## A shot that vanished at the soda line splashes; ones that blew up on land already had their blast.
-func _on_shot_lost(at: Vector3, _weapon: String) -> void:
+func _on_shot_lost(at: Vector3, weapon: String) -> void:
 	if at.y <= vm.sea_y + 2.0:
 		fx.splash(Vector3(at.x, vm.sea_y, at.z), 3.0)
+	elif weapon == "pinecone-popper":
+		fx.burst(at, Color("8b5a2b"))
 
 
 func _handle_events(events: Array, v: Dictionary) -> void:
@@ -354,13 +357,13 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 					what = "+1 %s" % hud.weapon_title(str(e.get("weaponId", "")))
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
-			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})))
+			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})), bool(e.get("hit", false)))
 		elif kind == "punch":
-			fx.puff(ViewModel.point(e.get("at", {})), 3.0)
+			var struck: Variant = e.get("hits", 0)
+			fx.punch(ViewModel.point(e.get("at", {})), (struck as Array).size() if struck is Array else int(struck))
 		elif kind == "teleported":
 			var up := Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
-			fx.puff(ViewModel.point(e.get("from", {})) + up, 4.5)
-			fx.puff(ViewModel.point(e.get("to", {})) + up, 4.5)
+			fx.teleport(ViewModel.point(e.get("from", {})) + up, ViewModel.point(e.get("to", {})) + up)
 		elif kind == "fired":
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:

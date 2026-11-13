@@ -9,6 +9,9 @@ const SIZE := 2.6
 const DROP_FROM := 45.0
 const DROP_SECONDS := 0.9
 
+## A crate that dropped in has just touched down at `at`.
+signal landed(at: Vector3)
+
 var _nodes: Dictionary = {}  # id -> Node3D
 var _t := 0.0
 
@@ -29,8 +32,11 @@ func sync(crates: Array, dt: float, drop_new := true) -> void:
 			add_child(node)
 			node.position = at
 			node.set_meta("fall", DROP_FROM if drop_new else 0.0)
-		var fall: float = maxf(0.0, float(node.get_meta("fall", 0.0)) - DROP_FROM / DROP_SECONDS * dt)
+		var was_falling: float = float(node.get_meta("fall", 0.0))
+		var fall: float = maxf(0.0, was_falling - DROP_FROM / DROP_SECONDS * dt)
 		node.set_meta("fall", fall)
+		if was_falling > 0.0 and fall == 0.0:
+			landed.emit(at)
 		# Follow the server downwards smoothly; the drop-in is only for show.
 		node.position = Vector3(at.x, lerpf(node.position.y, at.y, minf(1.0, dt * 12.0)), at.z)
 		var body := node.get_node("Body") as Node3D

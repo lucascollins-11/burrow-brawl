@@ -264,7 +264,7 @@ func _smoke(at: Vector3, radius: float) -> void:
 
 ## The streak of an instant shot: a bright thin bar from the muzzle to where it stopped, gone in a
 ## blink, with a puff at the muzzle.
-func tracer(from: Vector3, to: Vector3) -> void:
+func tracer(from: Vector3, to: Vector3, hit := false) -> void:
 	var span := to - from
 	var length := span.length()
 	if length < 0.01:
@@ -294,7 +294,158 @@ func tracer(from: Vector3, to: Vector3) -> void:
 	tw.tween_property(mat, "albedo_color:a", 0.0, 0.28)
 	tw.chain().tween_callback(bar.queue_free)
 	puff(from, 1.6)
+	if hit:
+		_sparks(to, 1.4)
+		puff(to, 1.8)
 	_kick(from, 0.12)
+
+
+## The Root Punch: a hard shock ring, sparks and a comic "POW!" when it connects.
+func punch(at: Vector3, hits: int) -> void:
+	_ring(at, 6.0, 0.3, Color(1.0, 0.95, 0.7, 0.9))
+	puff(at, 3.5)
+	if hits > 0:
+		_sparks(at, 2.2)
+		_word(at + Vector3(0, 3.0, 0), "POW!", Color("ffd23f"))
+		_kick(at, 0.3)
+	else:
+		_kick(at, 0.08)
+
+
+## A comic word that pops in over a point and floats away.
+func _word(at: Vector3, text: String, color: Color) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.pixel_size = 0.06
+	label.font_size = 96
+	label.outline_size = 26
+	label.modulate = color
+	label.outline_modulate = Color("3b2a1a")
+	label.position = at
+	label.scale = Vector3.ONE * 0.2
+	label.rotation_degrees.z = _rng.randf_range(-12.0, 12.0)
+	add_child(label)
+	var tw := create_tween()
+	tw.tween_property(label, "scale", Vector3.ONE * 1.3, 0.1)
+	tw.tween_property(label, "scale", Vector3.ONE, 0.08)
+	var rise := create_tween()
+	rise.set_parallel(true)
+	rise.tween_property(label, "position:y", at.y + 5.0, 0.9)
+	rise.tween_property(label, "modulate:a", 0.0, 0.5).set_delay(0.4)
+	rise.chain().tween_callback(label.queue_free)
+
+
+## Teleport Burrow: sparkles sucked into a column where the critter vanished, and a burst of them
+## where it pops out. Both points are at the critter's middle.
+func teleport(from: Vector3, to: Vector3) -> void:
+	_swirl(from, true)
+	_swirl(to, false)
+	_column(from, Color(0.7, 0.55, 1.0, 0.6))
+	_column(to, Color(0.55, 0.95, 1.0, 0.6))
+	puff(from, 4.0)
+	puff(to, 4.0)
+
+
+func _swirl(at: Vector3, inward: bool) -> void:
+	var p := CPUParticles3D.new()
+	p.position = at
+	p.amount = 40
+	p.lifetime = 0.8
+	p.one_shot = true
+	p.explosiveness = 0.9
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	p.emission_sphere_radius = 4.0 if inward else 0.5
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.initial_velocity_min = 0.0 if inward else 6.0
+	p.initial_velocity_max = 1.0 if inward else 12.0
+	p.gravity = Vector3.ZERO
+	p.radial_accel_min = -14.0 if inward else 0.0
+	p.radial_accel_max = -9.0 if inward else 0.0
+	p.damping_min = 0.0 if inward else 6.0
+	p.damping_max = 0.0 if inward else 9.0
+	var bit := SphereMesh.new()
+	bit.radius = 0.28
+	bit.height = 0.56
+	bit.radial_segments = 6
+	bit.rings = 3
+	p.mesh = bit
+	var fade := Gradient.new()
+	fade.set_color(0, Color(0.85, 0.7, 1.0, 1.0) if inward else Color(0.7, 1.0, 1.0, 1.0))
+	fade.set_color(1, Color(1, 1, 1, 0.0))
+	p.color_ramp = fade
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.emission_enabled = true
+	m.emission = Color(0.8, 0.8, 1.0)
+	m.emission_energy_multiplier = 2.0
+	p.material_override = m
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.6).timeout.connect(p.queue_free)
+
+
+## A tall soft light column that thins out.
+func _column(at: Vector3, color: Color) -> void:
+	var m := MeshInstance3D.new()
+	var c := CylinderMesh.new()
+	c.top_radius = 1.4
+	c.bottom_radius = 1.4
+	c.height = 14.0
+	c.radial_segments = 14
+	m.mesh = c
+	var mat := _unshaded(color, 1.5)
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.position = at + Vector3(0, 5.0, 0)
+	add_child(m)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(m, "scale", Vector3(0.1, 1.2, 0.1), 0.6)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.6)
+	tw.chain().tween_callback(m.queue_free)
+
+
+## A cluster shot popping in the air: a puff and a spray of little seeds.
+func burst(at: Vector3, color: Color) -> void:
+	puff(at, 3.5)
+	_ring(at, 4.5, 0.3, Color(1, 1, 1, 0.6))
+	var p := CPUParticles3D.new()
+	p.position = at
+	p.amount = 18
+	p.lifetime = 0.5
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.initial_velocity_min = 6.0
+	p.initial_velocity_max = 13.0
+	p.gravity = Vector3(0, -20, 0)
+	var bit := SphereMesh.new()
+	bit.radius = 0.3
+	bit.height = 0.6
+	bit.radial_segments = 6
+	bit.rings = 3
+	p.mesh = bit
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	p.material_override = mat
+	add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.2).timeout.connect(p.queue_free)
+	_kick(at, 0.1)
+
+
+## A crate thumping down: a flat dust ring and a few crumbs.
+func dust(at: Vector3, size := 2.0) -> void:
+	_ring(at + Vector3(0, 0.2, 0), size * 2.2, 0.5, Color(0.85, 0.75, 0.6, 0.6))
+	puff(at + Vector3(0, 0.8, 0), size)
+	_kick(at, 0.08)
 
 
 ## Small puff for shots that do not explode (muzzle, impacts).

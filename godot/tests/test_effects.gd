@@ -48,3 +48,77 @@ func test_shake_decays_to_zero() -> void:
 		fx.update(0.05)
 	check_eq(fx._shake, 0.0, "shake dies away")
 	fx.free()
+
+
+func test_a_tracer_that_hits_throws_sparks_a_miss_does_not() -> void:
+	var miss := _fx()
+	miss.tracer(Vector3.ZERO, Vector3(20, 0, 0), false)
+	var hit := _fx()
+	hit.tracer(Vector3.ZERO, Vector3(20, 0, 0), true)
+	check(hit.get_child_count() > miss.get_child_count(), "a hit adds sparks and a puff")
+	miss.free()
+	hit.free()
+
+
+func test_a_punch_that_connects_says_pow() -> void:
+	var whiff := _fx()
+	whiff.punch(Vector3.ZERO, 0)
+	var smack := _fx()
+	smack.punch(Vector3.ZERO, 2)
+	check(smack.get_child_count() > whiff.get_child_count(), "connecting adds sparks and a word")
+	var has_word := false
+	for c in smack.get_children():
+		if c is Label3D and (c as Label3D).text == "POW!":
+			has_word = true
+	check(has_word, "the word pops up")
+	whiff.free()
+	smack.free()
+
+
+func test_teleport_effects_appear_at_both_ends() -> void:
+	var fx := _fx()
+	fx.teleport(Vector3(0, 5, 0), Vector3(50, 5, 0))
+	var near_from := 0
+	var near_to := 0
+	for c in fx.get_children():
+		if c is Node3D:
+			var x := (c as Node3D).position.x
+			if x < 25.0:
+				near_from += 1
+			else:
+				near_to += 1
+	check(near_from >= 3 and near_to >= 3, "swirl, column and puff at each end")
+	fx.free()
+
+
+func test_burst_and_dust_build() -> void:
+	var fx := _fx()
+	fx.burst(Vector3(0, 20, 0), Color.BROWN)
+	var after_burst := fx.get_child_count()
+	check(after_burst >= 3, "puff, ring and seeds")
+	fx.dust(Vector3.ZERO, 2.0)
+	check(fx.get_child_count() > after_burst, "dust adds a ring and a puff")
+	fx.free()
+
+
+func test_a_dropped_crate_reports_touching_down_once() -> void:
+	var crates := CrateViews.new()
+	var landings: Array = []
+	crates.landed.connect(func(at: Vector3) -> void: landings.append(at))
+	var list := [{"id": 1, "kind": "weapon", "weapon": "fizz-grenade", "pos": Vector3(4, 6, 8)}]
+	for i in range(40):
+		crates.sync(list, 0.05, true)
+	check_eq(landings.size(), 1, "one landing")
+	check_eq(landings[0], Vector3(4, 6, 8), "where it came to rest")
+	crates.free()
+
+
+func test_crates_that_were_already_there_do_not_thump() -> void:
+	var crates := CrateViews.new()
+	var landings: Array = []
+	crates.landed.connect(func(at: Vector3) -> void: landings.append(at))
+	var list := [{"id": 1, "kind": "health", "weapon": "", "pos": Vector3(1, 1, 1)}]
+	for i in range(10):
+		crates.sync(list, 0.05, false)
+	check_eq(landings.size(), 0, "no landing for crates seen at match start")
+	crates.free()
