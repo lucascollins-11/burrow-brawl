@@ -9,7 +9,7 @@ import type { CritterInput, FireCommand, SimEvent, SimState } from "./api";
 import { cell } from "./critter";
 import { TRIGGER_MIN_AGE, blastRadius, explode } from "./projectile";
 import { flatSlab } from "./terrainOps";
-import { createCritter, createWorld, stepWorld } from "./world";
+import { createCritter, createWorld, isSettled, stepWorld } from "./world";
 
 const rng = { nextInt: () => 0 };
 const GROUND = 20;
@@ -416,6 +416,61 @@ describe("Teleport Burrow", () => {
   });
 });
 
+describe("Jelly Mine", () => {
+  const drop: CritterInput = {
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "jelly-mine", yaw: 0, pitch: 0, power: 0 },
+  };
+  /** Put a critter somewhere else, standing. */
+  const move = (s: SimState, id: number, x: number): SimState => ({
+    ...s,
+    critters: s.critters.map((c) =>
+      c.id === id ? { ...c, pos: { ...c.pos, x: x * FIXED_ONE + FIXED_ONE / 2 } } : c,
+    ),
+  });
+
+  it("blows on its own placer if they stay beside it past arming", () => {
+    const r = run(stepWorld(world(), [drop], rng).state, 60 * 2 + 40);
+    expect(r.events.filter((e) => e.type === "mineTriggered")).toHaveLength(1);
+    expect(explosions(r.events)).toHaveLength(1);
+    expect(r.state.critters[0]!.hp).toBeLessThan(100);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+
+  it("lies in wait without holding up the turn, then goes off under whoever comes close", () => {
+    let s = move(stepWorld(world(true), [drop], rng).state, 1, 10);
+    const waited = run(s, 60 * 12);
+    s = waited.state;
+    expect(explosions(waited.events)).toHaveLength(0);
+    expect(s.projectiles).toHaveLength(1);
+    expect(isSettled(s)).toBe(true);
+    const sprung = run(move(s, 2, 44), 30);
+    expect(sprung.events.filter((e) => e.type === "mineTriggered")).toHaveLength(1);
+    expect(explosions(sprung.events)).toHaveLength(1);
+    expect(sprung.state.critters[1]!.hp).toBeLessThan(100);
+    expect(sprung.state.critters[0]!.hp).toBe(100);
+  });
+
+  it("is set off by a blast that reaches it", () => {
+    let s = move(stepWorld(world(), [drop], rng).state, 1, 10);
+    s = run(s, 30).state;
+    const mine = s.projectiles[0]!;
+    const shell = {
+      ...mine,
+      id: 99,
+      weaponId: "acorn-mortar" as const,
+      pos: { ...mine.pos, y: mine.pos.y + 6 * FIXED_ONE },
+      vel: { x: 0, y: -FIXED_ONE, z: 0 },
+      resting: false,
+    };
+    const r = run({ ...s, projectiles: [mine, shell] }, 40);
+    expect(explosions(r.events)).toHaveLength(2);
+    expect(r.events.filter((e) => e.type === "mineTriggered")).toHaveLength(0);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -454,7 +509,9 @@ describe("weapon catalogue", () => {
       "pepper-shotgun",
       "root-punch",
       "teleport-burrow",
+      "jelly-mine",
     ]);
+    expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["root-punch"]!.needs).toEqual([]);
     expect(byId["teleport-burrow"]!.needs).toEqual(["target"]);
     expect(byId["pepper-shotgun"]!.needs).toEqual([]);
