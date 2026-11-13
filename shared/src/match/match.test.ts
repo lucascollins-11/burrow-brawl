@@ -399,3 +399,22 @@ describe("MatchMirror", () => {
     expect(hashMatch(mirror.state)).toBe(hashMatch(server));
   });
 });
+
+describe("statuses across turns", () => {
+  it("skips a frozen critter's turn as it starts, thawing it", () => {
+    let s = run(createMatch(cfg), 5);
+    const me = active(s);
+    s = {
+      ...s,
+      sim: {
+        ...s.sim,
+        critters: s.sim.critters.map((c) => (c.id === me.id ? { ...c, frozen: true as const } : c)),
+      },
+    };
+    const r = stepMatch(cfg, s, []);
+    expect(r.events).toContainEqual({ type: "thawed", critterId: me.id });
+    expect(r.state.sim.critters.find((c) => c.id === me.id)!.frozen).toBeUndefined();
+    const later = run(r.state, 120);
+    expect(later.turns.turn).toBeGreaterThan(s.turns.turn);
+  });
+});

@@ -17,6 +17,7 @@ import type {
 import { YAW_STEPS } from "./api";
 import { FALL_DAMAGE_DEN, FALL_DAMAGE_NUM, FALL_SAFE_DISTANCE } from "./constants";
 import { bodyBlocked, cell, createCritter, stepCritter } from "./critter";
+import { inGlue } from "./zones";
 import { fireInstant, isDormant, isInstantWeapon, spawnShots, stepProjectiles } from "./projectile";
 
 export function createWorld(terrain: VoxelTerrain, critters: readonly Critter[]): SimState {
@@ -75,8 +76,9 @@ function resolve(
  * Advance one 60 Hz tick. Critters and projectiles are new records; the terrain is edited in
  * place. No Math.random or clocks: `rng` is reserved for later systems (crates, scatter).
  */
-export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng: Rng): StepResult {
+export function stepWorld(state: SimState, given: readonly CritterInput[], rng: Rng): StepResult {
   void rng;
+  const inputs = restrain(state, given);
   const t = state.terrain;
   const moveEvents: SimEvent[] = [];
   let critters = state.critters.map((c) => stepCritter(t, c, inputFor(inputs, c.id), moveEvents));
@@ -94,7 +96,8 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
       scans.push({ critterId: c.id, cmd });
       return { ...c, yaw: facing };
     }
-    const shots = spawnShots(t, c, cmd, nextId);
+    const fresh = spawnShots(t, c, cmd, nextId);
+    const shots = c.feather ? fresh.map((s) => ({ ...s, light: true as const })) : fresh;
     const p = shots[0];
     if (!p) return c;
     nextId += shots.length;
@@ -148,9 +151,30 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
       critters,
       projectiles: flown.projectiles,
       nextProjectileId: flown.nextId,
+      ...(flown.zones.length ? { zones: [...(state.zones ?? []), ...flown.zones] } : {}),
     },
     events,
   };
+}
+
+/**
+ * Inputs after statuses: a frozen critter does nothing at all; one standing in glue can still
+ * aim and fire but not walk or jump.
+ */
+function restrain(state: SimState, inputs: readonly CritterInput[]): readonly CritterInput[] {
+  if (!state.zones && !state.critters.some((c) => c.frozen)) return inputs;
+  const out: CritterInput[] = [];
+  for (const i of inputs) {
+    const c = state.critters.find((k) => k.id === i.critterId);
+    if (!c) continue;
+    if (c.frozen) continue;
+    if (c.grounded && inGlue(state.zones, c)) {
+      const { jump: _j, backflip: _b, ...rest } = i;
+      void [_j, _b];
+      out.push({ ...rest, moveYaw: -1 });
+    } else out.push(i);
+  }
+  return out;
 }
 
 /**

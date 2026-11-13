@@ -231,7 +231,7 @@ export function stepCritter(
       jetFuel--;
       peakY = cell(y); // thrust brakes the fall
     }
-    vy = Math.max(vy - GRAVITY, -TERMINAL_VELOCITY);
+    vy = Math.max(vy - (c.feather ? GRAVITY >> 1 : GRAVITY), -TERMINAL_VELOCITY);
     if (c.umbrella) {
       const u = umbrellaSpeeds();
       vy = Math.max(vy, -u.fall);

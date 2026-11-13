@@ -13,7 +13,12 @@ import { FOOTPRINT, cell } from "./critter";
 import { applyEdit } from "./terrainOps";
 import { length } from "./vec3";
 
-export const UTILITY_WEAPONS = ["build-block", "bubble-shield", "cookie-snack"] as const;
+export const UTILITY_WEAPONS = [
+  "build-block",
+  "bubble-shield",
+  "cookie-snack",
+  "feather-charm",
+] as const;
 export type UtilityWeapon = (typeof UTILITY_WEAPONS)[number];
 
 export function isUtilityWeapon(id: string): id is UtilityWeapon {
@@ -90,6 +95,10 @@ export function fireUtility(
     if (boxHitsCritter(critters, b)) return null;
     applyEdit(t, { op: "box", ...b });
     return [...critters];
+  }
+  if (cmd.weaponId === "feather-charm") {
+    if (c.feather) return null;
+    return critters.map((o) => (o.id === c.id ? { ...o, feather: true as const } : o));
   }
   if (cmd.weaponId === "bubble-shield") {
     if (c.shield) return null;

@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "glue-puddle",
+  "name": "Glue Puddle",
+  "description": "A pot of craft glue that splats into a sticky puddle: critters in it can't walk or jump until it dries.",
+  "category": "projectile",
+  "behavior": "glue-pot",
+  "targeting": "aim-angle-power",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": true,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "maxSpeed": 800,
+    "gravity": 600,
+    "zone": "glue",
+    "zoneRadius": 40,
+    "zoneTurns": 2
+  }
+}

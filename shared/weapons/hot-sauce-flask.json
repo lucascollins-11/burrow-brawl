@@ -1,0 +1,25 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "hot-sauce-flask",
+  "name": "Hot Sauce Flask",
+  "description": "A flask of hot sauce that splashes into a burning puddle; anyone standing in it at the end of a turn gets scorched, for three turns.",
+  "category": "projectile",
+  "behavior": "fire-flask",
+  "targeting": "aim-angle-power",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": true,
+  "damage": 10,
+  "blastRadius": 20,
+  "knockback": 80,
+  "params": {
+    "maxSpeed": 800,
+    "gravity": 600,
+    "zone": "fire",
+    "zoneRadius": 40,
+    "zoneTurns": 3,
+    "zoneDamage": 10,
+    "damageFalloff": "linear"
+  }
+}

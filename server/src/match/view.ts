@@ -43,6 +43,8 @@ export function viewCritter(c: Critter): ViewCritter {
     grounded: c.grounded,
     ...critterAct(c),
     ...(c.shield ? { shield: true as const } : {}),
+    ...(c.frozen ? { frozen: true as const } : {}),
+    ...(c.feather ? { feather: true as const } : {}),
   };
 }
 
@@ -175,6 +177,7 @@ export class ViewStream {
       seaY: s.sim.seaY,
       critters: s.sim.critters.map(viewCritter),
       ...flyingAndMines(s.sim.projectiles),
+      zones: (s.sim.zones ?? []).map((z) => ({ ...z })),
       ammo: s.ammo,
       crates: s.crates,
     };
@@ -211,6 +214,7 @@ export class ViewStream {
       seaY: s.sim.seaY,
       critters,
       ...flyingAndMines(s.sim.projectiles),
+      zones: (s.sim.zones ?? []).map((z) => ({ ...z })),
       ammo: s.ammo,
       crates: s.crates,
     };
@@ -220,4 +224,4 @@ export class ViewStream {
 }
 
 const key = (c: ViewCritter): string =>
-  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team},${c.act ?? ""},${c.fuel ?? ""},${c.shield ? 1 : 0}`;
+  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team},${c.act ?? ""},${c.fuel ?? ""},${c.shield ? 1 : 0}${c.frozen ? 1 : 0}${c.feather ? 1 : 0}`;

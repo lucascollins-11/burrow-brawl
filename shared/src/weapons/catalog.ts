@@ -50,6 +50,10 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "paper-plane-seeker",
   "slingshot",
   "gumball-cluster",
+  "snow-globe",
+  "hot-sauce-flask",
+  "glue-puddle",
+  "feather-charm",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */
