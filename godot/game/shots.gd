@@ -3,6 +3,9 @@ extends Node3D
 ## Placeholder meshes for projectiles in flight: acorn = brown sphere, fizz grenade = blue sphere.
 ## Synced from a ViewModel snapshot every frame; a missing id means the shot is gone.
 
+## A shot disappeared; `at` is where it was last seen. The match scene uses it for sea splashes.
+signal lost(at: Vector3, weapon: String)
+
 var _nodes: Dictionary = {}  # id -> MeshInstance3D
 
 
@@ -19,7 +22,9 @@ func sync(shots: Array) -> void:
 		m.position = p["pos"]
 	for id in _nodes.keys():
 		if not seen.has(id):
-			(_nodes[id] as Node).queue_free()
+			var gone: Node3D = _nodes[id]
+			lost.emit(gone.position, str(gone.get_meta("weapon", "")))
+			gone.queue_free()
 			_nodes.erase(id)
 
 
@@ -40,4 +45,5 @@ func _make(weapon: String) -> MeshInstance3D:
 	mat.albedo_color = Color("4aa3df") if grenade else Color("8b5a2b")
 	mat.roughness = 0.6
 	m.material_override = mat
+	m.set_meta("weapon", weapon)
 	return m

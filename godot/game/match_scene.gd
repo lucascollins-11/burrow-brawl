@@ -73,6 +73,7 @@ func _ready() -> void:
 	add_child(fx)
 	shots = ShotViews.new()
 	shots.name = "Shots"
+	shots.lost.connect(_on_shot_lost)
 	add_child(shots)
 	crates = CrateViews.new()
 	crates.name = "Crates"
@@ -317,6 +318,12 @@ func _send_input(turn: int, cmds: Array) -> void:
 		net.call("send_input", turn, cmds)
 
 
+## A shot that vanished at the soda line splashes; ones that blew up on land already had their blast.
+func _on_shot_lost(at: Vector3, _weapon: String) -> void:
+	if at.y <= vm.sea_y + 2.0:
+		fx.splash(Vector3(at.x, vm.sea_y, at.z), 3.0)
+
+
 func _handle_events(events: Array, v: Dictionary) -> void:
 	Audio.on_events(events)
 	for e in events:
@@ -334,6 +341,8 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var c := _find(v["critters"], int(e.get("critterId", -1)))
 			if not c.is_empty():
 				fx.damage((c["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), int(e.get("amount", 0)))
+			if str(e.get("cause", "")) == "water" and not c.is_empty():
+				fx.splash(Vector3((c["pos"] as Vector3).x, vm.sea_y, (c["pos"] as Vector3).z), 5.0)
 			var hit: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if hit != null:
 				hit.hurt()
@@ -427,6 +436,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	var pos := CameraMath.rig_position(_rig)
 	# Never let the camera sink under the ground or the soda.
 	pos.y = maxf(pos.y, maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0))
+	fx.listener = camera.position
 	fx.update(dt)
 	camera.position = pos + fx.shake_offset
 	camera.look_at(_rig.target, Vector3.UP)
