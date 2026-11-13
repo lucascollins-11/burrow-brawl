@@ -155,8 +155,8 @@ func _run() -> bool:
 	# The software renderer takes seconds per frame and particles run on the clock, so slow the
 	# clock right down while the blast is photographed or it is over before the first frame.
 	Engine.time_scale = 0.03
-	scene.fx.explode(rig.target, 9.0)
-	await _shot("2b-blast", 4)
+	scene.fx.explode(rig.target, 12.0)
+	await _shot("2b-blast", 6)
 	Engine.time_scale = 1.0
 	var sea: float = scene.vm.sea_y
 	var mid: Vector2 = scene.get("_world")
@@ -353,6 +353,29 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 			"grounded": grounded, "act": acts[i], "shield": acts[i] == "rope", "anchor": twin.position + Vector3(6, 26, 0)
 		}
 		list.append(c)
+	# A fire puddle and a glue puddle, and the ice shell and feather glow on two more stand-ins.
+	var zone_list: Array = []
+	for i in 2:
+		var zat: Vector3 = (me["pos"] as Vector3) + right * (-9.0 + 18.0 * float(i)) + forward * 14.0
+		zat.y = scene.ground_y(zat.x, zat.z)
+		zone_list.append({"id": 1 + i, "kind": "fire" if i == 0 else "glue", "pos": zat, "r": 5.0, "turns": 2})
+	var zones := ZoneViews.new()
+	scene.add_child(zones)
+	for i in 2:
+		var zat: Vector3 = (me["pos"] as Vector3) + right * (-5.0 + 10.0 * float(i)) - forward * 8.0
+		zat.y = scene.ground_y(zat.x, zat.z)
+		var twin2 := Squirmling.create(1, "chef", Color("4aa3df"))
+		twin2.position = zat
+		twin2.rotation.y = rig.rotation.y
+		scene.add_child(twin2)
+		twin2.drive(0.016, false, Vector3.ZERO, true)
+		crowd.append(twin2)
+		list.append(
+			{
+				"id": 910 + i, "pos": zat, "heading_deg": rad_to_deg(rig.rotation.y), "alive": true,
+				"grounded": true, "act": "", "frozen": i == 0, "feather": i == 1
+			}
+		)
 	var mines: Array = []
 	for i in 2:
 		var at: Vector3 = (me["pos"] as Vector3) + right * (-3.0 + 6.0 * float(i)) + forward * 7.0
@@ -363,11 +386,18 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	for i in 4:
 		gear.sync(list, 0.05)
 		views.sync([], mines)
+		zones.sync(zone_list, 0.05)
 		await get_tree().process_frame
 	await _shot("1g-gear", 3)
 	for c: Dictionary in list:
 		c["act"] = ""
 		c["shield"] = false
+	gear.sync(list, 0.05)
+	if not (gear.state_of(910)["frozen"] and gear.state_of(911)["feather"]):
+		errors.append("the ice shell or the feather glow is missing")
+	for c: Dictionary in list:
+		c["frozen"] = false
+		c["feather"] = false
 	gear.sync(list, 0.05)
 	if not gear.state_of(900).is_empty():
 		errors.append("gear stayed after the acts ended")
@@ -378,4 +408,6 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	gear.queue_free()
 	scene.remove_child(views)
 	views.queue_free()
+	scene.remove_child(zones)
+	zones.queue_free()
 	print("E2E ok: gear and mines")
