@@ -57,6 +57,7 @@ export function viewProjectile(p: Projectile): ViewProjectile {
     y: p.pos.y,
     z: p.pos.z,
     fuseTicks: p.fuseTicks,
+    ...(p.heading !== undefined ? { heading: p.heading } : {}),
   };
 }
 

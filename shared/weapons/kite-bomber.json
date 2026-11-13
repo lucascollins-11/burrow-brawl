@@ -1,0 +1,31 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "kite-bomber",
+  "name": "Kite Bomber",
+  "description": "Fly a kite for six seconds with the walk keys, the wind at its back; click to drop its one charge.",
+  "category": "projectile",
+  "behavior": "steerable-flyer",
+  "targeting": "aim-angle",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": true,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "fuseSeconds": {
+      "min": 6,
+      "max": 6,
+      "default": 6
+    },
+    "launchSpeed": 300,
+    "flySpeed": 70,
+    "windScale": 2,
+    "gravity": 0,
+    "subMunition": "kite-charge",
+    "subCount": 1,
+    "subSpeed": 0,
+    "subPitch": -90
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "kite-charge",
+  "name": "Kite Charge",
+  "description": "The charge a Kite Bomber drops.",
+  "category": "projectile",
+  "behavior": "bomblet",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 50,
+  "blastRadius": 40,
+  "knockback": 320,
+  "params": {
+    "gravity": 600,
+    "damageFalloff": "linear"
+  }
+}

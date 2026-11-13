@@ -54,10 +54,19 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "hot-sauce-flask",
   "glue-puddle",
   "feather-charm",
+  "wind-up-robot",
+  "marble-roller",
+  "rc-racer",
+  "kite-bomber",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */
-export const TRIGGERED_WEAPONS: readonly WeaponId[] = ["pinecone-popper"];
+export const TRIGGERED_WEAPONS: readonly WeaponId[] = [
+  "pinecone-popper",
+  "wind-up-robot",
+  "rc-racer",
+  "kite-bomber",
+];
 
 let cached: WeaponInfo[] | null = null;
 
