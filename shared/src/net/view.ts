@@ -20,6 +20,8 @@ export interface ViewCritter {
   hp: number;
   status: CritterStatus;
   grounded: boolean;
+  /** What the critter is busy doing, if anything: "drill" (Drill Hat). Absent = nothing. */
+  act?: "drill";
 }
 
 export interface ViewProjectile {

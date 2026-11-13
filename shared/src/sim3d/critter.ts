@@ -12,11 +12,14 @@ import {
   GRAVITY,
   JUMP_VXZ,
   JUMP_VY,
+  LENGTH_DEN,
+  LENGTH_NUM,
   MAX_HEALTH,
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
-import { isSolid } from "./terrainOps";
+import { loadWeapons } from "../weapons/load";
+import { applyEdit, isSolid } from "./terrainOps";
 import { mulQ, yawDir } from "./vec3";
 
 export const cell = (f: Fixed): number => f >> 16;
@@ -98,6 +101,52 @@ function tryWalk(
   return { y: up === 0 ? y : clear * FIXED_ONE, grounded: false };
 }
 
+/** The critter without its drill state (the Drill Hat stopped). */
+export function stopDrill(c: Critter): Critter {
+  if (c.drillTicks === undefined && c.drillDir === undefined) return c;
+  const { drillTicks: _t, drillDir: _d, ...rest } = c;
+  void _t;
+  void _d;
+  return rest;
+}
+
+/** The Drill Hat carves a sphere this often (ticks), ahead of the body. */
+export const DRILL_CARVE_EVERY = 4;
+
+/**
+ * One tick of Drill Hat tunnelling: carve ahead every DRILL_CARVE_EVERY ticks, then move along
+ * the drill heading. Stops when the time is up, the way is blocked (bedrock, or ground the
+ * carve did not clear), or the critter was knocked (it has a velocity again). Input is ignored.
+ */
+function drillStep(t: VoxelTerrain, c: Critter): Critter {
+  const w = loadWeapons()["drill-hat"];
+  const tunnel = typeof w.params.tunnelRadius === "number" ? w.params.tunnelRadius : 14;
+  const radius = Math.max(3, Math.floor((tunnel * LENGTH_NUM) / LENGTH_DEN));
+  const dir = c.drillDir!;
+  if (c.vel.x !== 0 || c.vel.y !== 0 || c.vel.z !== 0) return stopDrill(c);
+  const ticks = c.drillTicks!;
+  const down = dir.x === 0 && dir.z === 0;
+  const { x, y, z } = c.pos;
+  if (ticks % DRILL_CARVE_EVERY === 0) {
+    // Centre: 8 ticks of travel ahead; at mid-body height sideways, at the feet going down.
+    const cx = cell(x + dir.x * 8);
+    const cz = cell(z + dir.z * 8);
+    const cy = down ? cell(y + dir.y * 8) : cell(y) + 3;
+    applyEdit(t, { op: "carve", x: cx, y: Math.max(t.bedrockY, cy), z: cz, r: radius });
+  }
+  const nx = x + dir.x;
+  const ny = y + dir.y;
+  const nz = z + dir.z;
+  const blocked = bodyBlocked(t, cell(nx), cell(ny), cell(nz)) || (down && cell(ny) < t.bedrockY);
+  if (blocked || ticks <= 1) return { ...stopDrill(c), peakY: cell(y) };
+  return {
+    ...c,
+    pos: { x: nx, y: ny, z: nz },
+    drillTicks: ticks - 1,
+    peakY: cell(ny),
+  };
+}
+
 /** Advance one critter by one tick. Pure: returns a new record and pushes events. */
 export function stepCritter(
   t: VoxelTerrain,
@@ -105,7 +154,8 @@ export function stepCritter(
   input: CritterInput | undefined,
   events: SimEvent[],
 ): Critter {
-  if (c.status !== "alive") return c;
+  if (c.status !== "alive") return stopDrill(c);
+  if (c.drillTicks !== undefined) return drillStep(t, c);
   let { x, y, z } = c.pos;
   let vx = c.vel.x;
   let vy = c.vel.y;

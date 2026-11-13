@@ -53,6 +53,10 @@ export interface Critter {
   readonly grounded: boolean;
   /** Highest voxel y reached since leaving the ground; drives fall damage. */
   readonly peakY: number;
+  /** Ticks of Drill Hat tunnelling left. Absent (never 0) when the critter is not drilling. */
+  readonly drillTicks?: number;
+  /** Drill velocity per tick (Q16.16 voxels) while drilling: level along the yaw, or straight down. */
+  readonly drillDir?: Vec3;
 }
 
 export interface Projectile {

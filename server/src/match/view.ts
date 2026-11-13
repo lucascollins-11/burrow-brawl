@@ -29,6 +29,7 @@ export function viewCritter(c: Critter): ViewCritter {
     hp: c.hp,
     status: c.status,
     grounded: c.grounded,
+    ...(c.drillTicks !== undefined ? { act: "drill" as const } : {}),
   };
 }
 
@@ -184,4 +185,4 @@ export class ViewStream {
 }
 
 const key = (c: ViewCritter): string =>
-  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team}`;
+  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team},${c.act ?? ""}`;

@@ -454,7 +454,9 @@ describe("weapon catalogue", () => {
       "pepper-shotgun",
       "root-punch",
       "teleport-burrow",
+      "drill-hat",
     ]);
+    expect(byId["drill-hat"]!.needs).toEqual([]);
     expect(byId["root-punch"]!.needs).toEqual([]);
     expect(byId["teleport-burrow"]!.needs).toEqual(["target"]);
     expect(byId["pepper-shotgun"]!.needs).toEqual([]);

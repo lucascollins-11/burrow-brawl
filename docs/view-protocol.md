@@ -82,7 +82,8 @@ ViewState = {
   crates?: Crate[]              // {id, kind: "health"|"weapon", weaponId, x, y, z} in voxels;
                                 // always the full list; a missing id was taken or sank
 }
-ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean }
+ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean,
+                   act?: "drill" }   // busy with a utility; absent = nothing (more values later)
 ViewProjectile = { id, ownerId, weaponId, x, y, z, fuseTicks }
 ```
 
@@ -101,7 +102,7 @@ before it: `jumped`, `landed`, `damage`, `died`, `fired`, `tracer`, `bounced`, `
 `projectileLost`, and the crate events `crateDropped`, `crateTaken` `{crateId, critterId, kind,
 weaponId, amount}` and `crateLost`. A hitscan weapon (the Pepper Shotgun) sends `fired` with `projectileId: -1`, then
 one `tracer` `{critterId, weaponId, from, to, hit}` per pellet (`from` and `to` are Q16.16 voxel
-points) and an `explosion` for each pellet that hit. The Root Punch sends `fired`, then `punch` `{critterId, at, hits}` and a `damage` per critter struck. The Teleport Burrow sends `fired`, then `teleported` `{critterId, from, to}`; a burrow with no clear spot at its target sends nothing and costs nothing. They drive sound, effects and damage numbers. They never change what the client
+points) and an `explosion` for each pellet that hit. The Root Punch sends `fired`, then `punch` `{critterId, at, hits}` and a `damage` per critter struck. The Teleport Burrow sends `fired`, then `teleported` `{critterId, from, to}`; a burrow with no clear spot at its target sends nothing and costs nothing. The Drill Hat sends `fired` (`projectileId: -1`) and does not end the turn; the critter then shows `act: "drill"` while it tunnels and the tunnel arrives as ordinary `terrain.patch`es. They drive sound, effects and damage numbers. They never change what the client
 believes about positions, health or terrain; `state` and `terrain.patch` do that.
 
 ### `terrain.patch`
