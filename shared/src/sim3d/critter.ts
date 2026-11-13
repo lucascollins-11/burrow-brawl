@@ -18,6 +18,7 @@ import {
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
+import { dropGear, jetBurst, umbrellaSpeeds } from "./gear";
 import { loadWeapons } from "../weapons/load";
 import { applyEdit, isSolid } from "./terrainOps";
 import { mulQ, yawDir } from "./vec3";
@@ -212,8 +213,24 @@ export function stepCritter(
     }
   }
 
+  let jetFuel = c.jetFuel;
   if (!grounded) {
+    if (jetFuel !== undefined && jetFuel > 0 && input?.jump) {
+      ({ x: vx, y: vy, z: vz } = jetBurst({ ...c, yaw }, { x: vx, y: vy, z: vz }));
+      jetFuel--;
+      peakY = cell(y); // thrust brakes the fall
+    }
     vy = Math.max(vy - GRAVITY, -TERMINAL_VELOCITY);
+    if (c.umbrella) {
+      const u = umbrellaSpeeds();
+      vy = Math.max(vy, -u.fall);
+      if (moving) {
+        const dir = yawDir(yaw);
+        vx = mulQ(dir.x, u.drift);
+        vz = mulQ(dir.z, u.drift);
+      }
+      peakY = cell(y); // a glide never hurts on landing
+    }
     const maxV = Math.max(Math.abs(vx), Math.abs(vy), Math.abs(vz));
     const n = Math.max(1, (maxV + FIXED_ONE - 1) >> 16);
     let sx = idiv(vx, n);
@@ -239,7 +256,9 @@ export function stepCritter(
         vx = 0;
         vy = 0;
         vz = 0;
-        events.push({ type: "landed", critterId: c.id, fallDistance: peakY - cell(y) });
+        const fall = peakY - cell(y);
+        const fallDistance = c.safeFall !== undefined && fall <= c.safeFall ? 0 : fall;
+        events.push({ type: "landed", critterId: c.id, fallDistance });
         break;
       }
       y = ny;
@@ -247,5 +266,7 @@ export function stepCritter(
     }
   }
 
-  return { ...c, pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, yaw, grounded, peakY };
+  const out = { ...c, pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, yaw, grounded, peakY };
+  if (grounded) return dropGear(out);
+  return jetFuel === undefined ? out : { ...out, jetFuel };
 }

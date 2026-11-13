@@ -1,0 +1,20 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "umbrella-glide",
+  "name": "Umbrella Glide",
+  "description": "Pop open a beach umbrella mid-air and drift down safely, steering as you go.",
+  "category": "utility",
+  "behavior": "slow-fall",
+  "targeting": "none",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "fallSpeed": 30,
+    "driftSpeed": 40
+  }
+}
