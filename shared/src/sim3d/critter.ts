@@ -18,10 +18,10 @@ import {
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
-import { dropGear, jetBurst, umbrellaSpeeds } from "./gear";
+import { dropGear, jetBurst, ropePump, umbrellaSpeeds } from "./gear";
 import { loadWeapons } from "../weapons/load";
 import { applyEdit, isSolid } from "./terrainOps";
-import { mulQ, yawDir } from "./vec3";
+import { dot, length, lengthSq, mulDiv, mulQ, withLength, yawDir } from "./vec3";
 
 export const cell = (f: Fixed): number => f >> 16;
 
@@ -214,7 +214,18 @@ export function stepCritter(
   }
 
   let jetFuel = c.jetFuel;
+  let rope = c.rope;
+  if (rope && (input?.jump || rope.ticks <= 1)) rope = undefined; // let go, keeping the swing
   if (!grounded) {
+    if (rope) {
+      if (moving) {
+        const dir = yawDir(yaw);
+        const pump = ropePump();
+        vx += mulQ(dir.x, pump);
+        vz += mulQ(dir.z, pump);
+      }
+      peakY = cell(y); // the rope holds the fall
+    }
     if (jetFuel !== undefined && jetFuel > 0 && input?.jump) {
       ({ x: vx, y: vy, z: vz } = jetBurst({ ...c, yaw }, { x: vx, y: vy, z: vz }));
       jetFuel--;
@@ -264,9 +275,59 @@ export function stepCritter(
       y = ny;
       if (cell(y) > peakY) peakY = cell(y);
     }
+    if (rope && !grounded) {
+      ({ x, y, z, vx, vy, vz } = ropeConstraint(t, rope, x, y, z, vx, vy, vz));
+      peakY = cell(y);
+    }
   }
 
   const out = { ...c, pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, yaw, grounded, peakY };
   if (grounded) return dropGear(out);
-  return jetFuel === undefined ? out : { ...out, jetFuel };
+  const { rope: _r, ...free } = out;
+  void _r;
+  const held = rope
+    ? {
+        ...free,
+        rope: { ...rope, len: Math.max(rope.reelTo, rope.len - rope.reel), ticks: rope.ticks - 1 },
+      }
+    : free;
+  return jetFuel === undefined ? held : { ...held, jetFuel };
+}
+
+/**
+ * Keep a roped critter within `len` of the anchor: pull it back onto the rope's sphere (unless
+ * that spot is inside terrain) and cancel any velocity moving away from the anchor, which turns
+ * a fall into a swing.
+ */
+function ropeConstraint(
+  t: VoxelTerrain,
+  rope: NonNullable<Critter["rope"]>,
+  x: Fixed,
+  y: Fixed,
+  z: Fixed,
+  vx: Fixed,
+  vy: Fixed,
+  vz: Fixed,
+): { x: Fixed; y: Fixed; z: Fixed; vx: Fixed; vy: Fixed; vz: Fixed } {
+  const a = rope.anchor;
+  const d = { x: x - a.x, y: y - a.y, z: z - a.z };
+  const dist = length(d);
+  if (dist <= rope.len || dist === 0) return { x, y, z, vx, vy, vz };
+  const on = withLength(d, rope.len);
+  const nx = a.x + on.x;
+  const ny = a.y + on.y;
+  const nz = a.z + on.z;
+  if (!bodyBlocked(t, cell(nx), cell(ny), cell(nz))) {
+    x = nx;
+    y = ny;
+    z = nz;
+  }
+  const out = dot({ x: vx, y: vy, z: vz }, d);
+  if (out > 0) {
+    const d2 = lengthSq(d);
+    vx -= mulDiv(d.x, out, d2);
+    vy -= mulDiv(d.y, out, d2);
+    vz -= mulDiv(d.z, out, d2);
+  }
+  return { x, y, z, vx, vy, vz };
 }

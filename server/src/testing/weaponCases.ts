@@ -68,4 +68,6 @@ export const WEAPON_CASES: WeaponCase[] = [
   { weapon: "drill-hat", pitch: -60, power: 0, expect: ["fired"], label: "down" },
   { weapon: "spring-boots", pitch: 70, power: 0, expect: ["fired", "landed"] },
   { weapon: "soda-jetpack", pitch: 0, power: 0, expect: ["fired", "landed"] },
+  // Aimed low at the ground ahead: the claw grips it and the critter swings in.
+  { weapon: "rope-claw", pitch: -20, power: 0, expect: ["fired", "landed"] },
 ];

@@ -187,7 +187,8 @@ export function fireInstant(
   if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
   if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
   if (cmd.weaponId === "drill-hat") return startDrill(critters, c, cmd);
-  if (isGearWeapon(cmd.weaponId)) return startGear(critters, c, { ...cmd, weaponId: cmd.weaponId });
+  if (isGearWeapon(cmd.weaponId))
+    return startGear(t, critters, c, { ...cmd, weaponId: cmd.weaponId });
   return fireHitscan(t, critters, c, cmd, events);
 }
 

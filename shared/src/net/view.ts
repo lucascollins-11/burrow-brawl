@@ -22,9 +22,11 @@ export interface ViewCritter {
   grounded: boolean;
   /**
    * The utility the critter is busy with, if any: "drill" (Drill Hat), "boots" (in a Spring Boots
-   * jump), "jetpack" (Soda Jetpack on) or "umbrella" (Umbrella Glide open). Absent = nothing.
+   * jump), "jetpack" (Soda Jetpack on) or "umbrella" (Umbrella Glide open) or "rope" (swinging on the Rope Claw). Absent = nothing.
    */
-  act?: "drill" | "boots" | "jetpack" | "umbrella";
+  act?: "drill" | "boots" | "jetpack" | "umbrella" | "rope";
+  /** Where the rope is gripped (Q16.16 voxels, like x/y/z), while `act` is "rope". */
+  anchor?: { x: number; y: number; z: number };
   /** Soda Jetpack bursts left, while `act` is "jetpack". */
   fuel?: number;
 }

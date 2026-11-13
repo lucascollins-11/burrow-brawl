@@ -63,6 +63,17 @@ export interface Critter {
   readonly jetFuel?: number;
   /** Umbrella Glide: open while airborne (slow fall, steerable, no fall damage). */
   readonly umbrella?: true;
+  /**
+   * Rope Claw: swinging on a rope from `anchor` (Q16.16), at most `len` long, for `ticks` more.
+   * The rope reels in by `reel` per tick until it is `reelTo` long.
+   */
+  readonly rope?: {
+    readonly anchor: Vec3;
+    readonly len: number;
+    readonly reelTo: number;
+    readonly reel: number;
+    readonly ticks: number;
+  };
 }
 
 export interface Projectile {
