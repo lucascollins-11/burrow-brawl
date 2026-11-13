@@ -809,6 +809,77 @@ describe("Build Block, Bubble Shield, Cookie Snack", () => {
   });
 });
 
+describe("rockets and seekers", () => {
+  const shoot = (fire: FireCommand) => fireOnce(fire);
+
+  it("Fizz Rocket flies dead level for a second, then drops", () => {
+    let s = stepWorld(
+      world(),
+      [
+        {
+          critterId: 1,
+          moveYaw: -1,
+          fire: { weaponId: "fizz-rocket", yaw: 0, pitch: 0, power: 30 },
+        },
+      ],
+      rng,
+    ).state;
+    const y0 = s.projectiles[0]!.pos.y;
+    s = run(s, 50).state;
+    expect(s.projectiles).toHaveLength(1);
+    expect(s.projectiles[0]!.pos.y).toBe(y0);
+    const r = run(s, 400);
+    expect(explosions(r.events)).toHaveLength(1);
+  });
+
+  it("Paper Plane Seeker needs a mark and comes down on it", () => {
+    const none = stepWorld(
+      world(),
+      [
+        {
+          critterId: 1,
+          moveYaw: -1,
+          fire: { weaponId: "paper-plane-seeker", yaw: 0, pitch: 45, power: 0 },
+        },
+      ],
+      rng,
+    );
+    expect(none.events.filter((e) => e.type === "fired")).toEqual([]);
+    // Launched the wrong way (yaw 512 = -x): it still turns and finds the mark at +x.
+    const target = { x: 90, y: GROUND - 1, z: 80 };
+    const r = run(
+      world(),
+      900,
+      shoot({ weaponId: "paper-plane-seeker", yaw: 512, pitch: 30, power: 0, target }),
+    );
+    const ex = explosions(r.events);
+    expect(ex).toHaveLength(1);
+    const e = ex[0]!.edit as { x: number; z: number };
+    expect(Math.abs(e.x - target.x)).toBeLessThanOrEqual(4);
+    expect(Math.abs(e.z - target.z)).toBeLessThanOrEqual(4);
+  });
+
+  it("Slingshot ignores the wind", () => {
+    const shot: FireCommand = { weaponId: "slingshot", yaw: 0, pitch: 40, power: 40 };
+    const calm = run(world(), 400, shoot(shot));
+    const windy = run({ ...world(), windX: 0, windZ: 100 }, 400, shoot(shot));
+    expect(explosions(windy.events)[0]!.edit).toEqual(explosions(calm.events)[0]!.edit);
+  });
+
+  it("Gumball Cluster bursts into gumballs that stick, then pop", () => {
+    const jar: FireCommand = { weaponId: "gumball-cluster", yaw: 0, pitch: 45, power: 30 };
+    let s = run(world(), 3 * 60 + 2, shoot(jar)).state;
+    expect(s.projectiles.filter((p) => p.weaponId === "gumball").length).toBe(6);
+    s = run(s, 60).state;
+    const stuck = s.projectiles.filter((p) => p.resting);
+    expect(stuck.length).toBeGreaterThan(0);
+    expect(stuck.every((p) => p.fuseTicks > 0)).toBe(true);
+    const r = run(s, 400);
+    expect(explosions(r.events).filter((e) => e.weaponId === "gumball")).toHaveLength(6);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -856,6 +927,10 @@ describe("weapon catalogue", () => {
       "build-block",
       "bubble-shield",
       "cookie-snack",
+      "fizz-rocket",
+      "paper-plane-seeker",
+      "slingshot",
+      "gumball-cluster",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);

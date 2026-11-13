@@ -69,6 +69,16 @@ export const WEAPON_CASES: WeaponCase[] = [
   { weapon: "spring-boots", pitch: 70, power: 0, expect: ["fired", "landed"] },
   { weapon: "soda-jetpack", pitch: 0, power: 0, expect: ["fired", "landed"] },
   // Aimed low at the ground ahead: the claw grips it and the critter swings in.
+  { weapon: "fizz-rocket", pitch: 10, power: 40, expect: ["fired", "explosion"] },
+  {
+    weapon: "paper-plane-seeker",
+    pitch: 40,
+    power: 0,
+    target: "center",
+    expect: ["fired", "explosion"],
+  },
+  { weapon: "slingshot", pitch: 50, power: 40, expect: ["fired", "explosion"] },
+  { weapon: "gumball-cluster", pitch: 50, power: 35, expect: ["fired", "bounced", "explosion"] },
   { weapon: "build-block", pitch: 0, power: 0, target: "center", expect: ["fired"] },
   { weapon: "bubble-shield", pitch: 0, power: 0, expect: ["fired"] },
   { weapon: "cookie-snack", pitch: 0, power: 0, expect: ["fired", "healed"] },
