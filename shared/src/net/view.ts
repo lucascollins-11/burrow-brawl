@@ -20,6 +20,8 @@ export interface ViewCritter {
   hp: number;
   status: CritterStatus;
   grounded: boolean;
+  /** What the critter is busy doing, if anything: "drill" (Drill Hat). Absent = nothing. */
+  act?: "drill";
 }
 
 export interface ViewProjectile {
@@ -33,14 +35,32 @@ export interface ViewProjectile {
   fuseTicks: number;
 }
 
+/** A placed Jelly Mine. Mines are not in `projectiles`. */
+export interface ViewMine {
+  id: number;
+  ownerId: number;
+  weaponId: WeaponId;
+  x: number;
+  y: number;
+  z: number;
+  /** Past its arming delay: a critter that comes close now sets it off. */
+  armed: boolean;
+  /** Set off: it explodes in `fuseTicks` ticks. */
+  triggered: boolean;
+  /** Ticks until it explodes once triggered; -1 while it lies in wait. */
+  fuseTicks: number;
+}
+
 export interface ViewState {
   tick: number;
   turns: TurnState;
   seaY: number;
   /** Full list in match.start; in `state` only the critters that changed since the last one. */
   critters: ViewCritter[];
-  /** Always the full list. */
+  /** Always the full list. Placed mines are in `mines` instead. */
   projectiles: ViewProjectile[];
+  /** Placed mines: always the full list; a missing id went off or sank. Absent from older servers. */
+  mines?: ViewMine[];
   /**
    * Shots left per sim team, by weapon id, for weapons with limited ammo; a weapon not listed is
    * unlimited. Always complete. Absent from servers older than ammo.

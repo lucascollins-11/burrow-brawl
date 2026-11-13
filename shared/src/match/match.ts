@@ -18,7 +18,7 @@ import {
   themedRecipe,
 } from "../terrain3d/impl";
 import { weaponCatalog } from "../weapons/catalog";
-import type { WeaponId } from "../weapons/load";
+import { loadWeapons, type WeaponId } from "../weapons/load";
 import {
   CRATE_CHANCE_DEN,
   CRATE_CHANCE_NUM,
@@ -343,7 +343,8 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
       ammo = ammo.map((a, i) =>
         i === shooter ? { ...a, [e.weaponId]: Math.max(0, left - 1) } : a,
       );
-    ts = turns.endTurn(ts, rules, "fired", tick);
+    // Utilities like the Drill Hat leave the turn running.
+    if (loadWeapons()[e.weaponId].endsTurn) ts = turns.endTurn(ts, rules, "fired", tick);
   }
   const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
   const turnChanged =

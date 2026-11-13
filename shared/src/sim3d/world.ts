@@ -87,7 +87,8 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
   let nextId = state.nextProjectileId;
   critters = critters.map((c) => {
     const cmd = inputFor(inputs, c.id)?.fire;
-    if (!cmd || c.status !== "alive") return c;
+    // A drilling critter can't fire until the drill stops.
+    if (!cmd || c.status !== "alive" || c.drillTicks !== undefined) return c;
     const facing = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
     if (isInstantWeapon(cmd.weaponId)) {
       scans.push({ critterId: c.id, cmd });
@@ -135,6 +136,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
     triggers,
     nextId,
     fireEvents,
+    state.seaY,
   );
 
   const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
@@ -157,6 +159,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
  */
 export function isSettled(state: SimState): boolean {
   if (state.projectiles.some((p) => !isDormant(p))) return false;
+  if (state.critters.some((c) => c.drillTicks !== undefined)) return false;
   return state.critters.every(
     (c) => c.status !== "alive" || (c.grounded && c.vel.x === 0 && c.vel.y === 0 && c.vel.z === 0),
   );

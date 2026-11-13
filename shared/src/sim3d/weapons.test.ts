@@ -8,7 +8,7 @@ import { loadWeapons } from "../weapons/load";
 import type { CritterInput, FireCommand, SimEvent, SimState } from "./api";
 import { cell } from "./critter";
 import { TRIGGER_MIN_AGE, blastRadius, explode } from "./projectile";
-import { flatSlab } from "./terrainOps";
+import { applyEdit, flatSlab, isSolid } from "./terrainOps";
 import { createCritter, createWorld, isSettled, stepWorld } from "./world";
 
 const rng = { nextInt: () => 0 };
@@ -471,6 +471,106 @@ describe("Jelly Mine", () => {
   });
 });
 
+describe("Drill Hat", () => {
+  const drill = (pitch: number, yaw = 0): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "drill-hat", yaw, pitch, power: 0 },
+  });
+  /** A solid wall across the +x heading, in front of critter 1 (at x 40). */
+  const walled = (): SimState => {
+    const s = world();
+    applyEdit(s.terrain, {
+      op: "box",
+      x0: 46,
+      y0: GROUND,
+      z0: 40,
+      x1: 90,
+      y1: GROUND + 20,
+      z1: 90,
+    });
+    return s;
+  };
+
+  it("tunnels level through a wall along the aim heading for three seconds", () => {
+    const r = run(stepWorld(walled(), [drill(0)], rng).state, 200);
+    const c = r.state.critters[0]!;
+    // 3 s at 60 cells/s (18 voxels/s after the 3/10 length scale) is about 54 voxels.
+    expect(cell(c.pos.x)).toBeGreaterThan(40 + 45);
+    expect(cell(c.pos.y)).toBe(GROUND);
+    expect(cell(c.pos.z)).toBe(64);
+    expect(c.drillTicks).toBeUndefined();
+    expect(isSolid(r.state.terrain, 60, GROUND + 2, 64)).toBe(false); // the tunnel is open
+    expect(isSolid(r.state.terrain, 60, GROUND + 15, 64)).toBe(true); // the wall above stands
+    expect(c.hp).toBe(100);
+  });
+
+  it("aimed low, drills straight down and stops above the soda", () => {
+    const s = stepWorld(world(), [drill(-60)], rng).state;
+    expect(s.critters[0]!.drillTicks).toBeGreaterThan(0);
+    const r = run(s, 200);
+    const c = r.state.critters[0]!;
+    expect(cell(c.pos.x)).toBe(40);
+    expect(cell(c.pos.y)).toBeLessThan(GROUND - 10);
+    expect(cell(c.pos.y)).toBeGreaterThanOrEqual(r.state.terrain.seaY);
+    expect(c.drillTicks).toBeUndefined();
+    expect(c.hp).toBe(100); // no fall damage from the dig
+  });
+
+  it("holds the world unsettled while drilling, and the critter cannot fire again meanwhile", () => {
+    let s = stepWorld(walled(), [drill(0)], rng).state;
+    expect(isSettled(s)).toBe(false);
+    const again = stepWorld(
+      s,
+      [
+        {
+          critterId: 1,
+          moveYaw: -1,
+          fire: { weaponId: "acorn-mortar", yaw: 0, pitch: 45, power: 40 },
+        },
+      ],
+      rng,
+    );
+    expect(again.events.filter((e) => e.type === "fired")).toHaveLength(0);
+    s = run(again.state, 240).state;
+    expect(isSettled(s)).toBe(true);
+  });
+
+  it("is refused in the air", () => {
+    const s = world();
+    const air = {
+      ...s,
+      critters: s.critters.map((c) => ({
+        ...c,
+        grounded: false,
+        pos: { ...c.pos, y: c.pos.y + 20 * FIXED_ONE },
+      })),
+    };
+    const r = stepWorld(air, [drill(0)], rng);
+    expect(r.events.filter((e) => e.type === "fired")).toHaveLength(0);
+  });
+
+  it("is knocked out of the drill by a blast", () => {
+    let s = run(stepWorld(walled(), [drill(0)], rng).state, 20).state;
+    s = {
+      ...s,
+      critters: s.critters.map((c) => ({ ...c, vel: { x: FIXED_ONE, y: FIXED_ONE, z: 0 } })),
+    };
+    s = stepWorld(s, [], rng).state;
+    expect(s.critters[0]!.drillTicks).toBeUndefined();
+  });
+
+  it("drills the same tunnel every time", () => {
+    const a = run(stepWorld(walled(), [drill(0, 7)], rng).state, 200);
+    const b = run(stepWorld(walled(), [drill(0, 7)], rng).state, 200);
+    expect(b.events).toEqual(a.events);
+    expect(b.state.critters).toEqual(a.state.critters);
+    expect(Buffer.from(b.state.terrain.density).equals(Buffer.from(a.state.terrain.density))).toBe(
+      true,
+    );
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -510,8 +610,10 @@ describe("weapon catalogue", () => {
       "root-punch",
       "teleport-burrow",
       "jelly-mine",
+      "drill-hat",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
+    expect(byId["drill-hat"]!.needs).toEqual([]);
     expect(byId["root-punch"]!.needs).toEqual([]);
     expect(byId["teleport-burrow"]!.needs).toEqual(["target"]);
     expect(byId["pepper-shotgun"]!.needs).toEqual([]);

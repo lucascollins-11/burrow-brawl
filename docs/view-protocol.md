@@ -76,14 +76,20 @@ ViewState = {
   turns: TurnState,             // turn, round, phase, activeTeam, activeCritter, phaseEndTick, winnerTeam, windX, windZ
   seaY: number,                 // rises in sudden death
   critters: ViewCritter[],      // only critters that changed since the previous state message
-  projectiles: ViewProjectile[] // always the full list; a missing id is gone
+  projectiles: ViewProjectile[] // always the full list; a missing id is gone; placed mines are not here
+  mines?: ViewMine[]            // placed Jelly Mines: always the full list; a missing id went off or sank
   ammo?: Record<string, number>[] // per sim team: shots left by weapon id, limited weapons only;
                                 // a weapon not listed is unlimited; always complete
   crates?: Crate[]              // {id, kind: "health"|"weapon", weaponId, x, y, z} in voxels;
                                 // always the full list; a missing id was taken or sank
 }
-ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean }
+ViewCritter    = { id, team, x, y, z, yaw, hp, status: "alive" | "dead" | "drowned", grounded: boolean,
+                   act?: "drill" }   // busy with a utility; absent = nothing (more values later)
 ViewProjectile = { id, ownerId, weaponId, x, y, z, fuseTicks }
+ViewMine       = { id, ownerId, weaponId, x, y, z,
+                   armed: boolean,      // past its arming delay: a critter close by now sets it off
+                   triggered: boolean,  // set off; explodes in fuseTicks ticks
+                   fuseTicks }          // -1 while it lies in wait
 ```
 
 `{ t: "state", ...ViewState }` on the wire. A client keeps the last two states and draws
@@ -101,7 +107,7 @@ before it: `jumped`, `landed`, `damage`, `died`, `fired`, `tracer`, `bounced`, `
 `projectileLost`, and the crate events `crateDropped`, `crateTaken` `{crateId, critterId, kind,
 weaponId, amount}` and `crateLost`. A hitscan weapon (the Pepper Shotgun) sends `fired` with `projectileId: -1`, then
 one `tracer` `{critterId, weaponId, from, to, hit}` per pellet (`from` and `to` are Q16.16 voxel
-points) and an `explosion` for each pellet that hit. The Root Punch sends `fired`, then `punch` `{critterId, at, hits}` and a `damage` per critter struck. The Teleport Burrow sends `fired`, then `teleported` `{critterId, from, to}`; a burrow with no clear spot at its target sends nothing and costs nothing. A Jelly Mine stays in `projectiles` with `fuseTicks: -1` while it lies in wait (it does not hold up the turn); `mineTriggered` `{projectileId}` is sent when a critter sets it off. They drive sound, effects and damage numbers. They never change what the client
+points) and an `explosion` for each pellet that hit. The Root Punch sends `fired`, then `punch` `{critterId, at, hits}` and a `damage` per critter struck. The Teleport Burrow sends `fired`, then `teleported` `{critterId, from, to}`; a burrow with no clear spot at its target sends nothing and costs nothing. A Jelly Mine is listed in `mines`, not `projectiles`, from the tick it is dropped until it goes off or sinks; it lies in wait with `fuseTicks: -1` and does not hold up the turn. `mineTriggered` `{projectileId}` is sent when a critter sets it off. The Drill Hat sends `fired` (`projectileId: -1`) and does not end the turn; the critter then shows `act: "drill"` while it tunnels and the tunnel arrives as ordinary `terrain.patch`es. They drive sound, effects and damage numbers. They never change what the client
 believes about positions, health or terrain; `state` and `terrain.patch` do that.
 
 ### `terrain.patch`

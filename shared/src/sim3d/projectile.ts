@@ -162,7 +162,9 @@ export function fireHitscan(
 
 /** Weapons that act the moment they fire, with no projectile: hitscan, melee and the burrow. */
 export function isInstantWeapon(id: string): boolean {
-  return isHitscanWeapon(id) || id === "root-punch" || id === "teleport-burrow";
+  return (
+    isHitscanWeapon(id) || id === "root-punch" || id === "teleport-burrow" || id === "drill-hat"
+  );
 }
 
 /**
@@ -179,7 +181,32 @@ export function fireInstant(
 ): Critter[] | null {
   if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
   if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
+  if (cmd.weaponId === "drill-hat") return startDrill(critters, c, cmd);
   return fireHitscan(t, critters, c, cmd, events);
+}
+
+/** Aim pitch at or below this digs straight down; anything higher digs level along the yaw. */
+export const DRILL_DOWN_PITCH = -30;
+
+/**
+ * The Drill Hat: from the next tick the critter tunnels for `durationSeconds` at
+ * `digSpeedCellsPerSecond`, level along the aim heading or (aimed low) straight down. Only from
+ * standing; refused (null) in the air or while already drilling.
+ */
+function startDrill(critters: readonly Critter[], c: Critter, cmd: FireCommand): Critter[] | null {
+  if (!c.grounded || c.drillTicks !== undefined) return null;
+  const w = loadWeapons()["drill-hat"];
+  const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+  const speed = speedPerTick(num(w, "digSpeedCellsPerSecond", 60));
+  const ticks = Math.max(1, Math.trunc(num(w, "durationSeconds", 3) * TICK_RATE));
+  const f = yawDir(yaw);
+  const dir =
+    clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX) <= DRILL_DOWN_PITCH
+      ? { x: 0, y: -speed, z: 0 }
+      : { x: mulQ(f.x, speed), y: 0, z: mulQ(f.z, speed) };
+  return critters.map((o) =>
+    o.id === c.id ? { ...o, yaw, vel: { x: 0, y: 0, z: 0 }, drillTicks: ticks, drillDir: dir } : o,
+  );
 }
 
 /**
@@ -364,6 +391,16 @@ function isMine(w: WeaponData): boolean {
 }
 
 /** A mine lying armed or arming on the ground with no fuse running. It does not hold up a turn. */
+/** True for a placed charge (Jelly Mine) that waits for a critter, set or not. */
+export function isMineProjectile(p: Projectile): boolean {
+  return isMine(loadWeapons()[p.weaponId]);
+}
+
+/** Ticks after placing before a mine can be set off. */
+export function mineArmTicks(p: Projectile): number {
+  return Math.trunc(num(loadWeapons()[p.weaponId], "armSeconds", 0) * TICK_RATE);
+}
+
 export function isDormant(p: Projectile): boolean {
   return p.resting && p.fuseTicks < 0 && isMine(loadWeapons()[p.weaponId]);
 }
@@ -623,6 +660,8 @@ export function stepProjectiles(
   nextId = 0,
   /** Events from earlier this tick whose blasts (hitscan hits) can also set off charges. */
   earlier: readonly SimEvent[] = [],
+  /** Current soda row (SimState.seaY, which rises in sudden death); dormant mines below it sink. */
+  seaY = t.seaY,
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
@@ -719,7 +758,7 @@ export function stepProjectiles(
     }
 
     if (mine && blast === null) {
-      if (cell(y) < t.seaY) {
+      if (cell(y) < seaY) {
         events.push({ type: "projectileLost", projectileId: p.id }); // sank
         continue;
       }
