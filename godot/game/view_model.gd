@@ -28,6 +28,7 @@ var started: bool = false
 
 var _critters: Dictionary = {}  # id -> {id, team, hp, status, grounded, a, b, ta, tb, yaw_a, yaw_b}
 var _projectiles: Dictionary = {}  # id -> {id, owner, weapon, a, b, ta, tb, fuse}
+var _zones: Array = []  # [{id, kind, pos, r, turns}] as last sent
 var _mines: Array = []  # [{id, weapon, pos, armed, triggered}] as last sent
 var _events: Array = []
 var _render_tick: float = 0.0
@@ -130,6 +131,8 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 		e["fuel"] = int(c.get("fuel", 0))
 		e["anchor"] = _pos(c["anchor"]) if c.get("anchor") is Dictionary else Vector3.INF
 		e["shield"] = bool(c.get("shield", false))
+		e["frozen"] = bool(c.get("frozen", false))
+		e["feather"] = bool(c.get("feather", false))
 		_critters[id] = e
 	var seen := {}
 	for p in msg.get("projectiles", []):
@@ -151,6 +154,18 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 	for id in _projectiles.keys():
 		if not seen.has(id):
 			_projectiles.erase(id)
+	# Puddles are the full list too; no list means none.
+	_zones = []
+	for z in msg.get("zones", []):
+		_zones.append(
+			{
+				"id": int(z["id"]),
+				"kind": str(z.get("kind", "fire")),
+				"pos": Vector3(float(z.get("x", 0)) + 0.5, float(z.get("y", 0)), float(z.get("z", 0)) + 0.5),
+				"r": float(z.get("r", 1)),
+				"turns": int(z.get("turns", 0)),
+			}
+		)
 	# Placed mines are always the full list; no list means none.
 	_mines = []
 	for m in msg.get("mines", []):
@@ -233,6 +248,8 @@ func snapshot() -> Dictionary:
 				"fuel": e["fuel"],
 				"anchor": e["anchor"],
 				"shield": e["shield"],
+				"frozen": e["frozen"],
+				"feather": e["feather"],
 			}
 		)
 	var shots: Array = []
@@ -253,6 +270,7 @@ func snapshot() -> Dictionary:
 		"critters": crit,
 		"projectiles": shots,
 		"mines": _mines.duplicate(),
+		"zones": _zones.duplicate(),
 		"crates": crate_list(),
 		"active_critter_id": turns.get("activeCritter", null),
 		"active_team": active_team,
