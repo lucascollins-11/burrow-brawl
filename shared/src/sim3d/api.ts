@@ -93,6 +93,8 @@ export interface Projectile {
   readonly fuseTicks: number;
   readonly bounces: number;
   readonly resting: boolean;
+  /** Walkers and steered shots (Wind-up Robot, RC Racer, Kite Bomber): heading in yaw steps. */
+  readonly heading?: number;
   /** Fired under a Feather Charm: falls at half gravity. */
   readonly light?: true;
   /** Homing target voxel (Paper Plane Seeker). Absent for everything else. */

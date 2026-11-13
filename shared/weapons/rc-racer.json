@@ -1,0 +1,27 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "rc-racer",
+  "name": "RC Racer",
+  "description": "A remote-control toy car: drive it with the walk keys for eight seconds, or click to set it off.",
+  "category": "projectile",
+  "behavior": "steerable-ground",
+  "targeting": "aim-angle",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 50,
+  "blastRadius": 40,
+  "knockback": 320,
+  "params": {
+    "fuseSeconds": {
+      "min": 8,
+      "max": 8,
+      "default": 8
+    },
+    "driveSpeed": 60,
+    "gravity": 600,
+    "dropSpeed": 0,
+    "damageFalloff": "linear"
+  }
+}
