@@ -77,9 +77,11 @@ func _ready() -> void:
 	add_child(fx)
 	shots = ShotViews.new()
 	shots.name = "Shots"
+	shots.lost.connect(_on_shot_lost)
 	add_child(shots)
 	crates = CrateViews.new()
 	crates.name = "Crates"
+	crates.landed.connect(func(at: Vector3) -> void: fx.dust(at, 2.4))
 	add_child(crates)
 	controls.name = "Controls"
 	add_child(controls)
@@ -379,6 +381,14 @@ func _send_input(turn: int, cmds: Array) -> void:
 		net.call("send_input", turn, cmds)
 
 
+## A shot that vanished at the soda line splashes; ones that blew up on land already had their blast.
+func _on_shot_lost(at: Vector3, weapon: String) -> void:
+	if at.y <= vm.sea_y + 2.0:
+		fx.splash(Vector3(at.x, vm.sea_y, at.z), 3.0)
+	elif weapon == "pinecone-popper":
+		fx.burst(at, Color("8b5a2b"))
+
+
 func _handle_events(events: Array, v: Dictionary) -> void:
 	Audio.on_events(events)
 	for e in events:
@@ -396,6 +406,8 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var c := _find(v["critters"], int(e.get("critterId", -1)))
 			if not c.is_empty():
 				fx.damage((c["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), int(e.get("amount", 0)))
+			if str(e.get("cause", "")) == "water" and not c.is_empty():
+				fx.splash(Vector3((c["pos"] as Vector3).x, vm.sea_y, (c["pos"] as Vector3).z), 5.0)
 			var hit: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if hit != null:
 				hit.hurt()
@@ -407,17 +419,17 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 					what = "+1 %s" % hud.weapon_title(str(e.get("weaponId", "")))
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
-			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})))
+			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})), bool(e.get("hit", false)))
 		elif kind == "mineTriggered":
 			for p in v["projectiles"]:
 				if int(p["id"]) == int(e.get("projectileId", -1)):
 					fx.puff(p["pos"], 2.5)
 		elif kind == "punch":
-			fx.puff(ViewModel.point(e.get("at", {})), 3.0)
+			var struck: Variant = e.get("hits", 0)
+			fx.punch(ViewModel.point(e.get("at", {})), (struck as Array).size() if struck is Array else int(struck))
 		elif kind == "teleported":
 			var up := Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
-			fx.puff(ViewModel.point(e.get("from", {})) + up, 4.5)
-			fx.puff(ViewModel.point(e.get("to", {})) + up, 4.5)
+			fx.teleport(ViewModel.point(e.get("from", {})) + up, ViewModel.point(e.get("to", {})) + up)
 		elif kind == "fired":
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:
@@ -496,6 +508,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	var pos := CameraMath.rig_position(_rig)
 	# Never let the camera sink under the ground or the soda.
 	pos.y = maxf(pos.y, maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0))
+	fx.listener = camera.position
 	fx.update(dt)
 	camera.position = pos + fx.shake_offset
 	camera.look_at(_rig.target, Vector3.UP)
