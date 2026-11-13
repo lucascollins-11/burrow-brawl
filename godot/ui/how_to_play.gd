@@ -1,10 +1,12 @@
-## How-to-play pages, opened from the title screen. Seven short pages, each with a plain text and a
+## How-to-play pages, opened from the title screen. Eight short pages, each with a plain text and a
 ## simple drawing made of shapes (no image files). Next and Back move through them; Close or Escape
 ## leaves. The text is plain data in PAGES so a test can check it.
 class_name HowToPlay
 extends Control
 
 signal closed
+## The player chose the guided tutorial; the title screen starts the practice match.
+signal practice_requested
 
 const PAGES: Array[Dictionary] = [
 	{
@@ -35,7 +37,12 @@ const PAGES: Array[Dictionary] = [
 	{
 		"art": "weapons",
 		"title": "Weapons",
-		"text": "Press 1 for the Acorn Mortar, which lands and blasts the ground. Press 2 for the Fizz Grenade, which bounces. Set its fuse with Z and X.",
+		"text": "Press 1 or 2 for the Acorn Mortar and Fizz Grenade. Press Q to open the Weapons menu and pick from the whole arsenal. Set a Fizz Grenade's fuse with Z and X.",
+	},
+	{
+		"art": "crate",
+		"title": "Crates",
+		"text": "Crates drop between turns. Walk into one to take it. Weapon crates give you a shot, and snack boxes give you health.",
 	},
 	{
 		"art": "water",
@@ -109,6 +116,13 @@ func _ready() -> void:
 	_text.custom_minimum_size = Vector2(480, 84)
 	box.add_child(_text)
 
+	var practice := Button.new()
+	practice.text = "Try the guided tutorial"
+	practice.tooltip_text = "Practice alone against target dummies, with a prompt for each control."
+	MenuStyle.paint(practice, MenuStyle.ORANGE, 20)
+	practice.pressed.connect(_on_practice_pressed)
+	box.add_child(practice)
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	box.add_child(row)
@@ -166,6 +180,11 @@ func _on_next_pressed() -> void:
 
 func _on_back_pressed() -> void:
 	_show(_index - 1)
+
+
+func _on_practice_pressed() -> void:
+	practice_requested.emit()
+	_close()
 
 
 func _close() -> void:
@@ -227,6 +246,13 @@ class Art:
 				draw_string(font, mid + Vector2(-140, 74), "1  Acorn Mortar", HORIZONTAL_ALIGNMENT_CENTER, 80, 18, MenuStyle.INK)
 				draw_circle(mid + Vector2(100, 0), 40.0, MenuStyle.BLUE)
 				draw_string(font, mid + Vector2(60, 74), "2  Fizz Grenade", HORIZONTAL_ALIGNMENT_CENTER, 80, 18, MenuStyle.INK)
+			"crate":
+				var crate := Rect2(mid + Vector2(-60, -50), Vector2(120, 100))
+				draw_rect(crate, Color("c98b4a"))
+				draw_rect(crate, MenuStyle.INK, false, 5.0)
+				draw_line(crate.position, crate.end, MenuStyle.INK, 4.0)
+				draw_line(Vector2(crate.end.x, crate.position.y), Vector2(crate.position.x, crate.end.y), MenuStyle.INK, 4.0)
+				_squirmling(mid + Vector2(-150, 60), 0.7, MenuStyle.BLUE)
 			"water":
 				draw_rect(Rect2(Vector2(0, mid.y + 20), box_size), Color(MenuStyle.BLUE, 0.85))
 				draw_polyline(_wave(Vector2(0, mid.y + 20), box_size.x), Color.WHITE, 4.0)

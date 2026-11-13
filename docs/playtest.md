@@ -27,8 +27,9 @@ To open it, press Windows+R, paste the path, and press Enter.
 - [ ] Type a nickname of 2 to 16 characters. A shorter or longer one shows a red message.
 - [ ] Click **Create room**. The first try can take up to a minute while the free server wakes up.
   The message says so while you wait.
-- [ ] Click **How to play**. It opens seven pages. **Next** and **Back** move through them, and
+- [ ] Click **How to play**. It opens eight pages. **Next** and **Back** move through them, and
   **Close** or Esc returns to the title screen. Every page fits the window with no cut-off text.
+- [ ] In **How to play**, click **Try the guided tutorial**. It starts a practice match against target dummies.
 
 ## 3. Lobby (two or more people)
 
@@ -51,6 +52,15 @@ To open it, press Windows+R, paste the path, and press Enter.
   should get the same match back, not a blank screen.
 - [ ] Losing your connection for a few seconds should reconnect on its own. If it gives up, the
   message says so.
+- [ ] Practice match: the banner shows one step at a time. Each step that is done is ticked off,
+  and the frame points at the thing the step is about: the **Weapons** button on the weapon step,
+  and the wind gauge on the wind step.
+- [ ] Walk into a crate between turns. The crate gives a weapon or health, and the pickup shows.
+- [ ] Knock a target dummy into the soda sea. It drowns, and the splash shows.
+- [ ] After the last step, **Tutorial complete** appears. **Keep playing** closes it, and
+  **Back to title** leaves the match.
+- [ ] The **Weapons** menu opens with **Q**. It lists every weapon. Items with no ammo are greyed out
+  and cannot be picked.
 
 ## 5. Report a bug
 
