@@ -231,6 +231,16 @@ func weapon_title(id: String) -> String:
 	return id
 
 
+## The HUD control a practice step points at (see PracticeGuide.HIGHLIGHTS), or null.
+func highlight_target(target_name: String) -> Control:
+	match target_name:
+		"weapons":
+			return _weapon_menu_button
+		"wind":
+			return _wind
+	return null
+
+
 func _weapon_id(index: int) -> String:
 	if index >= 0 and index < _weapon_list.size():
 		return str(_weapon_list[index]["id"])
