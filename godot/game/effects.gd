@@ -520,6 +520,12 @@ func pickup(at: Vector3, text: String) -> void:
 	puff(at, 3.0)
 
 
+## A snack's heal: a green "+12" rising from the critter and a soft ring round its middle.
+func heal(at: Vector3, amount: int) -> void:
+	pickup(at, "+%d" % amount)
+	_ring(at - Vector3(0, 3.0, 0), 5.0, 0.6, Color(0.36, 0.77, 0.6, 0.6))
+
+
 ## Decay the shake and pick this frame's camera offset. Add `shake_offset` to the camera, then remove it.
 func update(dt: float) -> void:
 	_shake = maxf(0.0, _shake - dt * 1.8)

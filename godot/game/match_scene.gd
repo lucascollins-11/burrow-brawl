@@ -34,6 +34,7 @@ var env: MatchEnvironment
 var fx: MatchEffects
 var shots: ShotViews
 var crates: CrateViews
+var gear: GearFx
 var pause: PauseMenu
 var terrain_view: Node3D = null
 
@@ -80,6 +81,9 @@ func _ready() -> void:
 	shots.lost.connect(_on_shot_lost)
 	add_child(shots)
 	crates = CrateViews.new()
+	gear = GearFx.new()
+	gear.name = "Gear"
+	add_child(gear)
 	crates.name = "Crates"
 	crates.landed.connect(func(at: Vector3) -> void: fx.dust(at, 2.4))
 	add_child(crates)
@@ -131,6 +135,7 @@ func set_terrain_view(node: Node3D) -> void:
 func handle_match_start(msg: Dictionary) -> void:
 	_clear_critters()
 	shots.clear()
+	gear.clear()
 	crates.clear()
 	_crates_seen = false
 	vm.set_teams(_teams_from_net(msg.get("teamIds", [])))
@@ -357,7 +362,8 @@ func _process(dt: float) -> void:
 		_guide_label.visible = v["phase"] != "over" and not pause.is_open()
 		_update_tutorial_pointers()
 	_sync_critters(v, active, aim, dt)
-	shots.sync(v["projectiles"])
+	shots.sync(v["projectiles"], v["mines"])
+	gear.sync(v["critters"], dt)
 	crates.sync(v["crates"], dt, _crates_seen)
 	_crates_seen = true
 	_update_marker(v, active, aim)
@@ -421,7 +427,7 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 		elif kind == "tracer":
 			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})), bool(e.get("hit", false)))
 		elif kind == "mineTriggered":
-			for p in v["projectiles"]:
+			for p in (v["projectiles"] as Array) + (v["mines"] as Array):
 				if int(p["id"]) == int(e.get("projectileId", -1)):
 					fx.puff(p["pos"], 2.5)
 		elif kind == "punch":
@@ -430,6 +436,15 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 		elif kind == "teleported":
 			var up := Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
 			fx.teleport(ViewModel.point(e.get("from", {})) + up, ViewModel.point(e.get("to", {})) + up)
+		elif kind == "shieldPopped":
+			var popped := _find(v["critters"], int(e.get("critterId", -1)))
+			if not popped.is_empty():
+				fx.burst((popped["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0), Color("8fd8ff"))
+		elif kind == "healed":
+			var healed := _find(v["critters"], int(e.get("critterId", -1)))
+			if not healed.is_empty():
+				var top := (healed["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0)
+				fx.heal(top, int(e.get("amount", 0)))
 		elif kind == "fired":
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:

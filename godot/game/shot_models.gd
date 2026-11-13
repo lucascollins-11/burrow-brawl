@@ -183,6 +183,37 @@ static func _mine(body: Node3D) -> void:
 	m.material_override = mat
 	m.name = "Jelly"
 	body.add_child(m)
+	# A little bulb on top that shows what the mine is doing (see blink_mine).
+	var bulb := _mi(_sphere(0.28), Color("ffe14a"), Vector3(0, 1.32, 0), 0.2)
+	var bulb_mat := (bulb.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	bulb_mat.emission_enabled = true
+	bulb_mat.emission = Color("ffd21f")
+	bulb_mat.emission_energy_multiplier = 0.2
+	bulb.material_override = bulb_mat
+	bulb.name = "Bulb"
+	body.add_child(bulb)
+
+
+## Show a placed mine's state: the bulb stays dark while it is arming, blinks slowly once armed
+## and flashes fast when it has been set off. The jelly glows a little with the bulb.
+static func blink_mine(root: Node3D, t: float, armed: bool, triggered: bool) -> void:
+	var level := mine_glow(t, armed, triggered)
+	var bulb := root.find_child("Bulb", true, false) as MeshInstance3D
+	if bulb != null:
+		(bulb.material_override as StandardMaterial3D).emission_energy_multiplier = 0.2 + 5.0 * level
+		bulb.scale = Vector3.ONE * (0.9 + 0.3 * level)
+	var jelly := root.find_child("Jelly", true, false) as MeshInstance3D
+	if jelly != null:
+		(jelly.material_override as StandardMaterial3D).emission_energy_multiplier = 0.3 + 0.9 * level
+
+
+## 0..1 brightness of a mine's bulb at time t.
+static func mine_glow(t: float, armed: bool, triggered: bool) -> float:
+	if triggered:
+		return 1.0 if fposmod(t, 0.16) < 0.08 else 0.0
+	if not armed:
+		return 0.0
+	return 1.0 if fposmod(t, 1.2) < 0.25 else 0.0
 
 
 static func _boulder(body: Node3D) -> void:
