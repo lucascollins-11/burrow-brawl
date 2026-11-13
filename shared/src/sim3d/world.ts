@@ -18,7 +18,7 @@ import { YAW_STEPS } from "./api";
 import { FALL_DAMAGE_DEN, FALL_DAMAGE_NUM, FALL_SAFE_DISTANCE } from "./constants";
 import { bodyBlocked, cell, createCritter, stepCritter } from "./critter";
 import { inGlue } from "./zones";
-import { isSteeredByOwner } from "./projectile";
+import { gatlingTick, isSteeredByOwner } from "./projectile";
 import { fireInstant, isDormant, isInstantWeapon, spawnShots, stepProjectiles } from "./projectile";
 
 export function createWorld(terrain: VoxelTerrain, critters: readonly Critter[]): SimState {
@@ -79,10 +79,15 @@ function resolve(
  */
 export function stepWorld(state: SimState, given: readonly CritterInput[], rng: Rng): StepResult {
   void rng;
-  const { inputs, steering } = restrain(state, given);
+  const { inputs, steering, sweep } = restrain(state, given);
   const t = state.terrain;
   const moveEvents: SimEvent[] = [];
-  let critters = state.critters.map((c) => stepCritter(t, c, inputFor(inputs, c.id), moveEvents));
+  let critters = state.critters.map((c) => {
+    const moved = stepCritter(t, c, inputFor(inputs, c.id), moveEvents);
+    // A critter spraying the Pea Gatling stands still and turns with the walk keys.
+    const turn = sweep.get(c.id);
+    return turn !== undefined && turn >= 0 ? { ...moved, yaw: turn } : moved;
+  });
 
   const fireEvents: SimEvent[] = [];
   const spawned: Projectile[] = [];
@@ -120,6 +125,12 @@ export function stepWorld(state: SimState, given: readonly CritterInput[], rng: 
       { type: "fired", critterId: shooter.id, projectileId: -1, weaponId: scan.cmd.weaponId },
       ...acted,
     );
+  }
+
+  // Pea Gatling streams already running (one started this tick waits for the next).
+  for (const c of critters) {
+    if (!c.gatling || scans.some((s) => s.critterId === c.id)) continue;
+    critters = gatlingTick(t, critters, c, fireEvents);
   }
 
   const triggers = new Set<number>();
@@ -167,20 +178,21 @@ export function stepWorld(state: SimState, given: readonly CritterInput[], rng: 
 function restrain(
   state: SimState,
   inputs: readonly CritterInput[],
-): { inputs: readonly CritterInput[]; steering: Map<number, number> } {
+): { inputs: readonly CritterInput[]; steering: Map<number, number>; sweep: Map<number, number> } {
   const steering = new Map<number, number>();
+  const sweep = new Map<number, number>();
   const drivers = new Set(
     state.projectiles.filter((p) => isSteeredByOwner(p.weaponId)).map((p) => p.ownerId),
   );
-  if (!state.zones && drivers.size === 0 && !state.critters.some((c) => c.frozen))
-    return { inputs, steering };
+  if (!state.zones && drivers.size === 0 && !state.critters.some((c) => c.frozen || c.gatling))
+    return { inputs, steering, sweep };
   const out: CritterInput[] = [];
   for (const i of inputs) {
     const c = state.critters.find((k) => k.id === i.critterId);
     if (!c) continue;
     if (c.frozen) continue;
-    if (drivers.has(c.id)) {
-      steering.set(c.id, i.moveYaw);
+    if (drivers.has(c.id) || c.gatling) {
+      (c.gatling ? sweep : steering).set(c.id, i.moveYaw);
       const { jump: _j, backflip: _b, ...rest } = i;
       void [_j, _b];
       out.push({ ...rest, moveYaw: -1 });
@@ -190,7 +202,7 @@ function restrain(
       out.push({ ...rest, moveYaw: -1 });
     } else out.push(i);
   }
-  return { inputs: out, steering };
+  return { inputs: out, steering, sweep };
 }
 
 /**
@@ -199,7 +211,7 @@ function restrain(
  */
 export function isSettled(state: SimState): boolean {
   if (state.projectiles.some((p) => !isDormant(p))) return false;
-  if (state.critters.some((c) => c.drillTicks !== undefined)) return false;
+  if (state.critters.some((c) => c.drillTicks !== undefined || c.gatling)) return false;
   return state.critters.every(
     (c) => c.status !== "alive" || (c.grounded && c.vel.x === 0 && c.vel.y === 0 && c.vel.z === 0),
   );

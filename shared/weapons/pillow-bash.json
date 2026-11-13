@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "pillow-bash",
+  "name": "Pillow Bash",
+  "description": "A pillow swung with everything you have: no damage, an enormous sideways shove.",
+  "category": "melee",
+  "behavior": "ring-out",
+  "targeting": "aim-angle",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 760,
+  "params": {
+    "range": 45,
+    "arcDegrees": 150,
+    "launchAngleDegrees": 15,
+    "targetsEnemiesOnly": true
+  }
+}

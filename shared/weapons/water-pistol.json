@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "water-pistol",
+  "name": "Water Pistol",
+  "description": "A squirt of water: barely hurts, but shoves whoever it hits a long way.",
+  "category": "hitscan",
+  "behavior": "knockback-beam",
+  "targeting": "aim-angle",
+  "ammo": 3,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 5,
+  "blastRadius": 16,
+  "knockback": 900,
+  "params": {
+    "shotsPerTurn": 1,
+    "range": 300,
+    "spreadDegrees": 0,
+    "noCrater": true
+  }
+}
