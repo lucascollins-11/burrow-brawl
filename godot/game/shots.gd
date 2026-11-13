@@ -32,6 +32,20 @@ func clear() -> void:
 func _make(weapon: String) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	var s := SphereMesh.new()
+	if weapon == "jelly-mine":
+		# A wobbly pink dome sitting on the ground.
+		s.radius = 1.3
+		s.height = 1.3
+		s.is_hemisphere = true
+		m.mesh = s
+		var jelly := StandardMaterial3D.new()
+		jelly.albedo_color = Color("ff5fa2")
+		jelly.roughness = 0.15
+		jelly.emission_enabled = true
+		jelly.emission = Color("ff2d7a")
+		jelly.emission_energy_multiplier = 0.4
+		m.material_override = jelly
+		return m
 	var grenade := weapon == "fizz-grenade"
 	s.radius = 0.8 if grenade else 0.9
 	s.height = s.radius * 2.0

@@ -346,6 +346,10 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
 			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})))
+		elif kind == "mineTriggered":
+			for p in v["projectiles"]:
+				if int(p["id"]) == int(e.get("projectileId", -1)):
+					fx.puff(p["pos"], 2.5)
 		elif kind == "punch":
 			fx.puff(ViewModel.point(e.get("at", {})), 3.0)
 		elif kind == "teleported":
@@ -398,7 +402,10 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	_rig = CameraMath.zoom(_rig, float(mouse["wheel"]))
 	_blast_left = maxf(0.0, _blast_left - dt)
 	var goal: Dictionary
-	var shot_list: Array = v["projectiles"]
+	# A mine lying in wait is not a shot to follow.
+	var shot_list: Array = (v["projectiles"] as Array).filter(
+		func(p: Dictionary) -> bool: return str(p["weapon"]) != "jelly-mine"
+	)
 	if not shot_list.is_empty():
 		goal = {"mode": "follow", "target": shot_list[0]["pos"], "dist": 38.0}
 	elif _blast_left > 0.0:
