@@ -80,6 +80,12 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "kite-bomber": "kite",
   "kite-charge": "impact",
   "mousetrap-snapper": "bounce",
+  "paper-lantern": "impact",
+  "giant-block": "impact",
+  "boulder-of-doom": "walk",
+  "meteor-marble": "impact",
+  pinata: "impact",
+  "candy-bomb": "impact",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -102,7 +108,12 @@ export type ProjectileWeaponId =
   | "marble-roller"
   | "rc-racer"
   | "kite-bomber"
-  | "mousetrap-snapper";
+  | "mousetrap-snapper"
+  | "lantern-drift"
+  | "toy-block-drop"
+  | "boulder-of-doom"
+  | "marble-meteor-shower"
+  | "party-pinata";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -124,6 +135,11 @@ const FIREABLE: readonly string[] = [
   "rc-racer",
   "kite-bomber",
   "mousetrap-snapper",
+  "lantern-drift",
+  "toy-block-drop",
+  "boulder-of-doom",
+  "marble-meteor-shower",
+  "party-pinata",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -410,7 +426,8 @@ export function spawnShots(
   if (!isProjectileWeapon(cmd.weaponId)) return [];
   const w = loadWeapons()[cmd.weaponId];
   const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
-  if (cmd.weaponId === "beehive-strike") return dropStrike(t, c, w, yaw, cmd.target, firstId);
+  if (STRIKES.includes(cmd.weaponId)) return dropStrike(t, c, w, yaw, cmd.target, firstId);
+  if (cmd.weaponId === "marble-meteor-shower") return meteorShower(t, c, w, firstId);
   if (cmd.weaponId === "firecracker-bundle" || isMine(w)) return [dropCharge(c, w, yaw, firstId)];
   // Walkers are set down ahead and head off along the aim.
   if (FLIGHT[cmd.weaponId] === "walk" || FLIGHT[cmd.weaponId] === "drive")
@@ -600,6 +617,48 @@ function dropCharge(c: Critter, w: WeaponData, yaw: number, id: number): Project
   };
 }
 
+/** Called-in strikes: bombs dropped over a target (the `bomb` param names them). */
+const STRIKES: readonly string[] = [
+  "beehive-strike",
+  "lantern-drift",
+  "toy-block-drop",
+  "party-pinata",
+];
+
+/**
+ * A map-wide shower: `bombCount` bombs spread over the whole map from just above the top, one
+ * released every so often across `spreadSeconds` (they wait with a negative `age`). Places come
+ * from a fixed integer hash of the first id, so every peer agrees.
+ */
+function meteorShower(t: VoxelTerrain, c: Critter, w: WeaponData, firstId: number): Projectile[] {
+  const n = Math.max(1, Math.trunc(num(w, "bombCount", 20)));
+  const gap = Math.max(1, Math.floor((num(w, "spreadSeconds", 4) * TICK_RATE) / n));
+  const bomb = typeof w.params.bomb === "string" ? (w.params.bomb as WeaponId) : "meteor-marble";
+  const half = FIXED_ONE >> 1;
+  const out: Projectile[] = [];
+  for (let k = 0; k < n; k++) {
+    const h = (Math.imul(firstId + k * 977, 2654435761) >>> 0) ^ (k * 40503);
+    const x = 4 + ((h >>> 3) % Math.max(1, t.sizeX - 8));
+    const z = 4 + ((h >>> 13) % Math.max(1, t.sizeZ - 8));
+    out.push({
+      id: firstId + k,
+      ownerId: c.id,
+      weaponId: bomb,
+      pos: {
+        x: x * FIXED_ONE + half,
+        y: (t.sizeY + 2) * FIXED_ONE + half,
+        z: z * FIXED_ONE + half,
+      },
+      vel: { x: 0, y: -STRIKE_DROP_SPEED, z: 0 },
+      age: -k * gap,
+      fuseTicks: -1,
+      bounces: 0,
+      resting: false,
+    });
+  }
+  return out;
+}
+
 /** Bombs start falling at this speed (Q16.16 voxels per tick). */
 const STRIKE_DROP_SPEED = FIXED_ONE >> 2;
 /** Each bomb in a strike starts this many voxels above the one before it, so they land in turn. */
@@ -626,6 +685,9 @@ function dropStrike(
   const cx = cosYaw(yaw);
   const sz = sinYaw(yaw);
   const half = FIXED_ONE >> 1;
+  const bomb = typeof w.params.bomb === "string" ? (w.params.bomb as WeaponId) : "beehive-bomb";
+  const fall =
+    w.params.dropSpeed === undefined ? STRIKE_DROP_SPEED : speedPerTick(num(w, "dropSpeed", 0));
   const out: Projectile[] = [];
   for (let k = 0; k < n; k++) {
     // Offset along the line in Q16.16 voxels: -spread/2 .. +spread/2.
@@ -634,13 +696,13 @@ function dropStrike(
     out.push({
       id: firstId + k,
       ownerId: c.id,
-      weaponId: "beehive-bomb",
+      weaponId: bomb,
       pos: {
         x: target.x * FIXED_ONE + half + mulQ(cx, off),
         y: y * FIXED_ONE + half,
         z: target.z * FIXED_ONE + half + mulQ(sz, off),
       },
-      vel: { x: 0, y: -STRIKE_DROP_SPEED, z: 0 },
+      vel: { x: 0, y: -fall, z: 0 },
       age: 0,
       fuseTicks: -1,
       bounces: 0,
@@ -798,6 +860,46 @@ export function explode(
   });
 }
 
+/**
+ * A falling block's landing: a `blockSize` square, `blockHeight` tall box of new terrain with its
+ * base on (x, y, z), kept inside the grid; none if a living critter is still inside it.
+ */
+function leaveBlock(
+  t: VoxelTerrain,
+  cs: readonly Critter[],
+  w: WeaponData,
+  x: number,
+  y: number,
+  z: number,
+): void {
+  const s = Math.max(2, Math.floor((num(w, "blockSize", 30) * LENGTH_NUM) / LENGTH_DEN));
+  const h = Math.max(1, Math.floor((num(w, "blockHeight", 24) * LENGTH_NUM) / LENGTH_DEN));
+  const b = {
+    x0: Math.max(0, x - (s >> 1)),
+    y0: Math.max(t.bedrockY, y),
+    z0: Math.max(0, z - (s >> 1)),
+    x1: Math.min(t.sizeX - 1, x - (s >> 1) + s - 1),
+    y1: Math.min(t.sizeY - 2, y + h - 1),
+    z1: Math.min(t.sizeZ - 1, z - (s >> 1) + s - 1),
+  };
+  if (b.x0 > b.x1 || b.y0 > b.y1 || b.z0 > b.z1) return;
+  const inside = cs.some((c) => {
+    if (c.status !== "alive") return false;
+    const cx = cell(c.pos.x);
+    const cy = cell(c.pos.y);
+    const cz = cell(c.pos.z);
+    return (
+      cx >= b.x0 - 1 &&
+      cx <= b.x1 + 1 &&
+      cz >= b.z0 - 1 &&
+      cz <= b.z1 + 1 &&
+      cy + CRITTER_HEIGHT > b.y0 &&
+      cy <= b.y1
+    );
+  });
+  if (!inside) applyEdit(t, { op: "box", ...b });
+}
+
 /** True if the voxel under (x, y, z) is solid. */
 function isSolidBelow(t: VoxelTerrain, x: number, y: number, z: number): boolean {
   return isSolid(t, x, y - 1, z);
@@ -858,6 +960,11 @@ export function stepProjectiles(
   let id = nextId;
 
   for (const p of projectiles) {
+    // Shower bombs wait their turn above the map, out of play.
+    if (p.age < 0) {
+      next.push({ ...p, age: p.age + 1 });
+      continue;
+    }
     const w = loadWeapons()[p.weaponId];
     let { x, y, z } = p.pos;
     let vx = p.vel.x;
@@ -886,6 +993,18 @@ export function stepProjectiles(
     if (resting && !(stick ? touchesSolid : isSolidBelow)(t, cell(x), cell(y), cell(z)))
       resting = false;
 
+    // The Boulder of Doom grinds a tunnel ahead of itself as it rolls.
+    const grind = Math.floor((num(w, "carveRadius", 0) * LENGTH_NUM) / LENGTH_DEN);
+    if (steered && grind > 0 && blast === null && p.age % 4 === 0) {
+      const d = yawDir(heading ?? 0);
+      applyEdit(t, {
+        op: "carve",
+        x: cell(x + mulQ(d.x, (grind * FIXED_ONE) >> 1)),
+        y: cell(y) + grind,
+        z: cell(z + mulQ(d.z, (grind * FIXED_ONE) >> 1)),
+        r: grind,
+      });
+    }
     if (steered && blast === null) {
       const m = steerStep(
         t,
@@ -917,7 +1036,16 @@ export function stepProjectiles(
         2 * TERMINAL_VELOCITY,
       );
       ({ x, y, z, vx, vy, vz, heading } = m);
-      if (m.crashed) {
+      const bump =
+        w.params.blowsOnContact === true &&
+        cs.some(
+          (c) =>
+            (c.id !== p.ownerId || p.age > 60) &&
+            c.status === "alive" &&
+            length({ x: c.pos.x - x, y: c.pos.y - y, z: c.pos.z - z }) <= grind * FIXED_ONE,
+        );
+      if (bump) blast = { x: cell(x), y: cell(y), z: cell(z) };
+      else if (m.crashed) {
         blast = { x: cell(x), y: cell(y), z: cell(z) };
         midAir = true;
       } else if (
@@ -940,8 +1068,9 @@ export function stepProjectiles(
       if (p.age >= Math.trunc(num(w, "flatSeconds", 0) * TICK_RATE))
         vy = Math.max(vy - (p.light ? g >> 1 : g), -2 * TERMINAL_VELOCITY);
       if (w.windAffected) {
-        vx += clampInt(windX, -100, 100) * WIND_ACCEL_PER_UNIT;
-        vz += clampInt(windZ, -100, 100) * WIND_ACCEL_PER_UNIT;
+        const k = Math.max(1, Math.trunc(num(w, "windScale", 1)));
+        vx += clampInt(windX, -100, 100) * WIND_ACCEL_PER_UNIT * k;
+        vz += clampInt(windZ, -100, 100) * WIND_ACCEL_PER_UNIT * k;
       }
       const n = Math.max(
         1,
@@ -1069,6 +1198,7 @@ export function stepProjectiles(
     if (blast === null && fuse === 0) blast = { x: cell(x), y: cell(y), z: cell(z) };
     if (blast !== null) {
       cs = explode(t, cs, p, blast.x, blast.y, blast.z, events);
+      if (w.params.leavesBlock === true) leaveBlock(t, cs, w, blast.x, blast.y, blast.z);
       const puddle = zoneFrom(t, p, blast.x, blast.y, blast.z);
       if (puddle) zones.push(puddle);
       const subs = burst(p, w, blast.x, blast.y, blast.z, midAir, id);

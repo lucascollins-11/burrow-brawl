@@ -22,6 +22,8 @@ export interface WeaponInfo {
   needs: WeaponNeed[];
   /** Uses per team per match, or null for unlimited. */
   ammo: number | null;
+  /** True if a team starts with none and gets it only from weapon crates. */
+  crateOnly: boolean;
   /** False for sub-munitions: listed only so a client can name and draw them. */
   fireable: boolean;
 }
@@ -63,6 +65,12 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "spatula-swat",
   "pillow-bash",
   "mousetrap-snapper",
+  "lantern-drift",
+  "toy-block-drop",
+  "boulder-of-doom",
+  "marble-meteor-shower",
+  "party-pinata",
+  "tabletop-quake",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */
@@ -94,6 +102,7 @@ export function weaponCatalog(): readonly WeaponInfo[] {
       description: w.description,
       needs,
       ammo: w.ammo,
+      crateOnly: w.crateOnly,
       fireable: w.fireable !== false,
     };
   });

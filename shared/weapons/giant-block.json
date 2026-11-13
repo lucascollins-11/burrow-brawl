@@ -1,0 +1,25 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "giant-block",
+  "name": "Giant Block",
+  "description": "The block from a Toy Block Drop.",
+  "category": "projectile",
+  "behavior": "crusher",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 45,
+  "blastRadius": 30,
+  "knockback": 350,
+  "params": {
+    "gravity": 600,
+    "noCrater": true,
+    "leavesBlock": true,
+    "blockSize": 30,
+    "blockHeight": 24,
+    "damageFalloff": "linear"
+  }
+}

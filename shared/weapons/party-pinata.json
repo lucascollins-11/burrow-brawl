@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "party-pinata",
+  "name": "Party Pi\u00f1ata",
+  "description": "Drop a pi\u00f1ata on a spot: it bursts into a ring of candy bombs.",
+  "category": "super",
+  "behavior": "cluster-super",
+  "targeting": "click-point",
+  "ammo": 1,
+  "crateOnly": true,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "bombCount": 1,
+    "spreadWidth": 0,
+    "dropHeight": 300,
+    "bomb": "pinata",
+    "damageFalloff": "linear"
+  }
+}

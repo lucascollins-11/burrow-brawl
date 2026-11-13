@@ -1,0 +1,24 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "lantern-drift",
+  "name": "Lantern Drift",
+  "description": "Call in paper lanterns over a spot: they float down on the wind and pop on whatever they touch.",
+  "category": "strike",
+  "behavior": "wind-strike",
+  "targeting": "click-point",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "bombCount": 3,
+    "spreadWidth": 120,
+    "dropHeight": 120,
+    "bomb": "paper-lantern",
+    "dropSpeed": 20,
+    "damageFalloff": "linear"
+  }
+}

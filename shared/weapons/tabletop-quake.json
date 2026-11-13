@@ -1,0 +1,19 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "tabletop-quake",
+  "name": "Tabletop Quake",
+  "description": "Thump the table: every critter on the map is shaken and thrown out toward the water.",
+  "category": "super",
+  "behavior": "map-event",
+  "targeting": "none",
+  "ammo": 1,
+  "crateOnly": true,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 10,
+  "blastRadius": 0,
+  "knockback": 420,
+  "params": {
+    "upwardSpeed": 120
+  }
+}

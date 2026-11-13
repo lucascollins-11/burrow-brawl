@@ -92,6 +92,11 @@ const WEAPON_IDS = [
   "spatula-swat",
   "pillow-bash",
   "mousetrap-snapper",
+  "lantern-drift",
+  "toy-block-drop",
+  "marble-meteor-shower",
+  "party-pinata",
+  "tabletop-quake",
 ] as const satisfies readonly WeaponId[];
 
 const isIntIn = (v: unknown, min: number, max: number): v is number =>
@@ -185,7 +190,9 @@ export interface MatchState {
 /** The ammo every team starts a match with: the limited weapons from the catalogue. */
 export function startingAmmo(): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const w of weaponCatalog()) if (w.fireable && w.ammo !== null) out[w.id] = w.ammo;
+  // Crate-only weapons start empty; a weapon crate adds one.
+  for (const w of weaponCatalog())
+    if (w.fireable && w.ammo !== null) out[w.id] = w.crateOnly ? 0 : w.ammo;
   return out;
 }
 
