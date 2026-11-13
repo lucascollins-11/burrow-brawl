@@ -23,7 +23,6 @@ const ALL: readonly Theme[] = [
   bathtubBay,
   gardenPatch,
 ];
-const ALL: readonly Theme[] = [picnicAtoll, toyboxHarbor, clockworkMesa, frostedBakery, bathtubBay];
 
 /** Themes the lobby can offer. */
 export const THEMES: readonly {
