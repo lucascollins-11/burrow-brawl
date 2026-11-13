@@ -43,6 +43,9 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "soda-jetpack",
   "umbrella-glide",
   "rope-claw",
+  "build-block",
+  "bubble-shield",
+  "cookie-snack",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */

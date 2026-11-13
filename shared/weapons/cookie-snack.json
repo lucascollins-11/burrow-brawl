@@ -1,0 +1,20 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "cookie-snack",
+  "name": "Cookie Snack",
+  "description": "Munch a cookie, or hand it to a teammate beside you: +25 health.",
+  "category": "utility",
+  "behavior": "heal",
+  "targeting": "none",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "heal": 25,
+    "reach": 30
+  }
+}

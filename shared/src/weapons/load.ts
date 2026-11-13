@@ -2,6 +2,9 @@ import acornMortar from "../../weapons/acorn-mortar.json";
 import beehiveBomb from "../../weapons/beehive-bomb.json";
 import beehiveStrike from "../../weapons/beehive-strike.json";
 import boulderOfDoom from "../../weapons/boulder-of-doom.json";
+import bubbleShield from "../../weapons/bubble-shield.json";
+import buildBlock from "../../weapons/build-block.json";
+import cookieSnack from "../../weapons/cookie-snack.json";
 import drillHat from "../../weapons/drill-hat.json";
 import firecrackerBundle from "../../weapons/firecracker-bundle.json";
 import fizzGrenade from "../../weapons/fizz-grenade.json";
@@ -39,7 +42,10 @@ export type WeaponId =
   | "beehive-bomb"
   | "firecracker-bundle"
   | "soda-jetpack"
-  | "umbrella-glide";
+  | "umbrella-glide"
+  | "build-block"
+  | "bubble-shield"
+  | "cookie-snack";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -68,6 +74,9 @@ const registry: WeaponRegistry = Object.freeze({
   "firecracker-bundle": toWeaponData(firecrackerBundle),
   "soda-jetpack": toWeaponData(sodaJetpack),
   "umbrella-glide": toWeaponData(umbrellaGlide),
+  "build-block": toWeaponData(buildBlock),
+  "bubble-shield": toWeaponData(bubbleShield),
+  "cookie-snack": toWeaponData(cookieSnack),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

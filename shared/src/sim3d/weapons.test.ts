@@ -717,6 +717,98 @@ describe("Rope Claw", () => {
   });
 });
 
+describe("Build Block, Bubble Shield, Cookie Snack", () => {
+  const use = (
+    weaponId: FireCommand["weaponId"],
+    target?: { x: number; y: number; z: number },
+    critterId = 1,
+  ): CritterInput => ({
+    critterId,
+    moveYaw: -1,
+    fire: { weaponId, yaw: 0, pitch: 0, power: 0, ...(target ? { target } : {}) },
+  });
+  const fired = (es: readonly SimEvent[]) => es.filter((e) => e.type === "fired");
+
+  it("Build Block puts a solid block on the target and refuses bad spots", () => {
+    const s = world(true);
+    const r = stepWorld(s, [use("build-block", { x: 60, y: GROUND, z: 64 })], rng);
+    expect(fired(r.events)).toHaveLength(1);
+    expect(isSolid(r.state.terrain, 60, GROUND + 2, 64)).toBe(true);
+    expect(isSolid(r.state.terrain, 60, GROUND + 8, 64)).toBe(false);
+    for (const g of [undefined, { x: 125, y: GROUND, z: 64 }, { x: 100, y: GROUND, z: 64 }]) {
+      // no target; off the grid (and out of range); onto critter 2
+      expect(fired(stepWorld(world(true), [use("build-block", g)], rng).events)).toEqual([]);
+    }
+  });
+
+  it("a critter can stand on its block", () => {
+    const s = stepWorld(world(), [use("build-block", { x: 40, y: GROUND, z: 70 })], rng).state;
+    const on = {
+      ...s,
+      critters: s.critters.map((c) => ({
+        ...c,
+        pos: { ...c.pos, z: 70 * FIXED_ONE, y: c.pos.y + 10 * FIXED_ONE },
+        grounded: false,
+      })),
+    };
+    const c = run(on, 60).state.critters[0]!;
+    expect(c.grounded).toBe(true);
+    expect(cell(c.pos.y)).toBe(GROUND + 4);
+  });
+
+  it("Bubble Shield soaks up one blast whole, then pops", () => {
+    let s = stepWorld(world(), [use("bubble-shield")], rng).state;
+    expect(s.critters[0]!.shield).toBe(true);
+    expect(fired(stepWorld(s, [use("bubble-shield")], rng).events)).toEqual([]);
+    const c0 = s.critters[0]!;
+    const ev: SimEvent[] = [];
+    const shell = {
+      id: 9,
+      ownerId: 2,
+      weaponId: "acorn-mortar" as const,
+      pos: c0.pos,
+      vel: { x: 0, y: 0, z: 0 },
+      age: 0,
+      fuseTicks: -1,
+      bounces: 0,
+      resting: false,
+    };
+    const at = [cell(c0.pos.x), cell(c0.pos.y), cell(c0.pos.z)] as const;
+    s = { ...s, critters: explode(s.terrain, s.critters, shell, ...at, ev) };
+    expect(ev.map((e) => e.type)).toContain("shieldPopped");
+    expect(ev.filter((e) => e.type === "damage")).toEqual([]);
+    expect(s.critters[0]!.hp).toBe(100);
+    expect(s.critters[0]!.shield).toBeUndefined();
+    const ev2: SimEvent[] = [];
+    s = { ...s, critters: explode(s.terrain, s.critters, shell, ...at, ev2) };
+    expect(s.critters[0]!.hp).toBeLessThan(100);
+  });
+
+  it("Cookie Snack heals the most hurt of self and a teammate beside, capped at full", () => {
+    const t = flatSlab(128, 96, 128, GROUND, 4);
+    const cs = [
+      { ...createCritter(1, 0, 40, GROUND, 64), hp: 90 },
+      { ...createCritter(2, 0, 44, GROUND, 64), hp: 50 },
+      { ...createCritter(3, 1, 42, GROUND, 64), hp: 10 }, // an enemy: never fed
+    ];
+    let s = createWorld(t, cs);
+    let r = stepWorld(s, [use("cookie-snack")], rng);
+    expect(r.events.find((e) => e.type === "healed")).toEqual({
+      type: "healed",
+      critterId: 2,
+      amount: 25,
+    });
+    s = { ...r.state, critters: r.state.critters.map((c) => (c.id === 2 ? { ...c, hp: 100 } : c)) };
+    r = stepWorld(s, [use("cookie-snack")], rng);
+    expect(r.events.find((e) => e.type === "healed")).toEqual({
+      type: "healed",
+      critterId: 1,
+      amount: 10,
+    });
+    expect(r.state.critters[0]!.hp).toBe(100);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -761,6 +853,9 @@ describe("weapon catalogue", () => {
       "soda-jetpack",
       "umbrella-glide",
       "rope-claw",
+      "build-block",
+      "bubble-shield",
+      "cookie-snack",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);
@@ -773,6 +868,8 @@ describe("weapon catalogue", () => {
     expect(byId["fizz-grenade"]!.needs).toEqual(["fuse", "charge"]);
     expect(byId["hopper-ball"]!.needs).toEqual(["charge"]);
     expect(byId["beehive-strike"]!.needs).toEqual(["target"]);
+    expect(byId["build-block"]!.needs).toEqual(["target"]);
+    expect(byId["cookie-snack"]!.needs).toEqual([]);
     expect(byId["pinecone-seed"]!.fireable).toBe(false);
     expect(byId["beehive-bomb"]!.fireable).toBe(false);
     expect(cat.every((w) => w.name.length > 0 && w.description.length > 0)).toBe(true);

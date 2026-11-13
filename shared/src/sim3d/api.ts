@@ -74,6 +74,8 @@ export interface Critter {
     readonly reel: number;
     readonly ticks: number;
   };
+  /** Bubble Shield: the next explosion or punch on this critter is absorbed. */
+  readonly shield?: true;
 }
 
 export interface Projectile {
@@ -205,6 +207,10 @@ export type SimEvent =
       readonly weaponId: string;
       readonly amount: number;
     }
+  /** A Cookie Snack: `critterId` gained `amount` health (0 when already full). */
+  | { readonly type: "healed"; readonly critterId: number; readonly amount: number }
+  /** A Bubble Shield took a hit for `critterId` and popped. */
+  | { readonly type: "shieldPopped"; readonly critterId: number }
   /** A crate sank into the soda. */
   | { readonly type: "crateLost"; readonly crateId: number };
 
