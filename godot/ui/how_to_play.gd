@@ -37,7 +37,7 @@ const PAGES: Array[Dictionary] = [
 	{
 		"art": "weapons",
 		"title": "Weapons",
-		"text": "Press 1 or 2 for your first two weapons. Press Q to open the Weapons menu and pick from the whole arsenal. Set a Fizz Grenade's fuse with Z and X.",
+		"text": "Press 1 or 2 for the Acorn Mortar and Fizz Grenade. Press Q to open the Weapons menu and pick from the whole arsenal. Set a Fizz Grenade's fuse with Z and X.",
 	},
 	{
 		"art": "crate",
