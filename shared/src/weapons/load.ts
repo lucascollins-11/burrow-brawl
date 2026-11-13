@@ -13,8 +13,10 @@ import pineconeSeed from "../../weapons/pinecone-seed.json";
 import ropeClaw from "../../weapons/rope-claw.json";
 import rootPunch from "../../weapons/root-punch.json";
 import skipTurn from "../../weapons/skip-turn.json";
+import sodaJetpack from "../../weapons/soda-jetpack.json";
 import springBoots from "../../weapons/spring-boots.json";
 import teleportBurrow from "../../weapons/teleport-burrow.json";
+import umbrellaGlide from "../../weapons/umbrella-glide.json";
 import type { WeaponData } from "./types";
 
 /** Every weapon id, sub-munitions included. The keys of the registry are exactly these. */
@@ -35,7 +37,9 @@ export type WeaponId =
   | "pinecone-seed"
   | "hopper-ball"
   | "beehive-bomb"
-  | "firecracker-bundle";
+  | "firecracker-bundle"
+  | "soda-jetpack"
+  | "umbrella-glide";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -62,6 +66,8 @@ const registry: WeaponRegistry = Object.freeze({
   "hopper-ball": toWeaponData(hopperBall),
   "beehive-bomb": toWeaponData(beehiveBomb),
   "firecracker-bundle": toWeaponData(firecrackerBundle),
+  "soda-jetpack": toWeaponData(sodaJetpack),
+  "umbrella-glide": toWeaponData(umbrellaGlide),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

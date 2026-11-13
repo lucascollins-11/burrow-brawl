@@ -39,6 +39,9 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "teleport-burrow",
   "jelly-mine",
   "drill-hat",
+  "spring-boots",
+  "soda-jetpack",
+  "umbrella-glide",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */

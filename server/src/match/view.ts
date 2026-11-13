@@ -20,6 +20,15 @@ import type { TerrainEdit, VoxelTerrain } from "@burrow-brawl/shared/src/terrain
 type Patch = Extract<ViewServerMessage, { t: "terrain.patch" }>;
 type StateMsg = Extract<ViewServerMessage, { t: "state" }>;
 
+/** What utility the critter is busy with, for animation. At most one at a time. */
+function critterAct(c: Critter): Pick<ViewCritter, "act" | "fuel"> {
+  if (c.drillTicks !== undefined) return { act: "drill" };
+  if (c.jetFuel !== undefined) return { act: "jetpack", fuel: c.jetFuel };
+  if (c.umbrella) return { act: "umbrella" };
+  if (c.safeFall !== undefined) return { act: "boots" };
+  return {};
+}
+
 export function viewCritter(c: Critter): ViewCritter {
   return {
     id: c.id,
@@ -31,7 +40,7 @@ export function viewCritter(c: Critter): ViewCritter {
     hp: c.hp,
     status: c.status,
     grounded: c.grounded,
-    ...(c.drillTicks !== undefined ? { act: "drill" as const } : {}),
+    ...critterAct(c),
   };
 }
 
@@ -209,4 +218,4 @@ export class ViewStream {
 }
 
 const key = (c: ViewCritter): string =>
-  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team},${c.act ?? ""}`;
+  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team},${c.act ?? ""},${c.fuel ?? ""}`;

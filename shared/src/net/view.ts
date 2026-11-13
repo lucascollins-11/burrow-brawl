@@ -20,8 +20,13 @@ export interface ViewCritter {
   hp: number;
   status: CritterStatus;
   grounded: boolean;
-  /** What the critter is busy doing, if anything: "drill" (Drill Hat). Absent = nothing. */
-  act?: "drill";
+  /**
+   * The utility the critter is busy with, if any: "drill" (Drill Hat), "boots" (in a Spring Boots
+   * jump), "jetpack" (Soda Jetpack on) or "umbrella" (Umbrella Glide open). Absent = nothing.
+   */
+  act?: "drill" | "boots" | "jetpack" | "umbrella";
+  /** Soda Jetpack bursts left, while `act` is "jetpack". */
+  fuel?: number;
 }
 
 export interface ViewProjectile {

@@ -66,4 +66,6 @@ export const WEAPON_CASES: WeaponCase[] = [
   // Does not end the turn: the turn timer runs out after the tunnel.
   { weapon: "drill-hat", pitch: 0, power: 0, expect: ["fired"], label: "sideways" },
   { weapon: "drill-hat", pitch: -60, power: 0, expect: ["fired"], label: "down" },
+  { weapon: "spring-boots", pitch: 70, power: 0, expect: ["fired", "landed"] },
+  { weapon: "soda-jetpack", pitch: 0, power: 0, expect: ["fired", "landed"] },
 ];

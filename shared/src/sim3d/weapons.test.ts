@@ -571,6 +571,88 @@ describe("Drill Hat", () => {
   });
 });
 
+describe("movement gear", () => {
+  const use = (weaponId: FireCommand["weaponId"], pitch = 0, yaw = 0): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId, yaw, pitch, power: 0 },
+  });
+  const fired = (es: readonly SimEvent[]) => es.filter((e) => e.type === "fired");
+  const landings = (es: SimEvent[]) =>
+    es.filter((e): e is Extract<SimEvent, { type: "landed" }> => e.type === "landed");
+  /** Lift critter 1 `h` voxels into the air. */
+  const lifted = (s: SimState, h: number): SimState => ({
+    ...s,
+    critters: s.critters.map((c) =>
+      c.id === 1 ? { ...c, grounded: false, pos: { ...c.pos, y: c.pos.y + h * FIXED_ONE } } : c,
+    ),
+  });
+
+  it("Spring Boots jump far higher than a jump and land softly", () => {
+    const r0 = stepWorld(world(), [use("spring-boots", 80)], rng);
+    expect(fired(r0.events)).toHaveLength(1);
+    expect(r0.state.critters[0]!.safeFall).toBe(60);
+    let top = 0;
+    const r = run(r0.state, 400, (_t, s) => {
+      top = Math.max(top, cell(s.critters[0]!.pos.y));
+      return [];
+    });
+    expect(top - GROUND).toBeGreaterThan(30); // a plain jump is about 10
+    const c = r.state.critters[0]!;
+    expect(c.grounded).toBe(true);
+    expect(c.safeFall).toBeUndefined();
+    expect(c.hp).toBe(100);
+    expect(landings(r.events)[0]!.fallDistance).toBe(0);
+    expect(cell(c.pos.x)).toBeGreaterThan(40); // aimed along +x
+  });
+
+  it("Spring Boots are refused in the air", () => {
+    expect(fired(stepWorld(lifted(world(), 20), [use("spring-boots", 80)], rng).events)).toEqual(
+      [],
+    );
+  });
+
+  it("the Soda Jetpack lifts off, bursts on each jump in the air, and runs out", () => {
+    const r0 = stepWorld(world(), [use("soda-jetpack")], rng);
+    expect(r0.state.critters[0]!.jetFuel).toBe(7);
+    // Jump every 10 ticks: each one spends a burst while there is fuel.
+    const r = run(r0.state, 100, (t) => [
+      { critterId: 1, moveYaw: -1, ...(t % 10 === 5 ? { jump: true } : {}) },
+    ]);
+    const c = r.state.critters[0]!;
+    expect(c.grounded).toBe(false);
+    expect(c.jetFuel).toBe(0);
+    expect(cell(c.pos.y) - GROUND).toBeGreaterThan(20); // bursts keep it climbing
+    const down = run(r.state, 600);
+    expect(down.state.critters[0]!.grounded).toBe(true);
+    expect(down.state.critters[0]!.jetFuel).toBeUndefined();
+  });
+
+  it("the Umbrella Glide opens only mid-air, falls slowly, steers, and lands unhurt", () => {
+    expect(fired(stepWorld(world(), [use("umbrella-glide")], rng).events)).toEqual([]);
+    const high = lifted(world(), 30);
+    const open = stepWorld(high, [use("umbrella-glide")], rng).state;
+    expect(open.critters[0]!.umbrella).toBe(true);
+    const r = run(open, 600, (_t, s) => [
+      { critterId: 1, moveYaw: s.critters[0]!.grounded ? -1 : 0 },
+    ]);
+    const c = r.state.critters[0]!;
+    expect(c.grounded).toBe(true);
+    expect(c.umbrella).toBeUndefined();
+    expect(c.hp).toBe(100);
+    expect(cell(c.pos.x)).toBeGreaterThan(40 + 20); // drifted along +x on the way down
+    // The same drop without the umbrella hurts.
+    const bare = run(high, 300);
+    expect(bare.state.critters[0]!.hp).toBeLessThan(100);
+  });
+
+  it("gear does not stack and keeps the world unsettled until landing", () => {
+    const s = stepWorld(world(), [use("soda-jetpack")], rng).state;
+    expect(isSettled(s)).toBe(false);
+    expect(fired(stepWorld(s, [use("umbrella-glide")], rng).events)).toEqual([]);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -611,6 +693,9 @@ describe("weapon catalogue", () => {
       "teleport-burrow",
       "jelly-mine",
       "drill-hat",
+      "spring-boots",
+      "soda-jetpack",
+      "umbrella-glide",
     ]);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);

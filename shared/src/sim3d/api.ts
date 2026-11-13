@@ -57,6 +57,12 @@ export interface Critter {
   readonly drillTicks?: number;
   /** Drill velocity per tick (Q16.16 voxels) while drilling: level along the yaw, or straight down. */
   readonly drillDir?: Vec3;
+  /** Spring Boots: voxels of fall forgiven on the next landing. Absent when not wearing them. */
+  readonly safeFall?: number;
+  /** Soda Jetpack: bursts left; each jump input in the air spends one. Absent when not worn. */
+  readonly jetFuel?: number;
+  /** Umbrella Glide: open while airborne (slow fall, steerable, no fall damage). */
+  readonly umbrella?: true;
 }
 
 export interface Projectile {

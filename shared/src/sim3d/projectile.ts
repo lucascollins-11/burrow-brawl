@@ -28,6 +28,7 @@ import {
   WIND_ACCEL_PER_UNIT,
 } from "./constants";
 import { bodyBlocked, cell } from "./critter";
+import { isGearWeapon, speedPerTick, startGear, wearingGear } from "./gear";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
 import {
   aimDir,
@@ -163,7 +164,11 @@ export function fireHitscan(
 /** Weapons that act the moment they fire, with no projectile: hitscan, melee and the burrow. */
 export function isInstantWeapon(id: string): boolean {
   return (
-    isHitscanWeapon(id) || id === "root-punch" || id === "teleport-burrow" || id === "drill-hat"
+    isHitscanWeapon(id) ||
+    isGearWeapon(id) ||
+    id === "root-punch" ||
+    id === "teleport-burrow" ||
+    id === "drill-hat"
   );
 }
 
@@ -182,6 +187,7 @@ export function fireInstant(
   if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
   if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
   if (cmd.weaponId === "drill-hat") return startDrill(critters, c, cmd);
+  if (isGearWeapon(cmd.weaponId)) return startGear(critters, c, { ...cmd, weaponId: cmd.weaponId });
   return fireHitscan(t, critters, c, cmd, events);
 }
 
@@ -194,7 +200,7 @@ export const DRILL_DOWN_PITCH = -30;
  * standing; refused (null) in the air or while already drilling.
  */
 function startDrill(critters: readonly Critter[], c: Critter, cmd: FireCommand): Critter[] | null {
-  if (!c.grounded || c.drillTicks !== undefined) return null;
+  if (!c.grounded || c.drillTicks !== undefined || wearingGear(c)) return null;
   const w = loadWeapons()["drill-hat"];
   const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
   const speed = speedPerTick(num(w, "digSpeedCellsPerSecond", 60));
@@ -315,11 +321,6 @@ function fuseRange(w: WeaponData): { min: number; max: number; def: number } {
     return { min, max, def: typeof r.default === "number" ? r.default : min };
   }
   return { min: 1, max: 5, def: 3 };
-}
-
-/** 2D units per second (weapon JSON) -> Q16.16 voxels per tick. */
-function speedPerTick(unitsPerSecond: number): Fixed {
-  return Math.floor((unitsPerSecond * LENGTH_NUM * FIXED_ONE) / (LENGTH_DEN * TICK_RATE));
 }
 
 /** 2D units per second^2 -> Q16.16 voxels per tick^2. */

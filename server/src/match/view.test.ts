@@ -37,6 +37,17 @@ describe("view stream", () => {
     expect(done.act).toBeUndefined();
   });
 
+  it("shows Spring Boots as act: boots until the landing", () => {
+    let s = run(createMatch(cfg), 60);
+    const id = s.turns.activeCritter;
+    const boots: Cmd = { k: "fire", weaponId: "spring-boots", yaw: 0, pitch: 80, power: 0 };
+    s = run(s, 3, s.sim.tick + 1, [boots]);
+    const v = new ViewStream(s);
+    expect(v.fullState(s).critters.find((c) => c.id === id)!.act).toBe("boots");
+    s = run(s, 400);
+    expect(v.fullState(s).critters.find((c) => c.id === id)!.act).toBeUndefined();
+  });
+
   it("lists a placed mine in mines, not projectiles, and arms it after its delay", () => {
     let s = run(createMatch(cfg), 60);
     const v = new ViewStream(s);
