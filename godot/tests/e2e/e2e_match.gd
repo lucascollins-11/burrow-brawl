@@ -138,12 +138,18 @@ func _run() -> bool:
 		return false
 	# A blast right where the camera looks, photographed within a few frames so it is still going.
 	var rig: Variant = scene.get("_rig")
+	# The software renderer takes seconds per frame and particles run on the clock, so slow the
+	# clock right down while the blast is photographed or it is over before the first frame.
+	Engine.time_scale = 0.03
 	scene.fx.explode(rig.target, 9.0)
 	await _shot("2b-blast", 4)
+	Engine.time_scale = 1.0
 	var sea: float = scene.vm.sea_y
 	var mid: Vector2 = scene.get("_world")
+	Engine.time_scale = 0.03
 	scene.fx.splash(Vector3(mid.x * 0.5, sea, mid.y * 0.5 + 40.0), 5.0)
 	await _shot("2c-splash", 4)
+	Engine.time_scale = 1.0
 	if not await _until(func() -> bool: return a_patches > 0 and b_patches > 0, "a terrain patch on both clients"):
 		return false
 	if not await _until(func() -> bool: return tv.pending() == 0, "the crater to be meshed"):
@@ -281,6 +287,7 @@ func _closeup(v: Dictionary) -> void:
 	await _shot("1f-marker", 2)
 	scene.remove_child(twin)
 	twin.queue_free()
+	await _gear_row(me, rig)
 	scene._rig.dist = old_dist
 	scene._rig.pitch_deg = old_pitch
 	scene._rig.yaw_deg = old_yaw
@@ -299,3 +306,60 @@ func _shot(shot_name: String, frames := 5) -> void:
 		print("E2E could not save ", path)
 	else:
 		print("E2E saved ", path)
+
+
+## Four stand-ins wearing the utilities (jetpack, umbrella, boots, drill), one with the rope and
+## a shield, and two Jelly Mines (arming, armed), all next to the active Squirmling.
+func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
+	var right := Vector3.RIGHT.rotated(Vector3.UP, deg_to_rad(float(me["heading_deg"])))
+	var forward := Vector3.FORWARD.rotated(Vector3.UP, deg_to_rad(float(me["heading_deg"])))
+	var gear := GearFx.new()
+	scene.add_child(gear)
+	var views := ShotViews.new()
+	scene.add_child(views)
+	var crowd: Array = []
+	var list: Array = []
+	var acts := ["jetpack", "umbrella", "boots", "drill", "rope"]
+	var offsets := [-14.0, -7.0, 7.0, 14.0, 21.0]
+	for i in 5:
+		var at: Vector3 = (me["pos"] as Vector3) + right * float(offsets[i])
+		at.y = scene.ground_y(at.x, at.z)
+		var grounded: bool = acts[i] != "jetpack" and acts[i] != "umbrella"
+		var lift := 0.0 if grounded else 6.0
+		var twin := Squirmling.create(1, "chef", Color("4aa3df"))
+		twin.position = at + Vector3(0, lift, 0)
+		twin.rotation.y = rig.rotation.y
+		scene.add_child(twin)
+		twin.drive(0.016, false, Vector3.ZERO, grounded)
+		crowd.append(twin)
+		var c := {
+			"id": 900 + i, "pos": twin.position, "heading_deg": rad_to_deg(rig.rotation.y), "alive": true,
+			"grounded": grounded, "act": acts[i], "shield": acts[i] == "rope", "anchor": twin.position + Vector3(6, 26, 0)
+		}
+		list.append(c)
+	var mines: Array = []
+	for i in 2:
+		var at: Vector3 = (me["pos"] as Vector3) + right * (-3.0 + 6.0 * float(i)) + forward * 7.0
+		at.y = scene.ground_y(at.x, at.z) + 0.2
+		mines.append({"id": 1 + i, "weapon": "jelly-mine", "pos": at, "armed": i == 1, "triggered": false})
+	scene._rig.dist = 46.0
+	scene._rig.pitch_deg = 14.0
+	for i in 4:
+		gear.sync(list, 0.05)
+		views.sync([], mines)
+		await get_tree().process_frame
+	await _shot("1g-gear", 3)
+	for c: Dictionary in list:
+		c["act"] = ""
+		c["shield"] = false
+	gear.sync(list, 0.05)
+	if not gear.state_of(900).is_empty():
+		errors.append("gear stayed after the acts ended")
+	for t: Node in crowd:
+		scene.remove_child(t)
+		t.queue_free()
+	scene.remove_child(gear)
+	gear.queue_free()
+	scene.remove_child(views)
+	views.queue_free()
+	print("E2E ok: gear and mines")

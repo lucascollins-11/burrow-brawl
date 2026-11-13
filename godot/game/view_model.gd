@@ -28,6 +28,7 @@ var started: bool = false
 
 var _critters: Dictionary = {}  # id -> {id, team, hp, status, grounded, a, b, ta, tb, yaw_a, yaw_b}
 var _projectiles: Dictionary = {}  # id -> {id, owner, weapon, a, b, ta, tb, fuse}
+var _mines: Array = []  # [{id, weapon, pos, armed, triggered}] as last sent
 var _events: Array = []
 var _render_tick: float = 0.0
 
@@ -124,6 +125,11 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 		e["hp"] = int(c.get("hp", 0))
 		e["status"] = str(c.get("status", "alive"))
 		e["grounded"] = bool(c.get("grounded", true))
+		# Utilities and the shield are only listed while they last, so a missing key clears them.
+		e["act"] = str(c.get("act", ""))
+		e["fuel"] = int(c.get("fuel", 0))
+		e["anchor"] = _pos(c["anchor"]) if c.get("anchor") is Dictionary else Vector3.INF
+		e["shield"] = bool(c.get("shield", false))
 		_critters[id] = e
 	var seen := {}
 	for p in msg.get("projectiles", []):
@@ -145,6 +151,18 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 	for id in _projectiles.keys():
 		if not seen.has(id):
 			_projectiles.erase(id)
+	# Placed mines are always the full list; no list means none.
+	_mines = []
+	for m in msg.get("mines", []):
+		_mines.append(
+			{
+				"id": int(m["id"]),
+				"weapon": str(m.get("weaponId", "jelly-mine")),
+				"pos": _pos(m),
+				"armed": bool(m.get("armed", false)),
+				"triggered": bool(m.get("triggered", false)),
+			}
+		)
 
 
 func apply_events(msg: Dictionary) -> void:
@@ -211,6 +229,10 @@ func snapshot() -> Dictionary:
 				"max_hp": max_hp,
 				"alive": e["status"] == "alive",
 				"grounded": e["grounded"],
+				"act": e["act"],
+				"fuel": e["fuel"],
+				"anchor": e["anchor"],
+				"shield": e["shield"],
 			}
 		)
 	var shots: Array = []
@@ -230,6 +252,7 @@ func snapshot() -> Dictionary:
 		"teams": teams,
 		"critters": crit,
 		"projectiles": shots,
+		"mines": _mines.duplicate(),
 		"crates": crate_list(),
 		"active_critter_id": turns.get("activeCritter", null),
 		"active_team": active_team,
