@@ -376,6 +376,12 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 				"grounded": true, "act": "", "frozen": i == 0, "feather": i == 1
 			}
 		)
+	var steered: Array = []
+	var weapons := ["wind-up-robot", "marble-roller", "rc-racer", "kite-bomber"]
+	for i in 4:
+		var sat: Vector3 = (me["pos"] as Vector3) + right * (-10.0 + 7.0 * float(i)) + forward * 20.0
+		sat.y = scene.ground_y(sat.x, sat.z) + (4.0 if weapons[i] == "kite-bomber" else 0.0)
+		steered.append({"id": 50 + i, "weapon": weapons[i], "pos": sat, "heading_deg": rad_to_deg(rig.rotation.y) + 40.0})
 	var mines: Array = []
 	for i in 2:
 		var at: Vector3 = (me["pos"] as Vector3) + right * (-3.0 + 6.0 * float(i)) + forward * 7.0
@@ -385,7 +391,7 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	scene._rig.pitch_deg = 14.0
 	for i in 4:
 		gear.sync(list, 0.05)
-		views.sync([], mines)
+		views.sync(steered, mines)
 		zones.sync(zone_list, 0.05)
 		await get_tree().process_frame
 	await _shot("1g-gear", 3)

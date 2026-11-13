@@ -13,6 +13,7 @@ const BLACK := Color("2b2118")
 const RED := Color("e0463a")
 const GREEN := Color("5cc46a")
 const GREY := Color("8d8a86")
+const BRASS := Color("e8b84a")
 
 static var _mats: Dictionary = {}
 
@@ -20,8 +21,11 @@ static var _mats: Dictionary = {}
 ## Which weapon ids have their own model (the rest use the grey ball).
 const KNOWN: Array[String] = [
 	"acorn-mortar", "fizz-grenade", "pinecone-popper", "pinecone-seed", "beehive-bomb", "hopper-ball",
-	"firecracker-bundle", "boulder-of-doom", "jelly-mine",
+	"firecracker-bundle", "boulder-of-doom", "jelly-mine", "wind-up-robot", "marble-roller", "rc-racer",
+	"kite-bomber",
 ]
+## Shots that travel along their own heading: drawn facing it, and animated by `animate`.
+const STEERED: Array[String] = ["wind-up-robot", "marble-roller", "rc-racer", "kite-bomber"]
 
 
 static func make(weapon: String) -> Node3D:
@@ -55,6 +59,18 @@ static func make(weapon: String) -> Node3D:
 		"jelly-mine":
 			_mine(body)
 			trail = {"color": Color(1, 1, 1, 0.0), "size": 0.1, "rate": 1, "life": 0.1, "spark": false}
+		"wind-up-robot":
+			_robot(body)
+			trail = {"color": Color(0.8, 0.75, 0.65, 0.45), "size": 0.3, "rate": 10, "life": 0.4, "spark": false}
+		"marble-roller":
+			_marble(body)
+			trail = {"color": Color(0.7, 0.85, 1.0, 0.35), "size": 0.3, "rate": 14, "life": 0.4, "spark": false}
+		"rc-racer":
+			_racer(body)
+			trail = {"color": Color(0.85, 0.8, 0.7, 0.55), "size": 0.45, "rate": 22, "life": 0.5, "spark": false}
+		"kite-bomber":
+			_kite(body)
+			trail = {"color": Color(1, 1, 1, 0.3), "size": 0.25, "rate": 8, "life": 0.5, "spark": false}
 		"boulder-of-doom":
 			_boulder(body)
 			trail = {"color": Color(0.7, 0.62, 0.5, 0.6), "size": 0.9, "rate": 20, "life": 1.0, "spark": false}
@@ -214,6 +230,116 @@ static func mine_glow(t: float, armed: bool, triggered: bool) -> float:
 	if not armed:
 		return 0.0
 	return 1.0 if fposmod(t, 1.2) < 0.25 else 0.0
+
+
+## A tin wind-up robot: boxy body, round head with an antenna, legs that swing and a key on its back.
+static func _robot(body: Node3D) -> void:
+	var tin := Color("b9c2cc")
+	body.add_child(_mi(_box(1.5, 1.7, 1.0), tin, Vector3(0, 1.5, 0), 0.3))
+	body.add_child(_mi(_sphere(0.65), Color("d9dee4"), Vector3(0, 2.8, 0), 0.3))
+	for side in [-1.0, 1.0]:
+		body.add_child(_mi(_sphere(0.14), YELLOW, Vector3(side * 0.28, 2.9, 0.55), 0.3))
+		var leg := Node3D.new()
+		leg.name = "Leg%d" % int(side)
+		leg.position = Vector3(side * 0.45, 0.8, 0)
+		leg.add_child(_mi(_box(0.5, 1.0, 0.6), RED, Vector3(0, -0.4, 0), 0.4))
+		body.add_child(leg)
+	var ant := _mi(_cyl(0.05, 0.05, 0.7), BLACK, Vector3(0, 3.7, 0))
+	body.add_child(ant)
+	body.add_child(_mi(_sphere(0.18), RED, Vector3(0, 4.1, 0), 0.3))
+	var key := Node3D.new()
+	key.name = "Key"
+	key.position = Vector3(0, 1.7, -0.7)
+	key.add_child(_mi(_cyl(0.07, 0.07, 0.9), BRASS, Vector3(0, 0, 0)))
+	key.add_child(_mi(_box(1.0, 0.18, 0.18), BRASS, Vector3(0, 0.45, 0)))
+	key.rotation.x = PI * 0.5
+	body.add_child(key)
+
+
+## A glass marble with a coloured swirl inside.
+static func _marble(body: Node3D) -> void:
+	var roll := Node3D.new()
+	roll.name = "Roll"
+	roll.position = Vector3(0, 1.3, 0)
+	body.add_child(roll)
+	var glass := _mi(_sphere(1.3), Color(0.75, 0.9, 1.0), Vector3.ZERO, 0.05)
+	var gm := (glass.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	gm.emission_enabled = true
+	gm.emission = Color(0.4, 0.7, 1.0)
+	gm.emission_energy_multiplier = 0.35
+	glass.material_override = gm
+	roll.add_child(glass)
+	for i in 3:
+		var a := float(i) * TAU / 3.0
+		roll.add_child(_mi(_sphere(0.45, 0.5), Color("ff5fa2") if i % 2 == 0 else YELLOW, Vector3(cos(a) * 0.7, sin(a) * 0.6, sin(a) * 0.4), 0.3))
+
+
+## A little remote-control car: red body, canopy, four wheels and an aerial. Faces +z.
+static func _racer(body: Node3D) -> void:
+	body.add_child(_mi(_box(1.5, 0.6, 2.4), RED, Vector3(0, 0.9, 0), 0.3))
+	body.add_child(_mi(_box(1.1, 0.5, 1.0), Color("bfe6ff"), Vector3(0, 1.45, -0.2), 0.1))
+	for x in [-0.9, 0.9]:
+		for z in [-0.8, 0.8]:
+			var wheel := Node3D.new()
+			wheel.name = "Wheel%d%d" % [int(x * 10.0), int(z * 10.0)]
+			wheel.position = Vector3(x, 0.5, z)
+			var tyre := _mi(_cyl(0.5, 0.5, 0.4), BLACK, Vector3.ZERO, 0.9)
+			tyre.rotation.z = PI * 0.5
+			wheel.add_child(tyre)
+			body.add_child(wheel)
+	var aerial := _mi(_cyl(0.03, 0.03, 1.4), BLACK, Vector3(0.5, 1.9, -0.9))
+	aerial.rotation.x = -0.3
+	body.add_child(aerial)
+
+
+## A diamond kite with a ribbon tail and a little bomb slung underneath. Faces +z, flat tilt.
+static func _kite(body: Node3D) -> void:
+	var sail := _mi(_box(2.6, 0.08, 3.2), Color("ffb347"), Vector3(0, 1.6, 0), 0.7)
+	sail.rotation.y = PI * 0.25
+	body.add_child(sail)
+	var spar := _mi(_box(0.1, 0.1, 4.2), BROWN, Vector3(0, 1.66, 0), 0.7)
+	body.add_child(spar)
+	for i in 4:
+		var rib := _mi(_box(0.5, 0.08, 0.3), RED if i % 2 == 0 else WHITE, Vector3(0, 1.5, -2.0 - float(i) * 0.6), 0.7)
+		rib.rotation.y = float(i) * 0.4
+		body.add_child(rib)
+	body.add_child(_mi(_sphere(0.5), BLACK, Vector3(0, 0.6, 0), 0.4))
+	body.add_child(_mi(_cyl(0.04, 0.04, 0.9), BROWN, Vector3(0, 1.1, 0)))
+
+
+## Per-frame motion for the steered shots: legs march, the key winds, wheels spin, the marble
+## rolls, the kite rocks. `t` is seconds; `speed` how fast the shot is moving (voxels/second).
+static func animate(root: Node3D, weapon: String, t: float, speed: float) -> void:
+	var body := root.get_node_or_null("Body") as Node3D
+	if body == null:
+		return
+	match weapon:
+		"wind-up-robot":
+			for side in ["-1", "1"]:
+				var leg := body.get_node_or_null("Leg" + side) as Node3D
+				if leg != null:
+					leg.rotation.x = sin(t * 10.0 + (PI if side == "-1" else 0.0)) * 0.6
+			var key := body.get_node_or_null("Key") as Node3D
+			if key != null:
+				key.rotation.y = t * 6.0
+			body.rotation.z = sin(t * 10.0) * 0.06
+		"marble-roller":
+			var roll := body.get_node_or_null("Roll") as Node3D
+			if roll != null:
+				roll.rotation.x = t * maxf(speed, 4.0) * 0.5
+		"rc-racer":
+			for w in body.get_children():
+				if str(w.name).begins_with("Wheel"):
+					(w as Node3D).rotation.x = t * maxf(speed, 4.0) * 0.8
+		"kite-bomber":
+			body.rotation.z = sin(t * 2.2) * 0.25
+			body.rotation.x = sin(t * 1.7) * 0.12
+
+
+static func _box(x: float, y: float, z: float) -> BoxMesh:
+	var b := BoxMesh.new()
+	b.size = Vector3(x, y, z)
+	return b
 
 
 static func _boulder(body: Node3D) -> void:

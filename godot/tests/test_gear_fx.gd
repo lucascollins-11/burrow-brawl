@@ -218,3 +218,32 @@ func test_view_model_keeps_zones_frozen_and_feather() -> void:
 	check(not s["critters"][0]["feather"], "no feather")
 	check_eq((s["zones"] as Array).size(), 1, "one puddle")
 	check_eq(s["zones"][0]["pos"], Vector3(10.5, 2, 12.5), "centred on its voxel")
+
+
+func test_view_model_keeps_a_steered_shot_heading() -> void:
+	var vm := ViewModel.new()
+	vm.apply_state(
+		{
+			"tick": 3,
+			"critters": [],
+			"projectiles":
+			[
+				{"id": 1, "ownerId": 1, "weaponId": "rc-racer", "x": 0, "y": 0, "z": 0, "fuseTicks": -1, "heading": 256},
+				{"id": 2, "ownerId": 1, "weaponId": "acorn-mortar", "x": 0, "y": 0, "z": 0, "fuseTicks": 30},
+			],
+		},
+		true
+	)
+	var shots: Array = vm.snapshot()["projectiles"]
+	check_eq(shots[0]["heading_deg"], 90.0, "256 steps is a quarter turn")
+	check_eq(shots[1]["heading_deg"], INF, "a plain shot has no heading")
+
+
+func test_trigger_is_a_bindable_action_and_pops_a_shot_in_flight() -> void:
+	check(not GameSettings.action_def("trigger").is_empty(), "trigger is rebindable")
+	var seen := {}
+	for a in GameSettings.ACTIONS:
+		var k := int(a["key"])
+		if a["id"] != "pause" and a["id"] != "cancel_aim":
+			check(not seen.has(k), "%s has its own default key" % a["id"])
+		seen[k] = true

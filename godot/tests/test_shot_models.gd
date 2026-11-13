@@ -35,3 +35,21 @@ func test_shots_sync_creates_removes_and_reports_lost_ones() -> void:
 	check_eq(lost[0][0], Vector3(1, 2, 3), "at its last position")
 	check_eq(lost[0][1], "acorn-mortar", "with its weapon")
 	views.free()
+
+
+func test_steered_shots_face_their_heading_and_move_their_parts() -> void:
+	var views := ShotViews.new()
+	for w in ShotModels.STEERED:
+		check(ShotModels.KNOWN.has(w), "%s has its own model" % w)
+	views.sync([{"id": 1, "weapon": "rc-racer", "pos": Vector3(0, 0, 0), "heading_deg": 90.0}])
+	var racer := views.get_child(0) as Node3D
+	check(absf(racer.rotation.y - deg_to_rad(90.0)) < 0.001, "racer faces its heading")
+	var body := racer.get_node("Body") as Node3D
+	check_eq(body.rotation, Vector3.ZERO, "a steered shot does not tumble")
+	var robot := ShotModels.make("wind-up-robot")
+	ShotModels.animate(robot, "wind-up-robot", 0.1, 5.0)
+	var left := robot.get_node("Body/Leg-1") as Node3D
+	var right := robot.get_node("Body/Leg1") as Node3D
+	check(absf(left.rotation.x - right.rotation.x) > 0.1, "the legs swing out of step")
+	robot.free()
+	views.free()

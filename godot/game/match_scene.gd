@@ -314,6 +314,21 @@ func _update_tutorial_pointers() -> void:
 		_done_panel.visible = true
 
 
+## True while one of the local player's shots that can be steered (robot, racer, kite, marble) is out.
+func _steering(v: Dictionary) -> bool:
+	for p: Dictionary in v["projectiles"]:
+		if ShotModels.STEERED.has(str(p["weapon"])):
+			return true
+	return false
+
+
+func _hint_steer() -> String:
+	var walk := ""
+	for id in ["move_forward", "move_left", "move_back", "move_right"]:
+		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
+	return walk + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
+
+
 func _hint_aim() -> String:
 	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
@@ -378,7 +393,9 @@ func _process(dt: float) -> void:
 	env.set_sea_y(vm.sea_y)
 	env.update(dt, v["wind"])
 	var hint := HINT_WATCH
-	if v["my_turn"] and v["phase"] != "settling":
+	if v["my_turn"] and _steering(v):
+		hint = _hint_steer()
+	elif v["my_turn"] and v["phase"] != "settling":
 		hint = _hint_aim() if aim != null else _hint_walk()
 		if empty and v["phase"] == "control":
 			hint = HINT_EMPTY
