@@ -12,12 +12,16 @@ import {
   GRAVITY,
   JUMP_VXZ,
   JUMP_VY,
+  LENGTH_DEN,
+  LENGTH_NUM,
   MAX_HEALTH,
   TERMINAL_VELOCITY,
   WALK_SPEED,
 } from "./constants";
-import { isSolid } from "./terrainOps";
-import { mulQ, yawDir } from "./vec3";
+import { dropGear, jetBurst, ropePump, umbrellaSpeeds } from "./gear";
+import { loadWeapons } from "../weapons/load";
+import { applyEdit, isSolid } from "./terrainOps";
+import { dot, length, lengthSq, mulDiv, mulQ, withLength, yawDir } from "./vec3";
 
 export const cell = (f: Fixed): number => f >> 16;
 
@@ -98,6 +102,55 @@ function tryWalk(
   return { y: up === 0 ? y : clear * FIXED_ONE, grounded: false };
 }
 
+/** The critter without its drill state (the Drill Hat stopped). */
+export function stopDrill(c: Critter): Critter {
+  if (c.drillTicks === undefined && c.drillDir === undefined) return c;
+  const { drillTicks: _t, drillDir: _d, ...rest } = c;
+  void _t;
+  void _d;
+  return rest;
+}
+
+/** The Drill Hat carves a sphere this often (ticks), ahead of the body. */
+export const DRILL_CARVE_EVERY = 4;
+
+/**
+ * One tick of Drill Hat tunnelling: carve ahead every DRILL_CARVE_EVERY ticks, then move along
+ * the drill heading. Stops when the time is up, the way is blocked (bedrock, or ground the
+ * carve did not clear), or the critter was knocked (it has a velocity again). Input is ignored.
+ */
+function drillStep(t: VoxelTerrain, c: Critter): Critter {
+  const w = loadWeapons()["drill-hat"];
+  const tunnel = typeof w.params.tunnelRadius === "number" ? w.params.tunnelRadius : 14;
+  const radius = Math.max(3, Math.floor((tunnel * LENGTH_NUM) / LENGTH_DEN));
+  const dir = c.drillDir!;
+  if (c.vel.x !== 0 || c.vel.y !== 0 || c.vel.z !== 0) return stopDrill(c);
+  const ticks = c.drillTicks!;
+  const down = dir.x === 0 && dir.z === 0;
+  const { x, y, z } = c.pos;
+  // Going down stops at bedrock, or at the map's soda row so the dig can't drown its own critter.
+  const floor = Math.max(t.bedrockY, t.seaY);
+  if (ticks % DRILL_CARVE_EVERY === 0) {
+    // Centre: 8 ticks of travel ahead; at mid-body height sideways, at the feet going down.
+    const cx = cell(x + dir.x * 8);
+    const cz = cell(z + dir.z * 8);
+    const cy = down ? cell(y + dir.y * 8) : cell(y) + 3;
+    // Never carve below the floor, so the critter is left standing on it.
+    applyEdit(t, { op: "carve", x: cx, y: Math.max(floor + radius, cy), z: cz, r: radius });
+  }
+  const nx = x + dir.x;
+  const ny = y + dir.y;
+  const nz = z + dir.z;
+  const blocked = bodyBlocked(t, cell(nx), cell(ny), cell(nz)) || (down && cell(ny) < floor);
+  if (blocked || ticks <= 1) return { ...stopDrill(c), peakY: cell(y) };
+  return {
+    ...c,
+    pos: { x: nx, y: ny, z: nz },
+    drillTicks: ticks - 1,
+    peakY: cell(ny),
+  };
+}
+
 /** Advance one critter by one tick. Pure: returns a new record and pushes events. */
 export function stepCritter(
   t: VoxelTerrain,
@@ -105,7 +158,8 @@ export function stepCritter(
   input: CritterInput | undefined,
   events: SimEvent[],
 ): Critter {
-  if (c.status !== "alive") return c;
+  if (c.status !== "alive") return stopDrill(c);
+  if (c.drillTicks !== undefined) return drillStep(t, c);
   let { x, y, z } = c.pos;
   let vx = c.vel.x;
   let vy = c.vel.y;
@@ -159,8 +213,35 @@ export function stepCritter(
     }
   }
 
+  let jetFuel = c.jetFuel;
+  let rope = c.rope;
+  if (rope && (input?.jump || rope.ticks <= 1)) rope = undefined; // let go, keeping the swing
   if (!grounded) {
+    if (rope) {
+      if (moving) {
+        const dir = yawDir(yaw);
+        const pump = ropePump();
+        vx += mulQ(dir.x, pump);
+        vz += mulQ(dir.z, pump);
+      }
+      peakY = cell(y); // the rope holds the fall
+    }
+    if (jetFuel !== undefined && jetFuel > 0 && input?.jump) {
+      ({ x: vx, y: vy, z: vz } = jetBurst({ ...c, yaw }, { x: vx, y: vy, z: vz }));
+      jetFuel--;
+      peakY = cell(y); // thrust brakes the fall
+    }
     vy = Math.max(vy - GRAVITY, -TERMINAL_VELOCITY);
+    if (c.umbrella) {
+      const u = umbrellaSpeeds();
+      vy = Math.max(vy, -u.fall);
+      if (moving) {
+        const dir = yawDir(yaw);
+        vx = mulQ(dir.x, u.drift);
+        vz = mulQ(dir.z, u.drift);
+      }
+      peakY = cell(y); // a glide never hurts on landing
+    }
     const maxV = Math.max(Math.abs(vx), Math.abs(vy), Math.abs(vz));
     const n = Math.max(1, (maxV + FIXED_ONE - 1) >> 16);
     let sx = idiv(vx, n);
@@ -186,13 +267,67 @@ export function stepCritter(
         vx = 0;
         vy = 0;
         vz = 0;
-        events.push({ type: "landed", critterId: c.id, fallDistance: peakY - cell(y) });
+        const fall = peakY - cell(y);
+        const fallDistance = c.safeFall !== undefined && fall <= c.safeFall ? 0 : fall;
+        events.push({ type: "landed", critterId: c.id, fallDistance });
         break;
       }
       y = ny;
       if (cell(y) > peakY) peakY = cell(y);
     }
+    if (rope && !grounded) {
+      ({ x, y, z, vx, vy, vz } = ropeConstraint(t, rope, x, y, z, vx, vy, vz));
+      peakY = cell(y);
+    }
   }
 
-  return { ...c, pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, yaw, grounded, peakY };
+  const out = { ...c, pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, yaw, grounded, peakY };
+  if (grounded) return dropGear(out);
+  const { rope: _r, ...free } = out;
+  void _r;
+  const held = rope
+    ? {
+        ...free,
+        rope: { ...rope, len: Math.max(rope.reelTo, rope.len - rope.reel), ticks: rope.ticks - 1 },
+      }
+    : free;
+  return jetFuel === undefined ? held : { ...held, jetFuel };
+}
+
+/**
+ * Keep a roped critter within `len` of the anchor: pull it back onto the rope's sphere (unless
+ * that spot is inside terrain) and cancel any velocity moving away from the anchor, which turns
+ * a fall into a swing.
+ */
+function ropeConstraint(
+  t: VoxelTerrain,
+  rope: NonNullable<Critter["rope"]>,
+  x: Fixed,
+  y: Fixed,
+  z: Fixed,
+  vx: Fixed,
+  vy: Fixed,
+  vz: Fixed,
+): { x: Fixed; y: Fixed; z: Fixed; vx: Fixed; vy: Fixed; vz: Fixed } {
+  const a = rope.anchor;
+  const d = { x: x - a.x, y: y - a.y, z: z - a.z };
+  const dist = length(d);
+  if (dist <= rope.len || dist === 0) return { x, y, z, vx, vy, vz };
+  const on = withLength(d, rope.len);
+  const nx = a.x + on.x;
+  const ny = a.y + on.y;
+  const nz = a.z + on.z;
+  if (!bodyBlocked(t, cell(nx), cell(ny), cell(nz))) {
+    x = nx;
+    y = ny;
+    z = nz;
+  }
+  const out = dot({ x: vx, y: vy, z: vz }, d);
+  if (out > 0) {
+    const d2 = lengthSq(d);
+    vx -= mulDiv(d.x, out, d2);
+    vy -= mulDiv(d.y, out, d2);
+    vz -= mulDiv(d.z, out, d2);
+  }
+  return { x, y, z, vx, vy, vz };
 }

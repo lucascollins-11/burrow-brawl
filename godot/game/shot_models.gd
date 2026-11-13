@@ -20,7 +20,7 @@ static var _mats: Dictionary = {}
 ## Which weapon ids have their own model (the rest use the grey ball).
 const KNOWN: Array[String] = [
 	"acorn-mortar", "fizz-grenade", "pinecone-popper", "pinecone-seed", "beehive-bomb", "hopper-ball",
-	"firecracker-bundle", "boulder-of-doom",
+	"firecracker-bundle", "boulder-of-doom", "jelly-mine",
 ]
 
 
@@ -52,6 +52,9 @@ static func make(weapon: String) -> Node3D:
 		"firecracker-bundle":
 			_firecrackers(body)
 			trail = {"color": Color(1.0, 0.8, 0.25, 1.0), "size": 0.22, "rate": 60, "life": 0.35, "spark": true}
+		"jelly-mine":
+			_mine(body)
+			trail = {"color": Color(1, 1, 1, 0.0), "size": 0.1, "rate": 1, "life": 0.1, "spark": false}
 		"boulder-of-doom":
 			_boulder(body)
 			trail = {"color": Color(0.7, 0.62, 0.5, 0.6), "size": 0.9, "rate": 20, "life": 1.0, "spark": false}
@@ -162,6 +165,24 @@ static func _firecrackers(body: Node3D) -> void:
 		body.add_child(stick)
 	body.add_child(_mi(_cyl(0.62, 0.62, 0.22), YELLOW, Vector3(0, 0.1, 0), 0.5))
 	body.add_child(_mi(_cyl(0.03, 0.03, 0.7), BLACK, Vector3(0, 1.0, 0)))
+
+
+## A wobbly pink jelly dome sitting on the ground.
+static func _mine(body: Node3D) -> void:
+	var dome := SphereMesh.new()
+	dome.radius = 1.3
+	dome.height = 1.3
+	dome.is_hemisphere = true
+	dome.radial_segments = 16
+	dome.rings = 8
+	var m := _mi(dome, Color("ff5fa2"), Vector3.ZERO, 0.15)
+	var mat := (m.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	mat.emission_enabled = true
+	mat.emission = Color("ff2d7a")
+	mat.emission_energy_multiplier = 0.4
+	m.material_override = mat
+	m.name = "Jelly"
+	body.add_child(m)
 
 
 static func _boulder(body: Node3D) -> void:

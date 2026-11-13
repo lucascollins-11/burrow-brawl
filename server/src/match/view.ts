@@ -7,16 +7,28 @@ import type { MatchState, SimEvent } from "@burrow-brawl/shared";
 import { encodeVoxels } from "@burrow-brawl/shared/src/net";
 import type {
   ViewCritter,
+  ViewMine,
   ViewProjectile,
   ViewServerMessage,
   ViewState,
   ViewTerrain,
 } from "@burrow-brawl/shared/src/net/view";
 import type { Critter, Projectile } from "@burrow-brawl/shared/src/sim3d";
+import { isMineProjectile, mineArmTicks } from "@burrow-brawl/shared/src/sim3d/projectile";
 import type { TerrainEdit, VoxelTerrain } from "@burrow-brawl/shared/src/terrain3d";
 
 type Patch = Extract<ViewServerMessage, { t: "terrain.patch" }>;
 type StateMsg = Extract<ViewServerMessage, { t: "state" }>;
+
+/** What utility the critter is busy with, for animation. At most one at a time. */
+function critterAct(c: Critter): Pick<ViewCritter, "act" | "fuel" | "anchor"> {
+  if (c.drillTicks !== undefined) return { act: "drill" };
+  if (c.jetFuel !== undefined) return { act: "jetpack", fuel: c.jetFuel };
+  if (c.umbrella) return { act: "umbrella" };
+  if (c.rope) return { act: "rope", anchor: { ...c.rope.anchor } };
+  if (c.safeFall !== undefined) return { act: "boots" };
+  return {};
+}
 
 export function viewCritter(c: Critter): ViewCritter {
   return {
@@ -29,6 +41,7 @@ export function viewCritter(c: Critter): ViewCritter {
     hp: c.hp,
     status: c.status,
     grounded: c.grounded,
+    ...critterAct(c),
   };
 }
 
@@ -41,6 +54,28 @@ export function viewProjectile(p: Projectile): ViewProjectile {
     y: p.pos.y,
     z: p.pos.z,
     fuseTicks: p.fuseTicks,
+  };
+}
+
+export function viewMine(p: Projectile): ViewMine {
+  return {
+    id: p.id,
+    ownerId: p.ownerId,
+    weaponId: p.weaponId,
+    x: p.pos.x,
+    y: p.pos.y,
+    z: p.pos.z,
+    armed: p.age >= mineArmTicks(p),
+    triggered: p.fuseTicks >= 0,
+    fuseTicks: p.fuseTicks,
+  };
+}
+
+/** Projectiles and placed mines, split for the wire. */
+function flyingAndMines(ps: readonly Projectile[]): Pick<ViewState, "projectiles" | "mines"> {
+  return {
+    projectiles: ps.filter((p) => !isMineProjectile(p)).map(viewProjectile),
+    mines: ps.filter(isMineProjectile).map(viewMine),
   };
 }
 
@@ -138,7 +173,7 @@ export class ViewStream {
       turns: s.turns,
       seaY: s.sim.seaY,
       critters: s.sim.critters.map(viewCritter),
-      projectiles: s.sim.projectiles.map(viewProjectile),
+      ...flyingAndMines(s.sim.projectiles),
       ammo: s.ammo,
       crates: s.crates,
     };
@@ -174,7 +209,7 @@ export class ViewStream {
       turns: s.turns,
       seaY: s.sim.seaY,
       critters,
-      projectiles: s.sim.projectiles.map(viewProjectile),
+      ...flyingAndMines(s.sim.projectiles),
       ammo: s.ammo,
       crates: s.crates,
     };
@@ -184,4 +219,4 @@ export class ViewStream {
 }
 
 const key = (c: ViewCritter): string =>
-  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team}`;
+  `${c.x},${c.y},${c.z},${c.yaw},${c.hp},${c.status},${c.grounded ? 1 : 0},${c.team},${c.act ?? ""},${c.fuel ?? ""}`;

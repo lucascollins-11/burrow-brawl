@@ -14,7 +14,7 @@
   "blastRadius": 0,
   "knockback": 0,
   "params": {
-    "jumpSpeed": 1000,
+    "jumpSpeed": 480,
     "maxAngleDegrees": 85,
     "ignoreFallDamageBelow": 200
   }

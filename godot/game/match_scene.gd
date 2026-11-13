@@ -50,6 +50,10 @@ var _crates_seen := false
 ## Set for a practice match (config.practice): the guided prompts and the label that shows them.
 var _guide: PracticeGuide = null
 var _guide_label: Label = null
+var _guide_layer: CanvasLayer = null
+var _spot: TutorialSpotlight = null
+var _done_panel: PanelContainer = null
+var _done_shown := false
 var _last_tick_second := -1
 var _prev_pos: Dictionary = {}  # id -> Vector3, to tell walking from standing
 var _built := false
@@ -215,14 +219,20 @@ func _guide_keys() -> Dictionary:
 		"jump": GameSettings.key_label(int(GameSettings.keys.get("jump", 0))),
 		"aim": GameSettings.key_label(int(GameSettings.keys.get("toggle_aim", 0))),
 		"fire": GameSettings.key_label(int(GameSettings.keys.get("fire", 0))),
+		"weapon_menu": GameSettings.key_label(int(GameSettings.keys.get("weapon_menu", 0))),
 	}
 
 
-## Practice matches get a prompt banner under the turn banner.
+## Practice matches get the tutorial: a prompt banner under the turn banner, a yellow frame that
+## points at the HUD piece a step is about, and a "Tutorial complete" card at the end.
 func _setup_guide(practice: bool) -> void:
-	if _guide_label != null:
-		_guide_label.get_parent().get_parent().queue_free()
-		_guide_label = null
+	if _guide_layer != null:
+		_guide_layer.queue_free()
+	_guide_layer = null
+	_guide_label = null
+	_spot = null
+	_done_panel = null
+	_done_shown = false
 	_guide = null
 	if not practice:
 		return
@@ -231,6 +241,7 @@ func _setup_guide(practice: bool) -> void:
 	layer.name = "PracticeGuide"
 	layer.layer = 5
 	add_child(layer)
+	_guide_layer = layer
 	var panel := PanelContainer.new()
 	panel.theme = MenuStyle.theme()
 	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -241,6 +252,56 @@ func _setup_guide(practice: bool) -> void:
 	_guide_label.add_theme_font_size_override("font_size", 22)
 	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	panel.add_child(_guide_label)
+	_spot = TutorialSpotlight.new()
+	layer.add_child(_spot)
+	_build_done_card(layer)
+
+
+func _build_done_card(layer: CanvasLayer) -> void:
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(center)
+	_done_panel = PanelContainer.new()
+	_done_panel.theme = MenuStyle.theme()
+	_done_panel.custom_minimum_size = Vector2(440, 0)
+	_done_panel.visible = false
+	center.add_child(_done_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	_done_panel.add_child(box)
+	var head := Label.new()
+	head.text = "Tutorial complete"
+	head.label_settings = MenuStyle.heading(34, Color("ffd23f"), 10)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(head)
+	var body := Label.new()
+	body.text = "You have walked, jumped, aimed, fired, switched weapons, taken a crate and knocked a dummy into the soda sea. Keep playing, or go back to the title screen."
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(400, 60)
+	box.add_child(body)
+	var keep := Button.new()
+	keep.text = "Keep playing"
+	MenuStyle.paint(keep, MenuStyle.GREEN, 20)
+	keep.pressed.connect(func() -> void: _done_panel.visible = false)
+	box.add_child(keep)
+	var back := Button.new()
+	back.text = "Back to title"
+	MenuStyle.paint(back, MenuStyle.ORANGE, 20)
+	back.pressed.connect(_leave)
+	box.add_child(back)
+
+
+## Frame the HUD piece the current step is about, hide the frame while the pause menu is up, and
+## show the done card once when the tutorial ends.
+func _update_tutorial_pointers() -> void:
+	var target: Control = null
+	if not pause.is_open() and not _guide.finished():
+		target = hud.highlight_target(_guide.highlight())
+	_spot.point_at(target)
+	if _guide.finished() and not _done_shown and _done_panel != null:
+		_done_shown = true
+		_done_panel.visible = true
 
 
 func _hint_aim() -> String:
@@ -294,6 +355,7 @@ func _process(dt: float) -> void:
 		_guide.feed(v, aim != null, events, controls.weapon_id())
 		_guide_label.text = _guide.text(_guide_keys())
 		_guide_label.visible = v["phase"] != "over" and not pause.is_open()
+		_update_tutorial_pointers()
 	_sync_critters(v, active, aim, dt)
 	shots.sync(v["projectiles"])
 	crates.sync(v["crates"], dt, _crates_seen)
@@ -358,6 +420,10 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
 			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})), bool(e.get("hit", false)))
+		elif kind == "mineTriggered":
+			for p in v["projectiles"]:
+				if int(p["id"]) == int(e.get("projectileId", -1)):
+					fx.puff(p["pos"], 2.5)
 		elif kind == "punch":
 			var struck: Variant = e.get("hits", 0)
 			fx.punch(ViewModel.point(e.get("at", {})), (struck as Array).size() if struck is Array else int(struck))
@@ -410,7 +476,10 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	_rig = CameraMath.zoom(_rig, float(mouse["wheel"]))
 	_blast_left = maxf(0.0, _blast_left - dt)
 	var goal: Dictionary
-	var shot_list: Array = v["projectiles"]
+	# A mine lying in wait is not a shot to follow.
+	var shot_list: Array = (v["projectiles"] as Array).filter(
+		func(p: Dictionary) -> bool: return str(p["weapon"]) != "jelly-mine"
+	)
 	if not shot_list.is_empty():
 		goal = {"mode": "follow", "target": shot_list[0]["pos"], "dist": 38.0}
 	elif _blast_left > 0.0:

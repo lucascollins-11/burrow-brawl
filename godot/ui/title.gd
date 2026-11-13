@@ -130,8 +130,11 @@ func _open_settings() -> void:
 
 
 func _on_help_pressed() -> void:
-	# The tutorial sits over the title. It frees itself when closed.
-	add_child(HowToPlay.new())
+	# The tutorial sits over the title. It frees itself when closed, and its practice button starts
+	# the guided practice match.
+	var help := HowToPlay.new()
+	help.practice_requested.connect(_on_practice_pressed)
+	add_child(help)
 
 
 func _on_create_pressed() -> void:

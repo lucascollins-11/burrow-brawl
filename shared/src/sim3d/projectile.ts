@@ -28,6 +28,7 @@ import {
   WIND_ACCEL_PER_UNIT,
 } from "./constants";
 import { bodyBlocked, cell } from "./critter";
+import { isGearWeapon, speedPerTick, startGear, wearingGear } from "./gear";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
 import {
   aimDir,
@@ -54,6 +55,7 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "fizz-grenade": "bounce",
   "hopper-ball": "bounce",
   "firecracker-bundle": "bounce",
+  "jelly-mine": "bounce",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -63,7 +65,8 @@ export type ProjectileWeaponId =
   | "pinecone-popper"
   | "hopper-ball"
   | "beehive-strike"
-  | "firecracker-bundle";
+  | "firecracker-bundle"
+  | "jelly-mine";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -72,6 +75,7 @@ const FIREABLE: readonly string[] = [
   "hopper-ball",
   "beehive-strike",
   "firecracker-bundle",
+  "jelly-mine",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -159,7 +163,13 @@ export function fireHitscan(
 
 /** Weapons that act the moment they fire, with no projectile: hitscan, melee and the burrow. */
 export function isInstantWeapon(id: string): boolean {
-  return isHitscanWeapon(id) || id === "root-punch" || id === "teleport-burrow";
+  return (
+    isHitscanWeapon(id) ||
+    isGearWeapon(id) ||
+    id === "root-punch" ||
+    id === "teleport-burrow" ||
+    id === "drill-hat"
+  );
 }
 
 /**
@@ -176,7 +186,34 @@ export function fireInstant(
 ): Critter[] | null {
   if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
   if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
+  if (cmd.weaponId === "drill-hat") return startDrill(critters, c, cmd);
+  if (isGearWeapon(cmd.weaponId))
+    return startGear(t, critters, c, { ...cmd, weaponId: cmd.weaponId });
   return fireHitscan(t, critters, c, cmd, events);
+}
+
+/** Aim pitch at or below this digs straight down; anything higher digs level along the yaw. */
+export const DRILL_DOWN_PITCH = -30;
+
+/**
+ * The Drill Hat: from the next tick the critter tunnels for `durationSeconds` at
+ * `digSpeedCellsPerSecond`, level along the aim heading or (aimed low) straight down. Only from
+ * standing; refused (null) in the air or while already drilling.
+ */
+function startDrill(critters: readonly Critter[], c: Critter, cmd: FireCommand): Critter[] | null {
+  if (!c.grounded || c.drillTicks !== undefined || wearingGear(c)) return null;
+  const w = loadWeapons()["drill-hat"];
+  const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+  const speed = speedPerTick(num(w, "digSpeedCellsPerSecond", 60));
+  const ticks = Math.max(1, Math.trunc(num(w, "durationSeconds", 3) * TICK_RATE));
+  const f = yawDir(yaw);
+  const dir =
+    clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX) <= DRILL_DOWN_PITCH
+      ? { x: 0, y: -speed, z: 0 }
+      : { x: mulQ(f.x, speed), y: 0, z: mulQ(f.z, speed) };
+  return critters.map((o) =>
+    o.id === c.id ? { ...o, yaw, vel: { x: 0, y: 0, z: 0 }, drillTicks: ticks, drillDir: dir } : o,
+  );
 }
 
 /**
@@ -287,11 +324,6 @@ function fuseRange(w: WeaponData): { min: number; max: number; def: number } {
   return { min: 1, max: 5, def: 3 };
 }
 
-/** 2D units per second (weapon JSON) -> Q16.16 voxels per tick. */
-function speedPerTick(unitsPerSecond: number): Fixed {
-  return Math.floor((unitsPerSecond * LENGTH_NUM * FIXED_ONE) / (LENGTH_DEN * TICK_RATE));
-}
-
 /** 2D units per second^2 -> Q16.16 voxels per tick^2. */
 function accelPerTick(unitsPerSecond2: number): Fixed {
   return Math.floor(
@@ -318,7 +350,8 @@ export function spawnShots(
   const w = loadWeapons()[cmd.weaponId];
   const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
   if (cmd.weaponId === "beehive-strike") return dropStrike(t, c, w, yaw, cmd.target, firstId);
-  if (cmd.weaponId === "firecracker-bundle") return [dropCharge(c, w, yaw, firstId)];
+  if (cmd.weaponId === "firecracker-bundle" || cmd.weaponId === "jelly-mine")
+    return [dropCharge(c, w, yaw, firstId)];
 
   const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
   const power = clampInt(cmd.power, 0, 100);
@@ -354,7 +387,30 @@ export function spawnShots(
 const DROP_REACH = 2 * FIXED_ONE;
 const DROP_HEIGHT = FIXED_ONE;
 
-/** A dropped charge (the Firecracker Bundle): set down just ahead with a nudge, fuse lit. */
+/** True for weapons that lie in wait (the Jelly Mine): no fuse until a critter comes close. */
+function isMine(w: WeaponData): boolean {
+  return num(w, "triggerRadius", 0) > 0;
+}
+
+/** A mine lying armed or arming on the ground with no fuse running. It does not hold up a turn. */
+/** True for a placed charge (Jelly Mine) that waits for a critter, set or not. */
+export function isMineProjectile(p: Projectile): boolean {
+  return isMine(loadWeapons()[p.weaponId]);
+}
+
+/** Ticks after placing before a mine can be set off. */
+export function mineArmTicks(p: Projectile): number {
+  return Math.trunc(num(loadWeapons()[p.weaponId], "armSeconds", 0) * TICK_RATE);
+}
+
+export function isDormant(p: Projectile): boolean {
+  return p.resting && p.fuseTicks < 0 && isMine(loadWeapons()[p.weaponId]);
+}
+
+/**
+ * A dropped charge: set down just ahead with a nudge. The Firecracker Bundle's fuse is lit; a
+ * mine has none.
+ */
 function dropCharge(c: Critter, w: WeaponData, yaw: number, id: number): Projectile {
   const dir = yawDir(yaw);
   const nudge = speedPerTick(num(w, "dropSpeed", 30));
@@ -369,7 +425,7 @@ function dropCharge(c: Critter, w: WeaponData, yaw: number, id: number): Project
     },
     vel: { x: mulQ(dir.x, nudge), y: 0, z: mulQ(dir.z, nudge) },
     age: 0,
-    fuseTicks: fuseRange(w).def * TICK_RATE,
+    fuseTicks: isMine(w) ? -1 : fuseRange(w).def * TICK_RATE,
     bounces: 0,
     resting: false,
   };
@@ -477,6 +533,20 @@ function critterHit(c: Critter, px: number, py: number, pz: number): boolean {
     Math.abs(pz - cell(c.pos.z)) <= 1 &&
     dy >= 0 &&
     dy < CRITTER_HEIGHT
+  );
+}
+
+/** True if a living critter's body centre is within `units` (2D units) of the point. */
+function critterNear(cs: readonly Critter[], x: Fixed, y: Fixed, z: Fixed, units: number): boolean {
+  const reach = Math.floor((units * LENGTH_NUM * FIXED_ONE) / LENGTH_DEN);
+  return cs.some(
+    (c) =>
+      c.status === "alive" &&
+      length({
+        x: c.pos.x - x,
+        y: c.pos.y + (CRITTER_HEIGHT * FIXED_ONE) / 2 - y,
+        z: c.pos.z - z,
+      }) <= reach,
   );
 }
 
@@ -590,6 +660,10 @@ export function stepProjectiles(
   events: SimEvent[],
   triggers: ReadonlySet<number> = new Set(),
   nextId = 0,
+  /** Events from earlier this tick whose blasts (hitscan hits) can also set off charges. */
+  earlier: readonly SimEvent[] = [],
+  /** Current soda row (SimState.seaY, which rises in sudden death); dormant mines below it sink. */
+  seaY = t.seaY,
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
@@ -603,7 +677,9 @@ export function stepProjectiles(
     let vy = p.vel.y;
     let vz = p.vel.z;
     let { bounces, resting } = p;
-    const fuse = p.fuseTicks < 0 ? -1 : p.fuseTicks - 1;
+    let fuse = p.fuseTicks < 0 ? -1 : p.fuseTicks - 1;
+    const mine = isMine(w);
+    const armTicks = Math.trunc(num(w, "armSeconds", 0) * TICK_RATE);
     const impact = FLIGHT[p.weaponId] !== "bounce";
     let blast: { x: number; y: number; z: number } | null = null;
     let midAir = false;
@@ -683,6 +759,16 @@ export function stepProjectiles(
       }
     }
 
+    if (mine && blast === null) {
+      if (cell(y) < seaY) {
+        events.push({ type: "projectileLost", projectileId: p.id }); // sank
+        continue;
+      }
+      if (fuse < 0 && p.age >= armTicks && critterNear(cs, x, y, z, num(w, "triggerRadius", 0))) {
+        fuse = Math.max(1, Math.trunc(num(w, "triggerDelayTicks", 15)));
+        events.push({ type: "mineTriggered", projectileId: p.id });
+      }
+    }
     if (blast === null && fuse === 0) blast = { x: cell(x), y: cell(y), z: cell(z) };
     if (blast !== null) {
       cs = explode(t, cs, p, blast.x, blast.y, blast.z, events);
@@ -695,13 +781,18 @@ export function stepProjectiles(
       ...p,
       pos: { x, y, z },
       vel: { x: vx, y: vy, z: vz },
-      age: p.age + 1,
+      // A mine's age only counts up to armed, so one shaken loose years later still falls.
+      age: mine ? Math.min(p.age + 1, armTicks) : p.age + 1,
       fuseTicks: fuse,
       bounces,
       resting,
     });
   }
-  return { projectiles: chain([...next, ...spawned], events), critters: cs, nextId: id };
+  return {
+    projectiles: chain([...next, ...spawned], [...earlier, ...events]),
+    critters: cs,
+    nextId: id,
+  };
 }
 
 /**
@@ -716,7 +807,7 @@ function chain(ps: Projectile[], events: readonly SimEvent[]): Projectile[] {
   if (blasts.length === 0) return ps;
   return ps.map((p) => {
     const cut = num(loadWeapons()[p.weaponId], "chainFuseTicks", 0);
-    if (cut <= 0 || p.fuseTicks <= cut) return p;
+    if (cut <= 0 || (p.fuseTicks >= 0 && p.fuseTicks <= cut)) return p;
     const px = cell(p.pos.x);
     const py = cell(p.pos.y);
     const pz = cell(p.pos.z);

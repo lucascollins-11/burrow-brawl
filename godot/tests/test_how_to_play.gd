@@ -1,8 +1,8 @@
 extends TestCase
 
 
-func test_there_are_seven_pages_with_a_title_and_a_short_text() -> void:
-	check_eq(HowToPlay.page_count(), 7, "seven pages")
+func test_there_are_eight_pages_with_a_title_and_a_short_text() -> void:
+	check_eq(HowToPlay.page_count(), 8, "eight pages")
 	var titles := {}
 	for i in range(HowToPlay.page_count()):
 		var p := HowToPlay.page(i)
@@ -15,7 +15,7 @@ func test_there_are_seven_pages_with_a_title_and_a_short_text() -> void:
 
 
 func test_every_page_names_a_known_drawing() -> void:
-	var known := ["goal", "turns", "move", "aim", "wind", "weapons", "water"]
+	var known := ["goal", "turns", "move", "aim", "wind", "weapons", "crate", "water"]
 	for i in range(HowToPlay.page_count()):
 		check(known.has(str(HowToPlay.page(i)["art"])), "page %d drawing is known" % i)
 

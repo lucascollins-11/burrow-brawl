@@ -136,11 +136,14 @@ func _run() -> bool:
 		func() -> bool: return a_events.has("explosion") and b_events.has("explosion"), "the explosion on both clients"
 	):
 		return false
-	await _shot("2b-blast")
+	# A blast right where the camera looks, photographed within a few frames so it is still going.
+	var rig: Variant = scene.get("_rig")
+	scene.fx.explode(rig.target, 9.0)
+	await _shot("2b-blast", 4)
 	var sea: float = scene.vm.sea_y
 	var mid: Vector2 = scene.get("_world")
 	scene.fx.splash(Vector3(mid.x * 0.5, sea, mid.y * 0.5 + 40.0), 5.0)
-	await _shot("2c-splash")
+	await _shot("2c-splash", 4)
 	if not await _until(func() -> bool: return a_patches > 0 and b_patches > 0, "a terrain patch on both clients"):
 		return false
 	if not await _until(func() -> bool: return tv.pending() == 0, "the crater to be meshed"):

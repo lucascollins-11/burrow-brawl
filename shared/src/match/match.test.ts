@@ -317,6 +317,24 @@ describe("ammo", () => {
     expect(hashMatch(back)).toBe(hashMatch(s));
   });
 
+  it("spends a Drill Hat without ending the turn, then a shot still can", () => {
+    let s = run(createMatch(cfg), 60);
+    const team = active(s).team;
+    const left = s.ammo[team]!["drill-hat"]!;
+    const at = s.sim.tick + 1;
+    const drill: Cmd = { k: "fire", weaponId: "drill-hat", yaw: 0, pitch: -60, power: 0 };
+    s = run(s, 2, (t) => (t === at ? [drill] : []));
+    expect(s.ammo[team]!["drill-hat"]).toBe(left - 1);
+    expect(active(s).drillTicks).toBeGreaterThan(0);
+    expect(s.turns.phase).toBe("control");
+    s = run(s, 200);
+    expect(active(s).drillTicks).toBeUndefined();
+    expect(s.turns.phase).toBe("control");
+    const next = s.sim.tick + 1;
+    s = run(s, 2, (t) => (t === next ? [mortar(0)] : []));
+    expect(s.turns.phase).not.toBe("control");
+  });
+
   it("drops a shot with no ammo left: nothing flies and the turn goes on", () => {
     let s = run(createMatch(cfg), 5);
     const team = active(s).team;

@@ -2,10 +2,10 @@
   "$schema": "./weapon.schema.json",
   "id": "jelly-mine",
   "name": "Jelly Mine",
-  "description": "Place a sticky mine at your feet. It arms after two seconds and goes off when a critter comes close.",
+  "description": "Drop a sticky mine at your feet. It arms after two seconds and goes off when any critter comes close, or when a blast reaches it.",
   "category": "placed",
   "behavior": "proximity-mine",
-  "targeting": "placement",
+  "targeting": "none",
   "ammo": 3,
   "crateOnly": false,
   "endsTurn": true,
@@ -15,8 +15,13 @@
   "knockback": 300,
   "params": {
     "armSeconds": 2,
-    "triggerRadius": 40,
-    "maxActiveMines": 6,
+    "triggerRadius": 24,
+    "triggerDelayTicks": 15,
+    "chainFuseTicks": 10,
+    "dropSpeed": 0,
+    "maxBounces": 0,
+    "bounciness": 0,
+    "gravity": 600,
     "damageFalloff": "linear"
   }
 }

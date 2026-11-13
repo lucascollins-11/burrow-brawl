@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { HASH_EVERY, hashMatch, type MatchState } from "@burrow-brawl/shared";
+import { isDormant } from "@burrow-brawl/shared/src/sim3d/projectile";
 import { topSolidY } from "@burrow-brawl/shared/src/terrain3d/impl";
 import { startHarness, type Harness } from "./testing/harness";
 import { startTwoPlayerMatch, yawTowardCenter } from "./testing/players";
@@ -61,7 +62,8 @@ describe("weapon determinism over the network", () => {
       // Play the turn out: control ends, everything settles, turn 2 starts.
       for (let i = 0; i < MAX_TURN_TICKS / 3 && runner.turn === 1; i++) runner.advance(3);
       expect(runner.turn, "turn never passed after the shot").toBe(2);
-      expect(runner.matchState.sim.projectiles).toHaveLength(0);
+      // Only placed charges (Jelly Mines) may outlive the turn.
+      expect(runner.matchState.sim.projectiles.filter((p) => !isDormant(p))).toHaveLength(0);
 
       // Finish one hash past the turn change so the clients also checked the server's hash.
       runner.advance(HASH_EVERY - (runner.tick % HASH_EVERY) + HASH_EVERY);

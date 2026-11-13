@@ -53,6 +53,27 @@ export interface Critter {
   readonly grounded: boolean;
   /** Highest voxel y reached since leaving the ground; drives fall damage. */
   readonly peakY: number;
+  /** Ticks of Drill Hat tunnelling left. Absent (never 0) when the critter is not drilling. */
+  readonly drillTicks?: number;
+  /** Drill velocity per tick (Q16.16 voxels) while drilling: level along the yaw, or straight down. */
+  readonly drillDir?: Vec3;
+  /** Spring Boots: voxels of fall forgiven on the next landing. Absent when not wearing them. */
+  readonly safeFall?: number;
+  /** Soda Jetpack: bursts left; each jump input in the air spends one. Absent when not worn. */
+  readonly jetFuel?: number;
+  /** Umbrella Glide: open while airborne (slow fall, steerable, no fall damage). */
+  readonly umbrella?: true;
+  /**
+   * Rope Claw: swinging on a rope from `anchor` (Q16.16), at most `len` long, for `ticks` more.
+   * The rope reels in by `reel` per tick until it is `reelTo` long.
+   */
+  readonly rope?: {
+    readonly anchor: Vec3;
+    readonly len: number;
+    readonly reelTo: number;
+    readonly reel: number;
+    readonly ticks: number;
+  };
 }
 
 export interface Projectile {
@@ -142,6 +163,8 @@ export type SimEvent =
       readonly to: Vec3;
       readonly hit: boolean;
     }
+  /** A critter came close to an armed mine; it blows a moment later. */
+  | { readonly type: "mineTriggered"; readonly projectileId: number }
   /** A melee swing landed at `at` (Q16.16 voxels) and struck `hits` critters; follows `fired`. */
   | {
       readonly type: "punch";

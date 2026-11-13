@@ -8,8 +8,8 @@ import { loadWeapons } from "../weapons/load";
 import type { CritterInput, FireCommand, SimEvent, SimState } from "./api";
 import { cell } from "./critter";
 import { TRIGGER_MIN_AGE, blastRadius, explode } from "./projectile";
-import { flatSlab } from "./terrainOps";
-import { createCritter, createWorld, stepWorld } from "./world";
+import { applyEdit, flatSlab, isSolid } from "./terrainOps";
+import { createCritter, createWorld, isSettled, stepWorld } from "./world";
 
 const rng = { nextInt: () => 0 };
 const GROUND = 20;
@@ -416,6 +416,307 @@ describe("Teleport Burrow", () => {
   });
 });
 
+describe("Jelly Mine", () => {
+  const drop: CritterInput = {
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "jelly-mine", yaw: 0, pitch: 0, power: 0 },
+  };
+  /** Put a critter somewhere else, standing. */
+  const move = (s: SimState, id: number, x: number): SimState => ({
+    ...s,
+    critters: s.critters.map((c) =>
+      c.id === id ? { ...c, pos: { ...c.pos, x: x * FIXED_ONE + FIXED_ONE / 2 } } : c,
+    ),
+  });
+
+  it("blows on its own placer if they stay beside it past arming", () => {
+    const r = run(stepWorld(world(), [drop], rng).state, 60 * 2 + 40);
+    expect(r.events.filter((e) => e.type === "mineTriggered")).toHaveLength(1);
+    expect(explosions(r.events)).toHaveLength(1);
+    expect(r.state.critters[0]!.hp).toBeLessThan(100);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+
+  it("lies in wait without holding up the turn, then goes off under whoever comes close", () => {
+    let s = move(stepWorld(world(true), [drop], rng).state, 1, 10);
+    const waited = run(s, 60 * 12);
+    s = waited.state;
+    expect(explosions(waited.events)).toHaveLength(0);
+    expect(s.projectiles).toHaveLength(1);
+    expect(isSettled(s)).toBe(true);
+    const sprung = run(move(s, 2, 44), 30);
+    expect(sprung.events.filter((e) => e.type === "mineTriggered")).toHaveLength(1);
+    expect(explosions(sprung.events)).toHaveLength(1);
+    expect(sprung.state.critters[1]!.hp).toBeLessThan(100);
+    expect(sprung.state.critters[0]!.hp).toBe(100);
+  });
+
+  it("is set off by a blast that reaches it", () => {
+    let s = move(stepWorld(world(), [drop], rng).state, 1, 10);
+    s = run(s, 30).state;
+    const mine = s.projectiles[0]!;
+    const shell = {
+      ...mine,
+      id: 99,
+      weaponId: "acorn-mortar" as const,
+      pos: { ...mine.pos, y: mine.pos.y + 6 * FIXED_ONE },
+      vel: { x: 0, y: -FIXED_ONE, z: 0 },
+      resting: false,
+    };
+    const r = run({ ...s, projectiles: [mine, shell] }, 40);
+    expect(explosions(r.events)).toHaveLength(2);
+    expect(r.events.filter((e) => e.type === "mineTriggered")).toHaveLength(0);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+});
+
+describe("Drill Hat", () => {
+  const drill = (pitch: number, yaw = 0): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "drill-hat", yaw, pitch, power: 0 },
+  });
+  /** A solid wall across the +x heading, in front of critter 1 (at x 40). */
+  const walled = (): SimState => {
+    const s = world();
+    applyEdit(s.terrain, {
+      op: "box",
+      x0: 46,
+      y0: GROUND,
+      z0: 40,
+      x1: 90,
+      y1: GROUND + 20,
+      z1: 90,
+    });
+    return s;
+  };
+
+  it("tunnels level through a wall along the aim heading for three seconds", () => {
+    const r = run(stepWorld(walled(), [drill(0)], rng).state, 200);
+    const c = r.state.critters[0]!;
+    // 3 s at 60 cells/s (18 voxels/s after the 3/10 length scale) is about 54 voxels.
+    expect(cell(c.pos.x)).toBeGreaterThan(40 + 45);
+    expect(cell(c.pos.y)).toBe(GROUND);
+    expect(cell(c.pos.z)).toBe(64);
+    expect(c.drillTicks).toBeUndefined();
+    expect(isSolid(r.state.terrain, 60, GROUND + 2, 64)).toBe(false); // the tunnel is open
+    expect(isSolid(r.state.terrain, 60, GROUND + 15, 64)).toBe(true); // the wall above stands
+    expect(c.hp).toBe(100);
+  });
+
+  it("aimed low, drills straight down and stops above the soda", () => {
+    const s = stepWorld(world(), [drill(-60)], rng).state;
+    expect(s.critters[0]!.drillTicks).toBeGreaterThan(0);
+    const r = run(s, 200);
+    const c = r.state.critters[0]!;
+    expect(cell(c.pos.x)).toBe(40);
+    expect(cell(c.pos.y)).toBeLessThan(GROUND - 10);
+    expect(cell(c.pos.y)).toBeGreaterThanOrEqual(r.state.terrain.seaY);
+    expect(c.drillTicks).toBeUndefined();
+    expect(c.hp).toBe(100); // no fall damage from the dig
+  });
+
+  it("holds the world unsettled while drilling, and the critter cannot fire again meanwhile", () => {
+    let s = stepWorld(walled(), [drill(0)], rng).state;
+    expect(isSettled(s)).toBe(false);
+    const again = stepWorld(
+      s,
+      [
+        {
+          critterId: 1,
+          moveYaw: -1,
+          fire: { weaponId: "acorn-mortar", yaw: 0, pitch: 45, power: 40 },
+        },
+      ],
+      rng,
+    );
+    expect(again.events.filter((e) => e.type === "fired")).toHaveLength(0);
+    s = run(again.state, 240).state;
+    expect(isSettled(s)).toBe(true);
+  });
+
+  it("is refused in the air", () => {
+    const s = world();
+    const air = {
+      ...s,
+      critters: s.critters.map((c) => ({
+        ...c,
+        grounded: false,
+        pos: { ...c.pos, y: c.pos.y + 20 * FIXED_ONE },
+      })),
+    };
+    const r = stepWorld(air, [drill(0)], rng);
+    expect(r.events.filter((e) => e.type === "fired")).toHaveLength(0);
+  });
+
+  it("is knocked out of the drill by a blast", () => {
+    let s = run(stepWorld(walled(), [drill(0)], rng).state, 20).state;
+    s = {
+      ...s,
+      critters: s.critters.map((c) => ({ ...c, vel: { x: FIXED_ONE, y: FIXED_ONE, z: 0 } })),
+    };
+    s = stepWorld(s, [], rng).state;
+    expect(s.critters[0]!.drillTicks).toBeUndefined();
+  });
+
+  it("drills the same tunnel every time", () => {
+    const a = run(stepWorld(walled(), [drill(0, 7)], rng).state, 200);
+    const b = run(stepWorld(walled(), [drill(0, 7)], rng).state, 200);
+    expect(b.events).toEqual(a.events);
+    expect(b.state.critters).toEqual(a.state.critters);
+    expect(Buffer.from(b.state.terrain.density).equals(Buffer.from(a.state.terrain.density))).toBe(
+      true,
+    );
+  });
+});
+
+describe("movement gear", () => {
+  const use = (weaponId: FireCommand["weaponId"], pitch = 0, yaw = 0): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId, yaw, pitch, power: 0 },
+  });
+  const fired = (es: readonly SimEvent[]) => es.filter((e) => e.type === "fired");
+  const landings = (es: SimEvent[]) =>
+    es.filter((e): e is Extract<SimEvent, { type: "landed" }> => e.type === "landed");
+  /** Lift critter 1 `h` voxels into the air. */
+  const lifted = (s: SimState, h: number): SimState => ({
+    ...s,
+    critters: s.critters.map((c) =>
+      c.id === 1 ? { ...c, grounded: false, pos: { ...c.pos, y: c.pos.y + h * FIXED_ONE } } : c,
+    ),
+  });
+
+  it("Spring Boots jump far higher than a jump and land softly", () => {
+    const r0 = stepWorld(world(), [use("spring-boots", 80)], rng);
+    expect(fired(r0.events)).toHaveLength(1);
+    expect(r0.state.critters[0]!.safeFall).toBe(60);
+    let top = 0;
+    const r = run(r0.state, 400, (_t, s) => {
+      top = Math.max(top, cell(s.critters[0]!.pos.y));
+      return [];
+    });
+    expect(top - GROUND).toBeGreaterThan(30); // a plain jump is about 10
+    const c = r.state.critters[0]!;
+    expect(c.grounded).toBe(true);
+    expect(c.safeFall).toBeUndefined();
+    expect(c.hp).toBe(100);
+    expect(landings(r.events)[0]!.fallDistance).toBe(0);
+    expect(cell(c.pos.x)).toBeGreaterThan(40); // aimed along +x
+  });
+
+  it("Spring Boots are refused in the air", () => {
+    expect(fired(stepWorld(lifted(world(), 20), [use("spring-boots", 80)], rng).events)).toEqual(
+      [],
+    );
+  });
+
+  it("the Soda Jetpack lifts off, bursts on each jump in the air, and runs out", () => {
+    const r0 = stepWorld(world(), [use("soda-jetpack")], rng);
+    expect(r0.state.critters[0]!.jetFuel).toBe(7);
+    // Jump every 10 ticks: each one spends a burst while there is fuel.
+    const r = run(r0.state, 100, (t) => [
+      { critterId: 1, moveYaw: -1, ...(t % 10 === 5 ? { jump: true } : {}) },
+    ]);
+    const c = r.state.critters[0]!;
+    expect(c.grounded).toBe(false);
+    expect(c.jetFuel).toBe(0);
+    expect(cell(c.pos.y) - GROUND).toBeGreaterThan(20); // bursts keep it climbing
+    const down = run(r.state, 600);
+    expect(down.state.critters[0]!.grounded).toBe(true);
+    expect(down.state.critters[0]!.jetFuel).toBeUndefined();
+  });
+
+  it("the Umbrella Glide opens only mid-air, falls slowly, steers, and lands unhurt", () => {
+    expect(fired(stepWorld(world(), [use("umbrella-glide")], rng).events)).toEqual([]);
+    const high = lifted(world(), 30);
+    const open = stepWorld(high, [use("umbrella-glide")], rng).state;
+    expect(open.critters[0]!.umbrella).toBe(true);
+    const r = run(open, 600, (_t, s) => [
+      { critterId: 1, moveYaw: s.critters[0]!.grounded ? -1 : 0 },
+    ]);
+    const c = r.state.critters[0]!;
+    expect(c.grounded).toBe(true);
+    expect(c.umbrella).toBeUndefined();
+    expect(c.hp).toBe(100);
+    expect(cell(c.pos.x)).toBeGreaterThan(40 + 20); // drifted along +x on the way down
+    // The same drop without the umbrella hurts.
+    const bare = run(high, 300);
+    expect(bare.state.critters[0]!.hp).toBeLessThan(100);
+  });
+
+  it("gear does not stack and keeps the world unsettled until landing", () => {
+    const s = stepWorld(world(), [use("soda-jetpack")], rng).state;
+    expect(isSettled(s)).toBe(false);
+    expect(fired(stepWorld(s, [use("umbrella-glide")], rng).events)).toEqual([]);
+  });
+});
+
+describe("Rope Claw", () => {
+  const claw = (pitch: number): CritterInput => ({
+    critterId: 1,
+    moveYaw: -1,
+    fire: { weaponId: "rope-claw", yaw: 0, pitch, power: 0 },
+  });
+  /** A slab hanging over +x of critter 1, 20 to 24 voxels up. */
+  const roofed = (): SimState => {
+    const s = world();
+    applyEdit(s.terrain, {
+      op: "box",
+      x0: 50,
+      y0: GROUND + 20,
+      z0: 44,
+      x1: 100,
+      y1: GROUND + 24,
+      z1: 84,
+    });
+    return s;
+  };
+  const dist = (c: SimState["critters"][number]) => {
+    const a = c.rope!.anchor;
+    const d = [c.pos.x - a.x, c.pos.y - a.y, c.pos.z - a.z].map((v) => v / FIXED_ONE);
+    return Math.hypot(d[0]!, d[1]!, d[2]!);
+  };
+
+  it("grips the overhang, lifts the critter and holds it on the rope", () => {
+    const r0 = stepWorld(roofed(), [claw(45)], rng);
+    expect(r0.events.filter((e) => e.type === "fired")).toHaveLength(1);
+    const rope = r0.state.critters[0]!.rope!;
+    expect(cell(rope.anchor.y)).toBe(GROUND + 20);
+    const r = run(r0.state, 120);
+    const c = r.state.critters[0]!;
+    expect(c.rope).toBeDefined();
+    expect(c.grounded).toBe(false);
+    expect(cell(c.pos.y)).toBeGreaterThan(GROUND + 2);
+    expect(dist(c)).toBeLessThanOrEqual(rope.len / FIXED_ONE + 0.01);
+    expect(c.hp).toBe(100);
+  });
+
+  it("lets go on jump and lands unhurt; misses with nothing in reach", () => {
+    let s = run(stepWorld(roofed(), [claw(45)], rng).state, 60).state;
+    s = stepWorld(s, [{ critterId: 1, moveYaw: -1, jump: true }], rng).state;
+    expect(s.critters[0]!.rope).toBeUndefined();
+    const down = run(s, 300);
+    expect(down.state.critters[0]!.grounded).toBe(true);
+    expect(down.state.critters[0]!.hp).toBe(100);
+    const miss = stepWorld(world(), [claw(80)], rng);
+    expect(miss.events.filter((e) => e.type === "fired")).toEqual([]);
+  });
+
+  it("swings further along the heading when pumped", () => {
+    const s = run(stepWorld(roofed(), [claw(45)], rng).state, 30).state;
+    const still = run(s, 90).state.critters[0]!;
+    const pumped = run(s, 90, () => [{ critterId: 1, moveYaw: 0 }]).state.critters[0]!;
+    expect(pumped.pos.x).toBeGreaterThan(still.pos.x);
+  });
+
+  it("lets go by itself after ten seconds", () => {
+    const r = run(stepWorld(roofed(), [claw(45)], rng).state, 60 * 10 + 5);
+    expect(r.state.critters[0]!.rope).toBeUndefined();
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -454,7 +755,15 @@ describe("weapon catalogue", () => {
       "pepper-shotgun",
       "root-punch",
       "teleport-burrow",
+      "jelly-mine",
+      "drill-hat",
+      "spring-boots",
+      "soda-jetpack",
+      "umbrella-glide",
+      "rope-claw",
     ]);
+    expect(byId["jelly-mine"]!.needs).toEqual([]);
+    expect(byId["drill-hat"]!.needs).toEqual([]);
     expect(byId["root-punch"]!.needs).toEqual([]);
     expect(byId["teleport-burrow"]!.needs).toEqual(["target"]);
     expect(byId["pepper-shotgun"]!.needs).toEqual([]);

@@ -22,7 +22,7 @@ func sync(shots: Array) -> void:
 		m.position = p["pos"]
 		# Tumble in flight; the trail particles stay behind in world space.
 		var body := m.get_node_or_null("Body") as Node3D
-		if body != null:
+		if body != null and str(p["weapon"]) != "jelly-mine":
 			var t := float(Time.get_ticks_msec()) / 1000.0
 			body.rotation = Vector3(t * 3.1 + float(id), t * 4.3, t * 2.2)
 	for id in _nodes.keys():
