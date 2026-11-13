@@ -66,6 +66,10 @@ const THEME_CASES = [
     id: "toybox-harbor",
     golden: { 256: 2733504448, 384: 3997548330, 512: 3958702342 } as Record<number, number>,
   },
+  {
+    id: "clockwork-mesa",
+    golden: { 256: 2217790638, 384: 3663389062, 512: 1011430248 } as Record<number, number>,
+  },
 ];
 
 describe.each(THEME_CASES)("$id", ({ id, golden }) => {
