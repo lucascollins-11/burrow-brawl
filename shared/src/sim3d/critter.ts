@@ -127,17 +127,20 @@ function drillStep(t: VoxelTerrain, c: Critter): Critter {
   const ticks = c.drillTicks!;
   const down = dir.x === 0 && dir.z === 0;
   const { x, y, z } = c.pos;
+  // Going down stops at bedrock, or at the map's soda row so the dig can't drown its own critter.
+  const floor = Math.max(t.bedrockY, t.seaY);
   if (ticks % DRILL_CARVE_EVERY === 0) {
     // Centre: 8 ticks of travel ahead; at mid-body height sideways, at the feet going down.
     const cx = cell(x + dir.x * 8);
     const cz = cell(z + dir.z * 8);
     const cy = down ? cell(y + dir.y * 8) : cell(y) + 3;
-    applyEdit(t, { op: "carve", x: cx, y: Math.max(t.bedrockY, cy), z: cz, r: radius });
+    // Never carve below the floor, so the critter is left standing on it.
+    applyEdit(t, { op: "carve", x: cx, y: Math.max(floor + radius, cy), z: cz, r: radius });
   }
   const nx = x + dir.x;
   const ny = y + dir.y;
   const nz = z + dir.z;
-  const blocked = bodyBlocked(t, cell(nx), cell(ny), cell(nz)) || (down && cell(ny) < t.bedrockY);
+  const blocked = bodyBlocked(t, cell(nx), cell(ny), cell(nz)) || (down && cell(ny) < floor);
   if (blocked || ticks <= 1) return { ...stopDrill(c), peakY: cell(y) };
   return {
     ...c,

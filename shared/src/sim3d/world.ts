@@ -136,6 +136,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
     triggers,
     nextId,
     fireEvents,
+    state.seaY,
   );
 
   const events: SimEvent[] = [...moveEvents, ...fireEvents, ...blastEvents];
@@ -158,6 +159,7 @@ export function stepWorld(state: SimState, inputs: readonly CritterInput[], rng:
  */
 export function isSettled(state: SimState): boolean {
   if (state.projectiles.some((p) => !isDormant(p))) return false;
+  if (state.critters.some((c) => c.drillTicks !== undefined)) return false;
   return state.critters.every(
     (c) => c.status !== "alive" || (c.grounded && c.vel.x === 0 && c.vel.y === 0 && c.vel.z === 0),
   );

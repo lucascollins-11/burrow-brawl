@@ -391,6 +391,16 @@ function isMine(w: WeaponData): boolean {
 }
 
 /** A mine lying armed or arming on the ground with no fuse running. It does not hold up a turn. */
+/** True for a placed charge (Jelly Mine) that waits for a critter, set or not. */
+export function isMineProjectile(p: Projectile): boolean {
+  return isMine(loadWeapons()[p.weaponId]);
+}
+
+/** Ticks after placing before a mine can be set off. */
+export function mineArmTicks(p: Projectile): number {
+  return Math.trunc(num(loadWeapons()[p.weaponId], "armSeconds", 0) * TICK_RATE);
+}
+
 export function isDormant(p: Projectile): boolean {
   return p.resting && p.fuseTicks < 0 && isMine(loadWeapons()[p.weaponId]);
 }
@@ -650,6 +660,8 @@ export function stepProjectiles(
   nextId = 0,
   /** Events from earlier this tick whose blasts (hitscan hits) can also set off charges. */
   earlier: readonly SimEvent[] = [],
+  /** Current soda row (SimState.seaY, which rises in sudden death); dormant mines below it sink. */
+  seaY = t.seaY,
 ): ProjectileStep {
   let cs: Critter[] = [...critters];
   const next: Projectile[] = [];
@@ -746,7 +758,7 @@ export function stepProjectiles(
     }
 
     if (mine && blast === null) {
-      if (cell(y) < t.seaY) {
+      if (cell(y) < seaY) {
         events.push({ type: "projectileLost", projectileId: p.id }); // sank
         continue;
       }
