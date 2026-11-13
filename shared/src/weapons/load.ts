@@ -20,6 +20,11 @@ import sodaJetpack from "../../weapons/soda-jetpack.json";
 import springBoots from "../../weapons/spring-boots.json";
 import teleportBurrow from "../../weapons/teleport-burrow.json";
 import umbrellaGlide from "../../weapons/umbrella-glide.json";
+import fizzRocket from "../../weapons/fizz-rocket.json";
+import paperPlaneSeeker from "../../weapons/paper-plane-seeker.json";
+import slingshot from "../../weapons/slingshot.json";
+import gumballCluster from "../../weapons/gumball-cluster.json";
+import gumball from "../../weapons/gumball.json";
 import type { WeaponData } from "./types";
 
 /** Every weapon id, sub-munitions included. The keys of the registry are exactly these. */
@@ -45,7 +50,12 @@ export type WeaponId =
   | "umbrella-glide"
   | "build-block"
   | "bubble-shield"
-  | "cookie-snack";
+  | "cookie-snack"
+  | "fizz-rocket"
+  | "paper-plane-seeker"
+  | "slingshot"
+  | "gumball-cluster"
+  | "gumball";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -77,6 +87,11 @@ const registry: WeaponRegistry = Object.freeze({
   "build-block": toWeaponData(buildBlock),
   "bubble-shield": toWeaponData(bubbleShield),
   "cookie-snack": toWeaponData(cookieSnack),
+  "fizz-rocket": toWeaponData(fizzRocket),
+  "paper-plane-seeker": toWeaponData(paperPlaneSeeker),
+  slingshot: toWeaponData(slingshot),
+  "gumball-cluster": toWeaponData(gumballCluster),
+  gumball: toWeaponData(gumball),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

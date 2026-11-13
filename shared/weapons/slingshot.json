@@ -1,0 +1,21 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "slingshot",
+  "name": "Slingshot",
+  "description": "A pebble from a rubber band: no wind, small blast, ideal for finishing.",
+  "category": "projectile",
+  "behavior": "precise-shot",
+  "targeting": "aim-angle-power",
+  "ammo": null,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 25,
+  "blastRadius": 14,
+  "knockback": 150,
+  "params": {
+    "maxSpeed": 1100,
+    "gravity": 600,
+    "damageFalloff": "linear"
+  }
+}

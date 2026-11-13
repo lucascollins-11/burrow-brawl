@@ -44,8 +44,11 @@ import {
   yawDir,
 } from "./vec3";
 
-/** How a shot flies: "impact" detonates on terrain or a critter, "bounce" waits for its fuse. */
-type Flight = "impact" | "bounce";
+/**
+ * How a shot flies: "impact" detonates on terrain or a critter, "bounce" waits for its fuse,
+ * "stick" clings to the first thing it touches and then lights its `stickFuseSeconds` fuse.
+ */
+type Flight = "impact" | "bounce" | "stick";
 
 /** Every weapon that exists as a projectile in flight, sub-munitions included. */
 const FLIGHT: Partial<Record<WeaponId, Flight>> = {
@@ -57,6 +60,11 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "hopper-ball": "bounce",
   "firecracker-bundle": "bounce",
   "jelly-mine": "bounce",
+  "fizz-rocket": "impact",
+  "paper-plane-seeker": "impact",
+  slingshot: "impact",
+  "gumball-cluster": "bounce",
+  gumball: "stick",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -67,7 +75,11 @@ export type ProjectileWeaponId =
   | "hopper-ball"
   | "beehive-strike"
   | "firecracker-bundle"
-  | "jelly-mine";
+  | "jelly-mine"
+  | "fizz-rocket"
+  | "paper-plane-seeker"
+  | "slingshot"
+  | "gumball-cluster";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -77,6 +89,10 @@ const FIREABLE: readonly string[] = [
   "beehive-strike",
   "firecracker-bundle",
   "jelly-mine",
+  "fizz-rocket",
+  "paper-plane-seeker",
+  "slingshot",
+  "gumball-cluster",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -361,7 +377,12 @@ export function spawnShots(
   const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
   const power = clampInt(cmd.power, 0, 100);
   const dir = aimDir(yaw, pitch);
-  const speed = mulDiv(speedPerTick(num(w, "maxSpeed", 600)), power, 100);
+  // A seeker needs a mark and leaves at a fixed speed; everything else is charged.
+  const homing = isHoming(w);
+  if (homing && !cmd.target) return [];
+  const speed = homing
+    ? speedPerTick(num(w, "launchSpeed", 400))
+    : mulDiv(speedPerTick(num(w, "maxSpeed", 600)), power, 100);
 
   let fuseTicks = -1;
   if (FLIGHT[cmd.weaponId] === "bounce") {
@@ -384,8 +405,58 @@ export function spawnShots(
       fuseTicks,
       bounces: 0,
       resting: false,
+      ...(homing && cmd.target
+        ? {
+            target: {
+              x: Math.trunc(cmd.target.x),
+              y: Math.trunc(cmd.target.y),
+              z: Math.trunc(cmd.target.z),
+            },
+          }
+        : {}),
     },
   ];
+}
+
+/** Weapons that steer toward their `target` in flight. */
+function isHoming(w: WeaponData): boolean {
+  return num(w, "turnAccel", 0) > 0;
+}
+
+/**
+ * One tick of homing: nudge the velocity toward `cruiseSpeed` aimed at the target's centre,
+ * each component by at most `turnAccel`. Returns the new velocity.
+ */
+function steer(
+  w: WeaponData,
+  target: { x: number; y: number; z: number },
+  x: Fixed,
+  y: Fixed,
+  z: Fixed,
+  v: { x: Fixed; y: Fixed; z: Fixed },
+): { x: Fixed; y: Fixed; z: Fixed } {
+  const half = FIXED_ONE >> 1;
+  const to = {
+    x: target.x * FIXED_ONE + half - x,
+    y: target.y * FIXED_ONE + half - y,
+    z: target.z * FIXED_ONE + half - z,
+  };
+  const want = withLength(to, speedPerTick(num(w, "cruiseSpeed", 400)));
+  const k = accelPerTick(num(w, "turnAccel", 2400));
+  const step = (cur: Fixed, goal: Fixed): Fixed => cur + clampInt(goal - cur, -k, k);
+  return { x: step(v.x, want.x), y: step(v.y, want.y), z: step(v.z, want.z) };
+}
+
+/** True if any face neighbour of the voxel is solid: something for a sticky shot to cling to. */
+function touchesSolid(t: VoxelTerrain, x: number, y: number, z: number): boolean {
+  return (
+    isSolid(t, x + 1, y, z) ||
+    isSolid(t, x - 1, y, z) ||
+    isSolid(t, x, y + 1, z) ||
+    isSolid(t, x, y - 1, z) ||
+    isSolid(t, x, y, z + 1) ||
+    isSolid(t, x, y, z - 1)
+  );
 }
 
 /** Charges are dropped this far in front of the feet, and this far up (Q16.16 voxels). */
@@ -397,7 +468,6 @@ function isMine(w: WeaponData): boolean {
   return num(w, "triggerRadius", 0) > 0;
 }
 
-/** A mine lying armed or arming on the ground with no fuse running. It does not hold up a turn. */
 /** True for a placed charge (Jelly Mine) that waits for a critter, set or not. */
 export function isMineProjectile(p: Projectile): boolean {
   return isMine(loadWeapons()[p.weaponId]);
@@ -408,6 +478,7 @@ export function mineArmTicks(p: Projectile): number {
   return Math.trunc(num(loadWeapons()[p.weaponId], "armSeconds", 0) * TICK_RATE);
 }
 
+/** A mine lying armed or arming on the ground with no fuse running. It does not hold up a turn. */
 export function isDormant(p: Projectile): boolean {
   return p.resting && p.fuseTicks < 0 && isMine(loadWeapons()[p.weaponId]);
 }
@@ -627,6 +698,11 @@ export function explode(
   });
 }
 
+/** True if the voxel under (x, y, z) is solid. */
+function isSolidBelow(t: VoxelTerrain, x: number, y: number, z: number): boolean {
+  return isSolid(t, x, y - 1, z);
+}
+
 /** Unit bounce normal at a solid voxel, entered from voxel (fx, fy, fz). */
 function bounceNormal(
   t: VoxelTerrain,
@@ -686,7 +762,10 @@ export function stepProjectiles(
     let fuse = p.fuseTicks < 0 ? -1 : p.fuseTicks - 1;
     const mine = isMine(w);
     const armTicks = Math.trunc(num(w, "armSeconds", 0) * TICK_RATE);
-    const impact = FLIGHT[p.weaponId] !== "bounce";
+    const flight = FLIGHT[p.weaponId] ?? "impact";
+    const impact = flight === "impact";
+    const stick = flight === "stick";
+    const stickFuse = Math.max(1, Math.trunc(num(w, "stickFuseSeconds", 2) * TICK_RATE));
     let blast: { x: number; y: number; z: number } | null = null;
     let midAir = false;
 
@@ -695,10 +774,16 @@ export function stepProjectiles(
       midAir = true;
     }
 
-    if (resting && !isSolid(t, cell(x), cell(y) - 1, cell(z))) resting = false; // ground carved away
+    // Ground carved away: a resting shot falls again (a sticky one only once nothing is left).
+    if (resting && !(stick ? touchesSolid : isSolidBelow)(t, cell(x), cell(y), cell(z)))
+      resting = false;
 
     if (!resting && blast === null) {
-      vy = Math.max(vy - accelPerTick(num(w, "gravity", 600)), -2 * TERMINAL_VELOCITY);
+      if (p.target && p.age >= Math.trunc(num(w, "homingDelaySeconds", 0) * TICK_RATE))
+        ({ x: vx, y: vy, z: vz } = steer(w, p.target, x, y, z, { x: vx, y: vy, z: vz }));
+      // A rocket flies flat for `flatSeconds` before gravity takes hold.
+      if (p.age >= Math.trunc(num(w, "flatSeconds", 0) * TICK_RATE))
+        vy = Math.max(vy - accelPerTick(num(w, "gravity", 600)), -2 * TERMINAL_VELOCITY);
       if (w.windAffected) {
         vx += clampInt(windX, -100, 100) * WIND_ACCEL_PER_UNIT;
         vz += clampInt(windZ, -100, 100) * WIND_ACCEL_PER_UNIT;
@@ -715,6 +800,14 @@ export function stepProjectiles(
         const hy = cell(ny);
         const hz = cell(nz);
         if (isSolid(t, hx, hy, hz)) {
+          if (stick) {
+            vx = 0;
+            vy = 0;
+            vz = 0;
+            resting = true;
+            if (fuse < 0) fuse = stickFuse;
+            break;
+          }
           if (impact) {
             blast = { x: cell(x), y: cell(y), z: cell(z) }; // last empty voxel
             break;
@@ -744,12 +837,22 @@ export function stepProjectiles(
         y = ny;
         z = nz;
         if (
-          impact &&
+          (impact || stick) &&
           cs.some(
             (c) => (c.id !== p.ownerId || p.age > OWNER_GRACE_TICKS) && critterHit(c, hx, hy, hz),
           )
-        )
-          blast = { x: hx, y: hy, z: hz };
+        ) {
+          if (impact) blast = { x: hx, y: hy, z: hz };
+          else {
+            // A gumball on a critter clings there (in the air beside it) and its fuse starts.
+            vx = 0;
+            vy = 0;
+            vz = 0;
+            resting = true;
+            if (fuse < 0) fuse = stickFuse;
+            break;
+          }
+        }
       }
 
       const lost =

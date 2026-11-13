@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "fizz-rocket",
+  "name": "Fizz Rocket",
+  "description": "A soda-bottle rocket: it flies dead straight for a second, then gravity takes over.",
+  "category": "projectile",
+  "behavior": "straight-rocket",
+  "targeting": "aim-angle-power",
+  "ammo": 3,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 45,
+  "blastRadius": 40,
+  "knockback": 320,
+  "params": {
+    "maxSpeed": 1000,
+    "gravity": 600,
+    "flatSeconds": 1,
+    "damageFalloff": "linear"
+  }
+}

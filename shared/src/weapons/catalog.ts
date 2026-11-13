@@ -46,6 +46,10 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "build-block",
   "bubble-shield",
   "cookie-snack",
+  "fizz-rocket",
+  "paper-plane-seeker",
+  "slingshot",
+  "gumball-cluster",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */

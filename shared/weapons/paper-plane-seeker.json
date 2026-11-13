@@ -1,0 +1,24 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "paper-plane-seeker",
+  "name": "Paper Plane Seeker",
+  "description": "Mark a spot and launch a folded plane: it glides there on its own, but the wind still pushes it.",
+  "category": "projectile",
+  "behavior": "homing",
+  "targeting": "click-point",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": true,
+  "damage": 35,
+  "blastRadius": 35,
+  "knockback": 260,
+  "params": {
+    "launchSpeed": 400,
+    "cruiseSpeed": 400,
+    "turnAccel": 2400,
+    "homingDelaySeconds": 0.3,
+    "gravity": 60,
+    "damageFalloff": "linear"
+  }
+}

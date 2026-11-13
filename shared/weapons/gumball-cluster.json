@@ -1,0 +1,32 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "gumball-cluster",
+  "name": "Gumball Cluster",
+  "description": "A bouncing jar that bursts into sticky gumballs; each clings where it lands, then pops.",
+  "category": "projectile",
+  "behavior": "cluster-grenade",
+  "targeting": "aim-angle-power",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 20,
+  "blastRadius": 20,
+  "knockback": 180,
+  "params": {
+    "fuseSeconds": {
+      "min": 3,
+      "max": 3,
+      "default": 3
+    },
+    "maxBounces": 3,
+    "bounciness": 0.4,
+    "maxSpeed": 700,
+    "gravity": 600,
+    "subMunition": "gumball",
+    "subCount": 6,
+    "subSpeed": 250,
+    "subPitch": 55,
+    "damageFalloff": "linear"
+  }
+}

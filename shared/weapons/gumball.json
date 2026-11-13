@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "gumball",
+  "name": "Gumball",
+  "description": "A sticky gumball from the Gumball Cluster. It clings to what it touches and pops two seconds later.",
+  "category": "projectile",
+  "behavior": "sticky-bomblet",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 15,
+  "blastRadius": 18,
+  "knockback": 150,
+  "params": {
+    "gravity": 600,
+    "stickFuseSeconds": 2,
+    "damageFalloff": "linear"
+  }
+}

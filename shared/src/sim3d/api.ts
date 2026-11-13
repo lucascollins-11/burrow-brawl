@@ -89,6 +89,8 @@ export interface Projectile {
   readonly fuseTicks: number;
   readonly bounces: number;
   readonly resting: boolean;
+  /** Homing target voxel (Paper Plane Seeker). Absent for everything else. */
+  readonly target?: { readonly x: number; readonly y: number; readonly z: number };
 }
 
 export interface FireCommand {
