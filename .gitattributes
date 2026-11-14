@@ -1,0 +1,13 @@
+# Third-party models and textures are big: keep them in Git LFS.
+godot/assets/thirdparty/**/*.glb filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.gltf filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.bin filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.obj filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.png filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.exr filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.hdr filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.wav filter=lfs diff=lfs merge=lfs -text
+godot/assets/thirdparty/**/*.ogg filter=lfs diff=lfs merge=lfs -text

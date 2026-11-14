@@ -39,6 +39,8 @@ export interface Theme {
   readonly name: string;
   /** Smallest grid edge the theme is laid out for. */
   readonly minSize: number;
+  /** Grid height in voxels (a multiple of 32); 96 when absent. */
+  readonly sizeY?: number;
   /** Shape the terrain and push placements into ctx.objects. Must be pure and integer-only. */
   build(ctx: ThemeCtx): void;
 }

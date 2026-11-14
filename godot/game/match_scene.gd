@@ -46,6 +46,8 @@ var _swing: Dictionary = {}
 var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
+var scenery: Scenery = null
+var landmarks: Landmarks = null
 
 var _critters: Dictionary = {}  # id -> Node3D
 var _rig := CameraMath.RigState.new()
@@ -184,6 +186,20 @@ func handle_match_start(msg: Dictionary) -> void:
 			MapLook.paint_terrain(ground_mat, look)
 	fx.debris_color = MapLook.color(look, "debris")
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
+	if scenery == null:
+		scenery = Scenery.new()
+		scenery.name = "Scenery"
+		add_child(scenery)
+	var density := float(GameSettings.quality_profile(GameSettings.quality).get("props", 1.0))
+	var starts: Array = []
+	for c: Dictionary in vm.snapshot().get("critters", []):
+		starts.append(c["pos"])
+	scenery.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), str(t.get("density", "")).hash(), density, starts)
+	if landmarks == null:
+		landmarks = Landmarks.new()
+		landmarks.name = "Landmarks"
+		add_child(landmarks)
+	landmarks.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, str(t.get("density", "")).hash(), density)
 	var world_env := env.get("_world_env") as WorldEnvironment
 	if world_env != null and world_env.environment != null:
 		world_env.environment.glow_enabled = GameSettings.glow_enabled()
@@ -207,6 +223,8 @@ func handle_events(msg: Dictionary) -> void:
 func handle_terrain_patch(msg: Dictionary) -> void:
 	if terrain_view != null and terrain_view.has_method("apply_patch"):
 		terrain_view.call("apply_patch", msg)
+	if scenery != null:
+		scenery.on_patch(msg)
 
 
 func handle_match_end(_msg: Dictionary) -> void:
@@ -553,7 +571,10 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 			node.set_seed(id)
 			_critters[id] = node
 			add_child(node)
+		var was_alive: bool = node.alive
 		node.set_alive(c["alive"])
+		if was_alive and not bool(c["alive"]):
+			_react_to_loss(c, v, active)
 		var grounded: bool = bool(c.get("grounded", true))
 		var sm: CritterSmoother = _smooth.get(id, null)
 		if sm == null:
@@ -569,6 +590,7 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		node.rotation.y = deg_to_rad(float(c["heading_deg"]))
 		var is_active: bool = not active.is_empty() and active["id"] == id
 		var pitch := float(aim.pitch_deg) if is_active and aim != null else 0.0
+		node.set_charging(is_active and aim != null and aim.charging and aim.power > 3.0)
 		node.set_look_target(_look_target_for(c, v))
 		node.set_cheer(v["phase"] == "over" and v["winner_team"] != null and int(v["winner_team"]) == int(c["team"]))
 		node.drive(dt, is_active, vel, grounded, pitch)
@@ -585,6 +607,26 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 			(_critters[id] as Node).queue_free()
 			_critters.erase(id)
 			_smooth.erase(id)
+
+
+## Derived on the client from who is playing and who just went down. A rival's loss: the shooter
+## celebrates and the shooter's teammates nod. A teammate's loss: the rest of that team winces.
+func _react_to_loss(dead: Dictionary, v: Dictionary, active: Dictionary) -> void:
+	var dead_team := int(dead["team"])
+	var active_team := int(active["team"]) if not active.is_empty() else -1
+	for c: Dictionary in v["critters"]:
+		if not bool(c["alive"]) or int(c["id"]) == int(dead["id"]):
+			continue
+		var rig: SquirmlingRig = _critters.get(int(c["id"]), null)
+		if rig == null:
+			continue
+		if int(c["team"]) == dead_team:
+			rig.wince()
+		elif active_team != dead_team and int(c["team"]) == active_team:
+			if not active.is_empty() and int(c["id"]) == int(active["id"]):
+				rig.celebrate()
+			else:
+				rig.nod()
 
 
 ## What a Squirmling looks at: a shot in the air if there is one, else the nearest living rival.
@@ -678,7 +720,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		var p: Vector3 = active["pos"]
 		goal = {
 			"mode": "aim",
-			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.86, 0) + d * FIRST_PERSON_BACK,
+			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.74, 0) + d * FIRST_PERSON_BACK,
 			"yaw_deg": CameraMath.camera_yaw_for_heading(CameraMath.yaw_to_deg(aim.yaw)),
 			"pitch_deg": -cam_pitch,
 			"dist": FIRST_PERSON_BACK,

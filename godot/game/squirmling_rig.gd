@@ -33,6 +33,7 @@ var _prop: Node3D
 var _off := PackedVector2Array()  # per ring: sideways (x) and forward (y -> model z) offset
 var _vel := PackedVector2Array()
 var _stretch := 1.0
+var _air := 0.0  # 0 curled on the ground, 1 stretched out in the air
 var _stretch_v := 0.0
 var _t := 0.0
 var _phase := 0.0
@@ -50,6 +51,12 @@ var _startle_dir := Vector2.ZERO
 var _brow_raise := 0.0  # seconds left of an idle eyebrow raise
 var _next_brow := 4.0
 var _cheer := false
+var _celebrate := 0.0  # seconds left of a kill celebration
+var _nod := 0.0  # seconds left of an approving nod
+var _wince := 0.0  # seconds left of a grieving wince
+var _charging := false
+var _mouths: Dictionary = {}  # shape name -> node
+var _gulp := 0.0
 var _panic := 0.0
 var _moving := false
 var _walk_amt := 0.0  # 0 standing, 1 walking: fades the inchworm in and out
@@ -78,6 +85,8 @@ func bind() -> void:
 		_brows.append(head.get_node("Brow" + side) as Node3D)
 	_mouth = head.get_node("Mouth") as Node3D
 	_mouth_open = head.get_node("MouthOpen") as Node3D
+	for shape in ["Smile", "Grimace", "Teeth", "Gulp"]:
+		_mouths[shape] = head.get_node("Mouth" + shape) as Node3D
 	_tuft = _model.find_child("TailTuft", true, false) as Node3D
 	_prop = _model.find_child("Propeller", true, false) as Node3D
 	_off.resize(N)
@@ -133,6 +142,7 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 	elif not grounded and _was_grounded:
 		_stretch_v += 2.6  # the spring of a jump
 	_was_grounded = grounded
+	_air = lerpf(_air, 0.0 if grounded else 1.0, minf(1.0, dt * (7.0 if grounded else 10.0)))
 	_stretch_v += ((goal_stretch - _stretch) * 180.0 - _stretch_v * 11.0) * dt
 	_stretch = clampf(_stretch + _stretch_v * dt, 0.5, 1.45)
 
@@ -148,9 +158,10 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 	# The ring chain: the head end trails behind the motion, sways when idle, ripples when walking.
 	for i in range(N):
 		var w := pow(float(i) / float(N - 1), 1.4)
-		var goal := (-flat * 0.05).limit_length(0.42) * w
+		# The head end trails the motion; the tail rings drag behind along the ground.
+		var goal := (-flat * 0.05).limit_length(0.42) * (w + 0.35 * (1.0 - w) * _walk_amt)
 		goal.x += sin(_t * 1.7 - float(i) * 0.7) * (0.07 if active else 0.045) * w * (1.0 - _walk_amt)
-		goal.y += sin(_phase - float(i) * 0.9) * 0.12 * w * _walk_amt
+		goal.y += sin(_phase * 2.0 - float(i) * 1.1) * 0.05 * _walk_amt
 		var stiff := 130.0 - 14.0 * float(i)
 		_vel[i] += ((goal - _off[i]) * stiff - _vel[i] * 7.0) * dt
 		_off[i] += _vel[i] * dt
@@ -175,6 +186,20 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 		head.rotation.z += _startle_dir.x * _startle * 0.5
 	if _panic > 0.0:
 		head.rotation.z += sin(_t * 40.0) * 0.18
+	_celebrate = maxf(0.0, _celebrate - dt)
+	_nod = maxf(0.0, _nod - dt)
+	_wince = maxf(0.0, _wince - dt)
+	_gulp = maxf(0.0, _gulp - dt)
+	if not grounded and local.y < -2.0 and _gulp <= 0.0 and _fall_speed > 3.0:
+		_gulp = 0.4  # a gulp on the way down
+	if _nod > 0.0:
+		head.rotation.x += sin((1.0 - _nod / 1.0) * TAU * 2.0) * 0.28 * minf(1.0, _nod * 3.0)
+	if _wince > 0.0:
+		head.rotation.x += 0.22 * minf(1.0, _wince)  # chin tucked
+		head.rotation.z += sin(_t * 30.0) * 0.04
+	if _celebrate > 0.0 and grounded:
+		_stretch_v += 0.0 if fposmod(_t, 0.5) > 0.05 else 3.2
+		head.rotation.x -= 0.2
 	# Victory: bounce on the spot, head up.
 	if _cheer and grounded:
 		_stretch_v += 0.0 if fposmod(_t, 0.7) > 0.05 else 3.0
@@ -305,23 +330,26 @@ func is_wobbling() -> bool:
 
 func _pose_rings() -> void:
 	var wide := 1.0 / sqrt(_stretch)
-	# Inchworm: the gap above each ring shrinks as a scrunch wave runs tail to head, so the body
-	# bunches up, then reaches out again, one ring after the next.
-	var height := Squirmling.ring_base(0).y * _stretch
 	for i in range(N):
 		var ring := _rings[i]
-		var base := Squirmling.ring_base(i)
-		if i > 0:
-			var scrunch := 0.5 + 0.5 * sin(_phase - float(i) * 0.9)
-			height += Squirmling.RING_STEP * (_stretch - 0.3 * scrunch * _walk_amt + 0.06 * _walk_amt)
-		ring.position = Vector3(base.x + _off[i].x, height, _off[i].y)
+		var f := float(i) / float(N - 1)
+		var base := Squirmling.curl_base(i).lerp(Squirmling.ring_base(i), _air)
+		# The raised part stretches and squashes; the tail on the ground hardly does.
+		var y := base.y * (1.0 + (_stretch - 1.0) * lerpf(pow(f, 1.6), 1.0, _air))
+		# Slither: a wave runs from the head back along the body, wider towards the tail.
+		var amp := lerpf(0.30, 0.08, f) * _walk_amt * (1.0 - _air)
+		var s := float(N - 1 - i) * 1.1
+		var wave := sin(s - _phase) * amp
+		var wave_slope := -cos(s - _phase) * 1.1 * amp / 0.6
+		ring.position = Vector3(base.x + _off[i].x + wave, y + absf(wave) * 0.08, base.z + _off[i].y)
 		# The head keeps more of its shape so the face and hat do not smear.
 		var k := 0.5 if i == N - 1 else 1.0
 		ring.scale = Vector3(lerpf(1.0, wide, k), lerpf(1.0, _stretch, k), lerpf(1.0, wide, k))
 		var below := _off[i - 1] if i > 0 else Vector2.ZERO
 		var above := _off[i + 1] if i < N - 1 else _off[i] * 2.0 - below
 		var lean := (above - below) / (2.0 * Squirmling.RING_STEP)
-		ring.rotation = Vector3(atan(lean.y) * 0.8, 0.0, -atan(lean.x) * 0.8)
+		var tip := lerpf(Squirmling.curl_angle(i), 0.0, _air)
+		ring.rotation = Vector3(tip + atan(lean.y) * 0.8, atan(wave_slope) * 0.7, -atan(lean.x) * 0.8)
 
 
 ## Head turn (yaw, pitch in radians, clamped) towards a direction in the Squirmling's own frame.
@@ -357,6 +385,29 @@ func panic() -> void:
 		_startle = maxf(_startle, 1.2)
 
 
+## A kill I made: a few hops and a grin.
+func celebrate() -> void:
+	if alive:
+		_celebrate = 2.0
+
+
+## A teammate got a kill: an approving nod.
+func nod() -> void:
+	if alive:
+		_nod = 1.0
+
+
+## A teammate went down: a wince, brows worried, a grimace.
+func wince() -> void:
+	if alive:
+		_wince = 2.2
+
+
+## True while the fire key is held and power builds: gritted teeth.
+func set_charging(on: bool) -> void:
+	_charging = on
+
+
 ## Victory pose while true: bouncing, grin, brows up.
 func set_cheer(on: bool) -> void:
 	_cheer = on
@@ -377,8 +428,12 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 		lid = 0.55
 	if _startle > 0.0 and _hurt <= 0.0:
 		lid = 1.35  # wide-eyed
-	elif _cheer:
+	elif _cheer or _celebrate > 0.0:
 		lid = 0.55  # happy squint
+	elif _wince > 0.0:
+		lid = 0.4
+	elif _charging:
+		lid = 0.5  # glaring
 	for k in range(_eyes.size()):
 		var eye := _eyes[k]
 		eye.scale = Vector3(1.0, lerpf(eye.scale.y, lid, minf(1.0, dt * 30.0)), 1.0)
@@ -388,7 +443,9 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 	var mood := 0.0
 	if _hurt > 0.0 or not grounded:
 		mood = -1.0
-	elif active or _fire > 0.0:
+	elif _wince > 0.0:
+		mood = -1.0
+	elif active or _fire > 0.0 or _charging:
 		mood = 1.0
 	_mood = lerpf(_mood, mood, minf(1.0, dt * 10.0))
 	# An idle eyebrow raise now and then, one brow a little higher than the other.
@@ -397,7 +454,7 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 		_brow_raise = 0.45
 		_next_brow = _t + 3.0 + _rng.randf() * 5.0
 	var raise := sin(clampf(_brow_raise / 0.45, 0.0, 1.0) * PI)
-	if _startle > 0.0 or _cheer:
+	if _startle > 0.0 or _cheer or _celebrate > 0.0:
 		raise = 1.0
 	for bi in range(_brows.size()):
 		var brow := _brows[bi]
@@ -405,9 +462,24 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 		# Determined: inner ends down. Worried: inner ends up and the whole brow lifts.
 		brow.rotation.z = deg_to_rad((-6.0 + 22.0 * _mood) * sx)
 		brow.position.y = 0.22 + maxf(0.0, -_mood) * 0.06 + raise * (0.07 if bi == 0 else 0.04)
-	var open := _hurt > 0.0 or _fire > 0.0 or not grounded or _startle > 0.3 or _cheer
-	_mouth_open.visible = open
-	_mouth.visible = not open
+	# One mouth at a time, most urgent first.
+	var shape := "stitch"
+	if _hurt > 0.0 or _fire > 0.0 or _startle > 0.3:
+		shape = "oh"
+	elif _wince > 0.0 or _panic > 0.0:
+		shape = "Grimace"
+	elif _gulp > 0.0:
+		shape = "Gulp"
+	elif _cheer or _celebrate > 0.0 or _nod > 0.0:
+		shape = "Smile"
+	elif _charging:
+		shape = "Teeth"
+	elif not grounded:
+		shape = "oh"
+	_mouth_open.visible = shape == "oh"
+	_mouth.visible = shape == "stitch"
+	for key in _mouths:
+		(_mouths[key] as Node3D).visible = key == shape
 
 
 func _step_pop(dt: float) -> void:

@@ -4,6 +4,8 @@ extends Node3D
 ## (port of client/src/game3d/effects3d.ts). Effects clean themselves up with tweens.
 
 ## Colour of the chunks an explosion throws; the match scene sets it from the map theme.
+const Toon := preload("res://game/toon.gd")
+
 var debris_color := Color("8b5a2b")
 var shake_offset: Vector3 = Vector3.ZERO
 var _shake: float = 0.0
@@ -34,6 +36,7 @@ func explode(at: Vector3, radius: float) -> void:
 
 func _unshaded(color: Color, emit := 0.0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
+	Toon.shade(mat)
 	mat.albedo_color = color
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -123,6 +126,7 @@ func _sparks(at: Vector3, r: float) -> void:
 	bit.size = Vector3(0.28, 0.28, 0.28)
 	sparks.mesh = bit
 	var mat := StandardMaterial3D.new()
+	Toon.shade(mat)
 	mat.albedo_color = Color("ffd24a")
 	mat.emission_enabled = true
 	mat.emission = Color("ffb52e")
@@ -159,6 +163,7 @@ func _chunks(at: Vector3, r: float) -> void:
 		box.size = Vector3.ONE * (1.1 if big else 0.5)
 		chunks.mesh = box
 		var mat := StandardMaterial3D.new()
+		Toon.shade(mat)
 		mat.albedo_color = shades[i]
 		mat.roughness = 1.0
 		chunks.material_override = mat
@@ -254,6 +259,7 @@ func _smoke(at: Vector3, radius: float) -> void:
 	ball.rings = 6
 	smoke.mesh = ball
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -284,6 +290,7 @@ func tracer(from: Vector3, to: Vector3, hit := false, weapon := "") -> void:
 	box.size = Vector3(thick, thick, 1.0)
 	bar.mesh = box
 	var mat := StandardMaterial3D.new()
+	Toon.shade(mat)
 	mat.albedo_color = Color(glow.r, glow.g, glow.b, 0.95).lerp(Color(1, 1, 1, 0.95), 0.55)
 	mat.emission_enabled = true
 	mat.emission = glow
@@ -411,6 +418,7 @@ func _swirl(at: Vector3, inward: bool) -> void:
 	fade.set_color(1, Color(1, 1, 1, 0.0))
 	p.color_ramp = fade
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -467,6 +475,7 @@ func burst(at: Vector3, color: Color) -> void:
 	bit.rings = 3
 	p.mesh = bit
 	var mat := StandardMaterial3D.new()
+	Toon.shade(mat)
 	mat.albedo_color = color
 	p.material_override = mat
 	add_child(p)
@@ -503,6 +512,7 @@ func puff(at: Vector3, radius := 2.0) -> void:
 	s.height = 2.0
 	p.mesh = s
 	var mat := StandardMaterial3D.new()
+	Toon.shade(mat)
 	mat.albedo_color = Color(1, 1, 1, 0.7)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

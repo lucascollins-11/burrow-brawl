@@ -26,6 +26,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Check third-party assets (files, hashes, licenses, credits)
+        run: python3 tools/assets/fetch.py check
 
       - name: Install Godot
         run: |
@@ -67,6 +72,8 @@ jobs:
       contents: write # needed only to attach screenshots to the pull request's release
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: pnpm/action-setup@v4
 
@@ -228,6 +235,8 @@ jobs:
       contents: write # needed only to attach the build to a release
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Install Godot
         run: |

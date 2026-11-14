@@ -27,7 +27,12 @@ const SMOOTH_PULL := 0.6
 ## surface must keep its hard edges, e.g. a voxel with a structure material id. Any vertex touching
 ## such a voxel is left where surface nets put it. This is the hook for per-material smoothing:
 ## hills stay soft, walls stay crisp.
-static func mesh_block(block: PackedByteArray, smooth := SMOOTH, crisp := PackedByteArray()) -> Dictionary:
+## `mats` (optional, same layout): material id per voxel. When given, the result also has
+## `colors` (PackedColorArray, r = material id / 255): each vertex takes the most common material
+## of the solid voxels around it (ties go to a structure material), and the shader draws it.
+static func mesh_block(
+	block: PackedByteArray, smooth := SMOOTH, crisp := PackedByteArray(), mats := PackedByteArray()
+) -> Dictionary:
 	var result := {
 		"positions": PackedVector3Array(),
 		"normals": PackedVector3Array(),
@@ -61,6 +66,10 @@ static func mesh_block(block: PackedByteArray, smooth := SMOOTH, crisp := Packed
 	var positions := PackedVector3Array()
 	var pinned := PackedByteArray()
 	var has_crisp := crisp.size() == block.size()
+	var has_mats := mats.size() == block.size()
+	var colors := PackedColorArray()
+	var votes := PackedInt32Array()
+	votes.resize(256)
 	var normals := PackedVector3Array()
 	var cell_index := PackedInt32Array()
 	cell_index.resize(CELLS * CELLS * CELLS)
@@ -129,6 +138,23 @@ static func mesh_block(block: PackedByteArray, smooth := SMOOTH, crisp := Packed
 							keep = true
 							break
 				pinned.append(1 if keep else 0)
+				if has_mats:
+					var best := 0
+					var best_n := 0
+					var touched := PackedInt32Array()
+					for k in 8:
+						var o := b + offs[k]
+						if solid[o] == 0:
+							continue
+						var m: int = mats[o]
+						votes[m] += 1
+						touched.append(m)
+						if votes[m] > best_n or (votes[m] == best_n and m != 0 and best == 0):
+							best = m
+							best_n = votes[m]
+					for m in touched:
+						votes[m] = 0
+					colors.append(Color(float(best) / 255.0, 0.0, 0.0, 1.0))
 
 	if positions.is_empty():
 		return result
@@ -176,6 +202,8 @@ static func mesh_block(block: PackedByteArray, smooth := SMOOTH, crisp := Packed
 	result["positions"] = positions
 	result["normals"] = normals
 	result["indices"] = indices
+	if has_mats:
+		result["colors"] = colors
 	return result
 
 

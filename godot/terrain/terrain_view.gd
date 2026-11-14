@@ -8,6 +8,7 @@ signal all_meshed
 const Store := preload("res://terrain/voxel_store.gd")
 const Mesher := preload("res://terrain/surface_mesher.gd")
 const TerrainMaterial := preload("res://terrain/terrain_material.gd")
+const DecorView := preload("res://terrain/decor_view.gd")
 
 ## Max meshing tasks running at once.
 @export var max_in_flight := 4
@@ -16,6 +17,8 @@ const TerrainMaterial := preload("res://terrain/terrain_material.gd")
 
 var store: Store
 var material: Material
+## Detail meshes on structures (null on maps without decor).
+var decor: Node3D = null
 
 var _nodes := {}  # chunk index -> MeshInstance3D
 var _dirty := {}  # chunk index -> true, waiting for a free worker slot
@@ -46,6 +49,15 @@ func load_terrain(match_start_terrain: Dictionary) -> bool:
 	if not new_store.load_full(match_start_terrain):
 		return false
 	set_store(new_store)
+	if decor != null:
+		decor.queue_free()
+		decor = null
+	var list: Array = match_start_terrain.get("decor", [])
+	if not list.is_empty():
+		decor = DecorView.new()
+		decor.name = "Decor"
+		add_child(decor)
+		decor.build(list, new_store)
 	return true
 
 
@@ -63,6 +75,8 @@ func apply_patch(msg: Dictionary) -> void:
 	for ci in store.apply_patch(msg):
 		_dirty[ci] = true
 		_busy = true
+	if decor != null:
+		decor.on_patch(msg)
 
 
 ## Chunks still waiting for or running a mesh job.
@@ -89,13 +103,21 @@ func _dispatch() -> void:
 		_serial[ci] = serial
 		_in_flight += 1
 		var dims := Vector3i(store.size_x, store.size_y, store.size_z)
-		WorkerThreadPool.add_task(_mesh_task.bind(ci, serial, store.density, dims))
+		WorkerThreadPool.add_task(_mesh_task.bind(ci, serial, store.density, store.material, dims))
 
 
-func _mesh_task(ci: int, serial: int, snapshot: PackedByteArray, dims: Vector3i) -> void:
+func _mesh_task(
+	ci: int, serial: int, snapshot: PackedByteArray, mat_snapshot: PackedByteArray, dims: Vector3i
+) -> void:
 	var t0 := Time.get_ticks_usec()
 	var block := Store.extract_padded(snapshot, dims.x, dims.y, dims.z, ci)
-	var mesh_data := Mesher.mesh_block(block)
+	var mesh_data: Dictionary
+	if mat_snapshot.is_empty():
+		mesh_data = Mesher.mesh_block(block)
+	else:
+		# Structure materials are both the crisp mask (no smoothing) and the shading ids.
+		var mats := Store.extract_padded(mat_snapshot, dims.x, dims.y, dims.z, ci, 0)
+		mesh_data = Mesher.mesh_block(block, Mesher.SMOOTH, mats, mats)
 	var msec := float(Time.get_ticks_usec() - t0) / 1000.0
 	_mutex.lock()
 	_done.append({"ci": ci, "serial": serial, "mesh": mesh_data, "msec": msec})
@@ -138,6 +160,8 @@ func _swap(ci: int, m: Dictionary) -> void:
 	arrays[Mesh.ARRAY_VERTEX] = m["positions"]
 	arrays[Mesh.ARRAY_NORMAL] = m["normals"]
 	arrays[Mesh.ARRAY_INDEX] = indices
+	if m.has("colors"):
+		arrays[Mesh.ARRAY_COLOR] = m["colors"]
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh.surface_set_material(0, material)

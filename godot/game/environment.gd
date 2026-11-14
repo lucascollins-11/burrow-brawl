@@ -58,9 +58,9 @@ func _build_sky() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.7
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_white = 5.0
+	env.ambient_light_energy = 1.0
+	# Linear keeps the painted colours as bright as they are picked (filmic greys them down).
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	# Glow only for things brighter than white (explosions, the sun), never the whole picture.
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
@@ -78,7 +78,8 @@ func _build_sky() -> void:
 	env.fog_depth_curve = 1.0
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.15
+	env.adjustment_saturation = MapLook.saturation(_look)
+	env.adjustment_contrast = 1.08
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
 	add_child(_world_env)
@@ -95,7 +96,7 @@ func _build_sun() -> void:
 	sun.shadow_bias = 0.05
 	sun.shadow_normal_bias = 1.0
 	# Low warm light from the south-west, so craters and hats throw long shadows.
-	sun.rotation_degrees = Vector3(float(_look.get("sun_pitch", -38.0)), 215.0, 0.0)
+	sun.rotation_degrees = Vector3(float(_look.get("sun_pitch", -38.0)), float(_look.get("sun_yaw", 215.0)), 0.0)
 	add_child(sun)
 
 

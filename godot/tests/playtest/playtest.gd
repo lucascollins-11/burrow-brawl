@@ -16,6 +16,7 @@
 extends Node
 
 const NetScript := preload("res://net/net.gd")
+const Codec := preload("res://terrain/voxel_codec.gd")
 const MATCH_SCENE := "res://game/match_scene.tscn"
 const SCREENS := {
 	"title": "res://ui/title.tscn",
@@ -179,6 +180,10 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _key("skip", 0.1)
 		"camera":
 			return await _camera(s)
+		"view":
+			return await _view(s)
+		"carve":
+			return await _carve(s)
 		"menu":
 			return await _menu(str(s.get("open", "none")))
 		"opponent":
@@ -484,6 +489,69 @@ func _camera(s: Dictionary) -> Dictionary:
 		rig.yaw_deg = float(s["yaw"])
 	await _frames(int(s.get("frames", 6)))
 	return _ok("camera dist %.0f pitch %.0f yaw %.0f" % [rig.dist, rig.pitch_deg, rig.yaw_deg])
+
+
+## {do:view, pos:[x,y,z], at:[x,y,z], fov} puts a free camera at pos looking at `at` (map
+## screenshots); {do:view, off:true} hands the view back to the game camera.
+func _view(s: Dictionary) -> Dictionary:
+	if scene == null:
+		return _fail("no match")
+	var cam := scene.get_node_or_null("PlaytestViewCam") as Camera3D
+	if bool(s.get("off", false)):
+		if cam != null:
+			cam.queue_free()
+		scene.hud.set("visible", true)
+		await _frames(2)
+		return _ok("game camera")
+	if cam == null:
+		cam = Camera3D.new()
+		cam.name = "PlaytestViewCam"
+		cam.far = 4000.0
+		scene.add_child(cam)
+	cam.fov = float(s.get("fov", 55.0))
+	cam.current = true
+	# Clean map shots: hide the HUD unless asked to keep it.
+	scene.hud.set("visible", bool(s.get("hud", false)))
+	var pos: Array = s.get("pos", [256, 200, 600])
+	var at: Array = s.get("at", [256, 40, 256])
+	cam.position = Vector3(pos[0], pos[1], pos[2])
+	cam.look_at(Vector3(at[0], at[1], at[2]))
+	await _frames(int(s.get("frames", 6)))
+	return _ok("view from %s at %s" % [pos, at])
+
+
+## {do:carve, at:[x,y,z], r} - client-only crater for looking at blast damage: carves a ball out
+## of the local terrain copy and feeds it to the view as a terrain.patch (the sim never sees it).
+func _carve(s: Dictionary) -> Dictionary:
+	if scene == null or scene.terrain_view == null:
+		return _fail("no terrain")
+	var tv: Node3D = scene.terrain_view
+	var store: RefCounted = tv.get("store")
+	if store == null:
+		return _fail("no terrain")
+	var at: Array = s.get("at", [256, 40, 256])
+	var r := int(s.get("r", 6))
+	var c := Vector3i(int(at[0]), int(at[1]), int(at[2]))
+	var lo := (c - Vector3i(r + 1, r + 1, r + 1)).max(Vector3i.ZERO)
+	var hi := (c + Vector3i(r + 2, r + 2, r + 2)).min(Vector3i(int(store.get("size_x")), int(store.get("size_y")), int(store.get("size_z"))))
+	var size := hi - lo
+	var bytes := PackedByteArray()
+	bytes.resize(size.x * size.y * size.z)
+	var dens: PackedByteArray = store.get("density")
+	var sx := int(store.get("size_x"))
+	var sz := int(store.get("size_z"))
+	var k := 0
+	for y in range(lo.y, hi.y):
+		for z in range(lo.z, hi.z):
+			for x in range(lo.x, hi.x):
+				var d := Vector3(x - c.x, y - c.y, z - c.z).length()
+				var v: int = dens[(y * sz + z) * sx + x]
+				bytes[k] = 0 if d <= r else v
+				k += 1
+	tv.call("apply_patch", {"x0": lo.x, "y0": lo.y, "z0": lo.z, "sx": size.x, "sy": size.y, "sz": size.z,
+		"density": Codec.encode(bytes)})
+	await _frames(int(s.get("frames", 20)))
+	return _ok("carved r=%d at %s, decor broken %s" % [r, at, tv.get("decor").get("broken") if tv.get("decor") != null else 0])
 
 
 ## {do:menu, open: pause|settings|weapons|none}
