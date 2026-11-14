@@ -1,0 +1,7 @@
+{
+  "about": "The Settings Controls tab with the mouse and controller stick sensitivity sliders and invert-Y.",
+  "steps": [
+    { "do": "screen", "scene": "settings", "tab": 2, "name": "settings-controls" },
+    { "do": "quit" }
+  ]
+}

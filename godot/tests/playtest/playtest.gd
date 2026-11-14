@@ -289,7 +289,7 @@ func _wait_for(until: String, timeout: float) -> Dictionary:
 	return _ok("%s after %.1f s" % [until, (Time.get_ticks_msec() - t) / 1000.0])
 
 
-## {do:screen, scene: title|howto|lobby|settings, page}
+## {do:screen, scene: title|howto|lobby|settings, page (howto), tab (settings)}
 func _screen(s: Dictionary) -> Dictionary:
 	var which := str(s.get("scene", "title"))
 	_close_screen()
@@ -303,6 +303,9 @@ func _screen(s: Dictionary) -> Dictionary:
 		scene.visible = false
 	add_child(screen)
 	await _frames(5)
+	if which == "settings" and s.has("tab"):
+		screen._tabs.current_tab = int(s["tab"])
+		await _frames(2)
 	if which == "howto" and s.has("page") and screen.has_method("_show"):
 		screen.call("_show", int(s["page"]))
 		await _frames(2)

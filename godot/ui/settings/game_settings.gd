@@ -49,6 +49,9 @@ static var vsync := true
 static var quality := 2
 static var sensitivity := 1.0
 static var invert_y := false
+## Controller stick aim speed, separate from the mouse. 1.0 turns the aim about 150 degrees a second
+## with the stick fully over.
+static var stick_sensitivity := 1.0
 ## The last choices made on the practice setup screen ("random" or a theme id; edge in voxels or 0
 ## for the server's default; seconds per turn).
 static var practice_theme := "random"
@@ -91,6 +94,24 @@ static func hint_for(pairs: Array) -> String:
 		var code := int(keys.get(id, action_def(id).get("key", 0)))
 		parts.append("%s %s" % [key_label(code), pair[1]])
 	return " - ".join(parts)
+
+
+## Stick deflection inside this radius is ignored (drift), and the rest is stretched to 0..1.
+const STICK_DEADZONE := 0.18
+## Aim movement per second at full deflection and 1.0x, in the same pixel units as mouse motion.
+const STICK_PIXELS_PER_SECOND := 600.0
+
+
+## Aim movement for one frame from a right-stick reading (-1..1 on each axis): a radial dead zone,
+## a gentle curve so small pushes aim finely, the stick sensitivity, and the invert-Y option.
+static func stick_look(raw: Vector2, dt: float) -> Vector2:
+	var mag := raw.length()
+	if mag <= STICK_DEADZONE:
+		return Vector2.ZERO
+	var strength := clampf((mag - STICK_DEADZONE) / (1.0 - STICK_DEADZONE), 0.0, 1.0)
+	var dir := raw / mag
+	var speed := strength * strength * STICK_PIXELS_PER_SECOND * stick_sensitivity * dt
+	return Vector2(dir.x * speed, dir.y * speed * (-1.0 if invert_y else 1.0))
 
 
 ## Mouse movement scaled by the sensitivity setting, with the vertical axis flipped if asked.
@@ -140,6 +161,7 @@ static func load_file(path: String = PATH) -> void:
 	quality = clampi(int(cfg.get_value("video", "quality", quality)), 0, QUALITIES.size() - 1)
 	sensitivity = clampf(float(cfg.get_value("input", "sensitivity", sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
 	invert_y = bool(cfg.get_value("input", "invert_y", invert_y))
+	stick_sensitivity = clampf(float(cfg.get_value("input", "stick_sensitivity", stick_sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
 	practice_theme = str(cfg.get_value("practice", "theme", practice_theme))
 	practice_size = maxi(0, int(cfg.get_value("practice", "size", practice_size)))
 	practice_turn = clampi(int(cfg.get_value("practice", "turn", practice_turn)), 15, 90)
@@ -159,6 +181,7 @@ static func save_file(path: String = PATH) -> void:
 	cfg.set_value("video", "quality", quality)
 	cfg.set_value("input", "sensitivity", sensitivity)
 	cfg.set_value("input", "invert_y", invert_y)
+	cfg.set_value("input", "stick_sensitivity", stick_sensitivity)
 	cfg.set_value("practice", "theme", practice_theme)
 	cfg.set_value("practice", "size", practice_size)
 	cfg.set_value("practice", "turn", practice_turn)
@@ -176,6 +199,7 @@ static func reset_to_defaults() -> void:
 	vsync = true
 	quality = 2
 	sensitivity = 1.0
+	stick_sensitivity = 1.0
 	invert_y = false
 	keys = default_keys()
 	apply_all()
@@ -237,6 +261,11 @@ static func set_practice(theme_id: String, size: int, turn: int) -> void:
 	practice_theme = theme_id
 	practice_size = maxi(0, size)
 	practice_turn = clampi(turn, 15, 90)
+	save_file()
+
+
+static func set_stick_sensitivity(s: float) -> void:
+	stick_sensitivity = clampf(s, SENSITIVITY_MIN, SENSITIVITY_MAX)
 	save_file()
 
 
