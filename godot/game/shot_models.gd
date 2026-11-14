@@ -22,9 +22,11 @@ static var _mats: Dictionary = {}
 const KNOWN: Array[String] = [
 	"acorn-mortar", "fizz-grenade", "pinecone-popper", "pinecone-seed", "beehive-bomb", "hopper-ball",
 	"firecracker-bundle", "boulder-of-doom", "jelly-mine", "wind-up-robot", "marble-roller", "rc-racer",
-	"kite-bomber",
+	"kite-bomber", "mousetrap-snapper",
 ]
 ## Shots that travel along their own heading: drawn facing it, and animated by `animate`.
+## Placed mines: dropped on the ground, never tumbled.
+const MINES: Array[String] = ["jelly-mine", "mousetrap-snapper"]
 const STEERED: Array[String] = ["wind-up-robot", "marble-roller", "rc-racer", "kite-bomber"]
 
 
@@ -58,6 +60,9 @@ static func make(weapon: String) -> Node3D:
 			trail = {"color": Color(1.0, 0.8, 0.25, 1.0), "size": 0.22, "rate": 60, "life": 0.35, "spark": true}
 		"jelly-mine":
 			_mine(body)
+			trail = {"color": Color(1, 1, 1, 0.0), "size": 0.1, "rate": 1, "life": 0.1, "spark": false}
+		"mousetrap-snapper":
+			_trap(body)
 			trail = {"color": Color(1, 1, 1, 0.0), "size": 0.1, "rate": 1, "life": 0.1, "spark": false}
 		"wind-up-robot":
 			_robot(body)
@@ -230,6 +235,22 @@ static func mine_glow(t: float, armed: bool, triggered: bool) -> float:
 	if not armed:
 		return 0.0
 	return 1.0 if fposmod(t, 1.2) < 0.25 else 0.0
+
+
+## A giant wooden mousetrap with a spring bar and a wedge of cheese on the trigger.
+static func _trap(body: Node3D) -> void:
+	var wood := Color("c99a5b")
+	body.add_child(_mi(_box(3.0, 0.3, 1.9), wood, Vector3(0, 0.15, 0), 0.8))
+	var bar := _mi(_box(2.6, 0.12, 0.12), Color("b8bcc4"), Vector3(0, 0.55, -0.55), 0.2)
+	bar.name = "Bar"
+	body.add_child(bar)
+	for side in [-1.0, 1.0]:
+		body.add_child(_mi(_box(0.1, 0.5, 0.1), Color("b8bcc4"), Vector3(side * 1.3, 0.4, -0.55), 0.2))
+	var cheese := _mi(_box(0.8, 0.4, 0.6), YELLOW, Vector3(0.7, 0.5, 0.5), 0.5)
+	cheese.rotation.y = 0.4
+	body.add_child(cheese)
+	for i in 3:
+		body.add_child(_mi(_sphere(0.1), Color("d9a21f"), Vector3(0.45 + float(i) * 0.25, 0.72, 0.4 + float(i % 2) * 0.2), 0.5))
 
 
 ## A tin wind-up robot: boxy body, round head with an antenna, legs that swing and a key on its back.

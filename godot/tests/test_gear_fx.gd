@@ -247,3 +247,14 @@ func test_trigger_is_a_bindable_action_and_pops_a_shot_in_flight() -> void:
 		if a["id"] != "pause" and a["id"] != "cancel_aim":
 			check(not seen.has(k), "%s has its own default key" % a["id"])
 		seen[k] = true
+
+
+func test_gatling_act_holds_a_spinning_gun() -> void:
+	var gear := GearFx.new()
+	gear.sync([_crit(1, {"act": "gatling", "grounded": true})], 0.05)
+	check_eq(gear.state_of(1).get("act", ""), "gatling", "gatling is drawn")
+	var barrels := gear.get_node("Gear1/Act/Gun/Barrels") as Node3D
+	var before := barrels.rotation.z
+	gear.sync([_crit(1, {"act": "gatling", "grounded": true})], 0.05)
+	check(barrels.rotation.z != before, "the barrels turn")
+	gear.free()

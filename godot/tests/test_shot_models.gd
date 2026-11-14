@@ -53,3 +53,13 @@ func test_steered_shots_face_their_heading_and_move_their_parts() -> void:
 	check(absf(left.rotation.x - right.rotation.x) > 0.1, "the legs swing out of step")
 	robot.free()
 	views.free()
+
+
+func test_mousetrap_is_a_mine_model_and_does_not_tumble() -> void:
+	check(ShotModels.KNOWN.has("mousetrap-snapper"), "has a model")
+	var views := ShotViews.new()
+	views.sync([], [{"id": 3, "weapon": "mousetrap-snapper", "pos": Vector3(1, 1, 1), "armed": true, "triggered": false}])
+	var body := views.get_child(0).get_node("Body") as Node3D
+	check_eq(body.rotation, Vector3.ZERO, "a mine lies still")
+	check(body.get_child_count() > 3, "board, bar and cheese")
+	views.free()

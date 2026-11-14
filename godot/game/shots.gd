@@ -42,7 +42,7 @@ func sync(shots: Array, mines := []) -> void:
 			ShotModels.blink_mine(m, now, bool(p["armed"]), bool(p.get("triggered", false)))
 		# Tumble in flight; the trail particles stay behind in world space.
 		var body := m.get_node_or_null("Body") as Node3D
-		if body != null and str(p["weapon"]) != "jelly-mine" and not ShotModels.STEERED.has(str(p["weapon"])):
+		if body != null and not ShotModels.MINES.has(str(p["weapon"])) and not ShotModels.STEERED.has(str(p["weapon"])):
 			var t := float(Time.get_ticks_msec()) / 1000.0
 			body.rotation = Vector3(t * 3.1 + float(id), t * 4.3, t * 2.2)
 	for id in _nodes.keys():
