@@ -147,6 +147,7 @@ describe("materials and edits", () => {
 
   it("leaves the existing themes without materials or decor", () => {
     for (const th of THEMES) {
+      if (th.id === "lighthouse-village") continue;
       const m = generate(themedRecipe(th.id, 1, MAP_SIZES[0]));
       expect(m.terrain.material).toBeUndefined();
       expect(m.terrain.decor).toBeUndefined();

@@ -9,6 +9,7 @@ import { frostedBakery } from "./frostedBakery.js";
 import { picnicAtoll } from "./picnicAtoll.js";
 import { clockworkMesa } from "./clockworkMesa.js";
 import { toyboxHarbor } from "./toyboxHarbor.js";
+import { lighthouseVillage } from "./lighthouseVillage.js";
 
 export { type Theme, type ThemeCtx } from "./kit.js";
 
@@ -22,6 +23,7 @@ const ALL: readonly Theme[] = [
   frostedBakery,
   bathtubBay,
   gardenPatch,
+  lighthouseVillage,
 ];
 
 /** Themes the lobby can offer. */
@@ -50,7 +52,7 @@ export function themedRecipe(theme: string, seed: number, size: number): MapReci
     generator: THEMED_GENERATOR,
     seed: seed >>> 0,
     sizeX: size,
-    sizeY: 96,
+    sizeY: ALL.find((t) => t.id === theme)?.sizeY ?? 96,
     sizeZ: size,
     theme,
   };

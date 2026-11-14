@@ -720,7 +720,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		var p: Vector3 = active["pos"]
 		goal = {
 			"mode": "aim",
-			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.86, 0) + d * FIRST_PERSON_BACK,
+			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.74, 0) + d * FIRST_PERSON_BACK,
 			"yaw_deg": CameraMath.camera_yaw_for_heading(CameraMath.yaw_to_deg(aim.yaw)),
 			"pitch_deg": -cam_pitch,
 			"dist": FIRST_PERSON_BACK,
