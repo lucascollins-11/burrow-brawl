@@ -157,6 +157,8 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _start(s)
 		"screen":
 			return await _screen(s)
+		"practice_setup":
+			return await _practice_setup(s)
 		"wait":
 			await _seconds(float(s.get("seconds", 1.0)))
 			return _ok()
@@ -214,11 +216,13 @@ func _start(s: Dictionary) -> Dictionary:
 	_close_screen()
 	mode = str(s.get("mode", "match"))
 	opponent = str(s.get("opponent", opponent))
-	a.enter_room("create", str(s.get("name", "Tester")))
+	if not (mode == "practice" and a.lobby.is_active() and a.lobby.code() != ""):
+		a.enter_room("create", str(s.get("name", "Tester")))
 	if not await _until(func() -> bool: return a.lobby.code() != "", 40.0):
 		return _fail("no room was created (server down or asleep?)")
 	if mode == "practice":
-		a.start_practice()
+		# After a practice_setup step the room already holds the chosen map; else use the saved choices.
+		a.start_practice(int(s.get("turn_seconds", GameSettings.practice_turn)))
 	else:
 		b = NetScript.new()
 		b.name = "Rival"
@@ -303,6 +307,37 @@ func _screen(s: Dictionary) -> Dictionary:
 		screen.call("_show", int(s["page"]))
 		await _frames(2)
 	return _ok("showing " + which + ("" if not s.get("keep", false) else " (kept)"))
+
+
+## {do:practice_setup, theme, size, turn_seconds}: open the real practice setup screen (a room is
+## created for it), optionally pick values on it, and leave it showing for a screenshot. A later
+## `start` with mode practice reuses the room.
+func _practice_setup(s: Dictionary) -> Dictionary:
+	_close_screen()
+	if not (a.lobby.is_active() and a.lobby.code() != ""):
+		a.enter_room("create", str(s.get("name", "Tester")))
+		if not await _until(func() -> bool: return a.lobby.code() != "", 40.0):
+			return _fail("no room was created (server down or asleep?)")
+	a.practice_pending = true
+	screen = (load(SCREENS["lobby"]) as PackedScene).instantiate()
+	add_child(screen)
+	await _frames(5)
+	for pair in [["theme", "_theme_pick"], ["size", "_size_pick"], ["turn_seconds", "_turn_pick"]]:
+		if not s.has(pair[0]):
+			continue
+		var pick: OptionButton = screen.get(pair[1])
+		var found := false
+		for i in range(pick.item_count):
+			var have: Variant = pick.get_item_metadata(i)
+			var same: bool = str(have) == str(s[pair[0]]) if have is String else int(have) == int(s[pair[0]])
+			if same:
+				pick.select(i)
+				pick.item_selected.emit(i)
+				found = true
+		if not found:
+			return _fail("no %s choice '%s' on the setup screen" % [pair[0], s[pair[0]]])
+	await _seconds(0.6)
+	return _ok("practice setup showing")
 
 
 func _close_screen() -> void:

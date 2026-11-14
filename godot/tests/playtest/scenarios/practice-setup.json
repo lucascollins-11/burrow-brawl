@@ -1,0 +1,40 @@
+{
+  "about": "The practice setup screen: shots of the defaults and of Lighthouse Village, large map, 60 second turns, then a light theme picked on the same screen and started.",
+  "steps": [
+    {
+      "do": "screen",
+      "scene": "title"
+    },
+    {
+      "do": "practice_setup",
+      "name": "setup-default"
+    },
+    {
+      "do": "practice_setup",
+      "theme": "lighthouse-village",
+      "size": 512,
+      "turn_seconds": 60,
+      "name": "setup-lighthouse"
+    },
+    {
+      "do": "practice_setup",
+      "theme": "toybox-harbor",
+      "size": 256,
+      "turn_seconds": 60,
+      "name": "setup-toybox"
+    },
+    {
+      "do": "start",
+      "mode": "practice",
+      "turn_seconds": 60
+    },
+    {
+      "do": "camera",
+      "focus": "overview",
+      "name": "practice-toybox"
+    },
+    {
+      "do": "quit"
+    }
+  ]
+}
