@@ -73,6 +73,33 @@ func test_settings_round_trip_through_the_file() -> void:
 	_reset()
 
 
+func test_practice_choices_round_trip_and_stay_in_range() -> void:
+	_reset()
+	GameSettings.practice_theme = "lighthouse-village"
+	GameSettings.practice_size = 512
+	GameSettings.practice_turn = 60
+	GameSettings.save_file(TMP)
+	GameSettings.practice_theme = "random"
+	GameSettings.practice_size = 0
+	GameSettings.practice_turn = 90
+	GameSettings.load_file(TMP)
+	check_eq(GameSettings.practice_theme, "lighthouse-village", "theme")
+	check_eq(GameSettings.practice_size, 512, "size")
+	check_eq(GameSettings.practice_turn, 60, "turn")
+	var cfg := ConfigFile.new()
+	cfg.set_value("practice", "turn", 5)
+	cfg.set_value("practice", "size", -4)
+	cfg.save(TMP)
+	GameSettings.load_file(TMP)
+	check_eq(GameSettings.practice_turn, 15, "turn is clamped")
+	check_eq(GameSettings.practice_size, 0, "size is clamped")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+	GameSettings.practice_theme = "random"
+	GameSettings.practice_size = 0
+	GameSettings.practice_turn = 90
+	_reset()
+
+
 func test_mouse_scaling_follows_sensitivity_and_invert() -> void:
 	_reset()
 	GameSettings.sensitivity = 2.0

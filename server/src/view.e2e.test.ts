@@ -94,6 +94,20 @@ describe("practice", () => {
     expect(runner.matchState.sim.critters.filter((c) => c.team === 1)).toHaveLength(3);
   });
 
+  it("uses the turn time the host picks, and the room's map settings", async () => {
+    h = await startHarness();
+    const vc = await connectView(h, "Solo");
+    vc.send({ t: "room.create" });
+    const { code } = await vc.room();
+    expect(
+      await vc.request({ t: "lobby.setSettings", patch: { mapTheme: "lighthouse-village", mapSize: 512 } }),
+    ).toMatchObject({ t: "ok" });
+    expect(await vc.request({ t: "lobby.practice", turnSeconds: 30 })).toMatchObject({ t: "ok" });
+    const runner = h.server.registry.get(code)!.match!;
+    expect(runner.config.turnTicks).toBe(30 * 60);
+    expect(runner.config.map).toMatchObject({ theme: "lighthouse-village" });
+  });
+
   it("is refused when someone else is in the room", async () => {
     h = await startHarness();
     const vc = await connectView(h, "Host");

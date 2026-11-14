@@ -191,8 +191,11 @@ export type ClientMessage =
   | { t: "lobby.ready"; seq?: number; ready: boolean }
   | { t: "lobby.kick"; seq?: number; memberId: string }
   | { t: "lobby.start"; seq?: number }
-  /** Host, alone in the room: start a practice match against still target dummies. */
-  | { t: "lobby.practice"; seq?: number }
+  /**
+   * Host, alone in the room: start a practice match against still target dummies. The room's map
+   * settings apply; `turnSeconds` overrides the long default practice turn (15..90).
+   */
+  | { t: "lobby.practice"; seq?: number; turnSeconds?: number }
   | { t: "match.rematch"; seq?: number }
   | { t: "chat"; seq?: number; text: string }
   | { t: "ping"; seq?: number; clientTime: number }
@@ -257,7 +260,7 @@ const ALLOWED_KEYS: Record<ClientMessageType, readonly string[]> = {
   "lobby.ready": ["ready"],
   "lobby.kick": ["memberId"],
   "lobby.start": [],
-  "lobby.practice": [],
+  "lobby.practice": ["turnSeconds"],
   "match.rematch": [],
   chat: ["text"],
   ping: ["clientTime"],
@@ -422,6 +425,11 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
     case "lobby.kick":
       if (!isStr(raw.memberId, ID_MAX)) return bad("bad memberId");
       return ok();
+    case "lobby.practice":
+      if (raw.turnSeconds !== undefined && !isInt(raw.turnSeconds, 15, 90)) {
+        return bad("bad turnSeconds");
+      }
+      return ok();
     case "chat":
       if (!isStr(raw.text, CHAT_MAX * 2)) return bad("bad text");
       return ok();
@@ -443,7 +451,6 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
     case "room.sync":
     case "lobby.addTeam":
     case "lobby.start":
-    case "lobby.practice":
     case "match.rematch":
       return ok();
   }
