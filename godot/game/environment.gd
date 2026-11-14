@@ -34,6 +34,11 @@ func setup(size_x: float, size_z: float, sea_y: float, ground_y: Callable, look:
 	_build_streamers(ground_y, sea_y)
 
 
+## Distance from the camera where the haze starts: the map's longest side, so the whole map stays clear.
+static func fog_begin(size_x: float, size_z: float) -> float:
+	return maxf(size_x, size_z)
+
+
 func set_sea_y(y: float) -> void:
 	if sea != null:
 		sea.position.y = y
@@ -61,10 +66,16 @@ func _build_sky() -> void:
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.0
 	env.glow_hdr_threshold = 1.2
-	# A light warm haze far away. It must not paint over the sky or the near island.
+	# A light warm haze far away. It must not paint over the sky or the near island: depth fog that
+	# starts past the far edge of the map, so even the overview camera sees the island clearly.
+	# (Exponential fog from the camera washed the whole island out in distant shots.)
 	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_light_color = MapLook.color(_look, "fog")
-	env.fog_density = 0.0003
+	env.fog_density = 0.6
+	env.fog_depth_begin = fog_begin(_size_x, _size_z)
+	env.fog_depth_end = env.fog_depth_begin + 1200.0
+	env.fog_depth_curve = 1.0
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.15
@@ -99,6 +110,8 @@ func _build_sea(sea_y: float) -> void:
 	sea.material_override = preload("res://terrain/sea_material.gd").make(
 		MapLook.color(_look, "sea_shallow"), MapLook.color(_look, "sea_deep"), MapLook.color(_look, "sea_horizon")
 	)
+	# The sea fades to the horizon colour only beyond the map, not across the water next to it.
+	(sea.material_override as ShaderMaterial).set_shader_parameter("horizon_start", fog_begin(_size_x, _size_z))
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	sea.position = Vector3(_size_x * 0.5, sea_y, _size_z * 0.5)
 	add_child(sea)
