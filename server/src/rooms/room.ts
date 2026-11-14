@@ -359,7 +359,7 @@ export class Room {
         const mine = this.teams.find((t) => t.controllerId === id);
         const dummies = this.teams.find((t) => t.controllerId === null);
         if (this.members.size !== 1 || !mine || !dummies) return "not_allowed";
-        this.startMatch({ dummies: dummies.id });
+        this.startMatch({ dummies: dummies.id, turnSeconds: msg.turnSeconds });
         return null;
       }
     }
@@ -374,7 +374,7 @@ export class Room {
    * Start the match with every controlled team. `practice.dummies` adds that uncontrolled team as
    * target dummies: nobody controls it, so the runner skips its turns.
    */
-  private startMatch(practice?: { dummies: string }): void {
+  private startMatch(practice?: { dummies: string; turnSeconds?: number | undefined }): void {
     const teams = this.teams.filter((t) => t.controllerId !== null || t.id === practice?.dummies);
     let config = MatchRunner.configFor(this.settings, teams.length);
     if (practice) {
@@ -383,7 +383,7 @@ export class Room {
         practice: true,
         dummyTeam: teams.findIndex((t) => t.id === practice.dummies),
         teamSizes: teams.map((t) => (t.id === practice.dummies ? PRACTICE_DUMMIES : 1)),
-        turnTicks: PRACTICE_TURN_SECONDS * TICKS_PER_SECOND,
+        turnTicks: (practice.turnSeconds ?? PRACTICE_TURN_SECONDS) * TICKS_PER_SECOND,
         windMax: 0,
       };
     }

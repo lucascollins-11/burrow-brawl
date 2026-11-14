@@ -49,6 +49,11 @@ static var vsync := true
 static var quality := 2
 static var sensitivity := 1.0
 static var invert_y := false
+## The last choices made on the practice setup screen ("random" or a theme id; edge in voxels or 0
+## for the server's default; seconds per turn).
+static var practice_theme := "random"
+static var practice_size := 0
+static var practice_turn := 90
 ## action id -> physical keycode of the main binding.
 static var keys: Dictionary = {}
 static var _booted := false
@@ -135,6 +140,9 @@ static func load_file(path: String = PATH) -> void:
 	quality = clampi(int(cfg.get_value("video", "quality", quality)), 0, QUALITIES.size() - 1)
 	sensitivity = clampf(float(cfg.get_value("input", "sensitivity", sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
 	invert_y = bool(cfg.get_value("input", "invert_y", invert_y))
+	practice_theme = str(cfg.get_value("practice", "theme", practice_theme))
+	practice_size = maxi(0, int(cfg.get_value("practice", "size", practice_size)))
+	practice_turn = clampi(int(cfg.get_value("practice", "turn", practice_turn)), 15, 90)
 	for a in ACTIONS:
 		var id: String = a["id"]
 		keys[id] = int(cfg.get_value("keys", id, keys[id]))
@@ -151,6 +159,9 @@ static func save_file(path: String = PATH) -> void:
 	cfg.set_value("video", "quality", quality)
 	cfg.set_value("input", "sensitivity", sensitivity)
 	cfg.set_value("input", "invert_y", invert_y)
+	cfg.set_value("practice", "theme", practice_theme)
+	cfg.set_value("practice", "size", practice_size)
+	cfg.set_value("practice", "turn", practice_turn)
 	for id in keys:
 		cfg.set_value("keys", id, keys[id])
 	cfg.save(path)  # best effort; a read-only disk just forgets the settings
@@ -218,6 +229,14 @@ static func set_quality(q: int) -> void:
 
 static func set_sensitivity(s: float) -> void:
 	sensitivity = clampf(s, SENSITIVITY_MIN, SENSITIVITY_MAX)
+	save_file()
+
+
+## Remember the practice setup choices.
+static func set_practice(theme_id: String, size: int, turn: int) -> void:
+	practice_theme = theme_id
+	practice_size = maxi(0, size)
+	practice_turn = clampi(turn, 15, 90)
 	save_file()
 
 
