@@ -28,6 +28,7 @@ const ACTIONS: Array[Dictionary] = [
 	{"id": "fuse_down", "label": "Shorter fuse", "key": KEY_Z, "alt": 0, "group": "Fight"},
 	{"id": "fuse_up", "label": "Longer fuse", "key": KEY_X, "alt": 0, "group": "Fight"},
 	{"id": "skip", "label": "Skip turn", "key": KEY_BACKSPACE, "alt": 0, "group": "Turn"},
+	{"id": "skip_follow", "label": "Skip the camera follow", "key": KEY_C, "alt": 0, "group": "Turn"},
 	{"id": "pause", "label": "Pause menu", "key": KEY_ESCAPE, "alt": 0, "group": "Turn"},
 ]
 

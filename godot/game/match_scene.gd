@@ -26,6 +26,8 @@ const BLAST_HOLD_S := 1.4
 ## Aiming is first person: the camera sits at the head. Below this rig distance the body is hidden.
 const FIRST_PERSON_BACK := 6.0
 const FIRST_PERSON_DIST := 12.0
+## Closest the terrain check may pull the camera to its target.
+const MIN_CAMERA_DIST := 7.0
 const HINT_WATCH := "Watching. Hold tight."
 const HINT_EMPTY := "Out of ammo for this one. Pick another weapon."
 
@@ -48,6 +50,13 @@ var _critters: Dictionary = {}  # id -> Node3D
 var _rig := CameraMath.RigState.new()
 var _blast_at := Vector3.ZERO
 var _blast_left := 0.0
+## The player pressed "skip the camera follow" for the shot or blast on screen.
+var _follow_skipped := false
+## True while the camera is following a shot or holding on its blast (for the hint).
+var _following := false
+## How far from its target the camera may sit now: pulled in at once when terrain gets in the way,
+## eased back out when it clears (see _update_camera).
+var _cam_pull := 1.0e9
 var _marker: MeshInstance3D
 var _target_ring: MeshInstance3D
 var _time := 0.0
@@ -208,6 +217,8 @@ func ground_y(x: float, z: float) -> float:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if ev.is_action_pressed("skip_follow"):
+		_follow_skipped = _following
 	if ev.is_action_pressed("pause") and controls.aim == null:
 		# Pause closes an open weapon grid first, so the two never show together.
 		if not pause.is_open() and hud.close_grid():
@@ -262,16 +273,18 @@ func _setup_guide(practice: bool) -> void:
 	_guide_layer = layer
 	var panel := PanelContainer.new()
 	panel.theme = MenuStyle.theme()
-	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.offset_top = 104.0
+	# Docked at the left under the wind gauge, small, so it stays off the play area.
+	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	panel.offset_left = 10.0
+	panel.offset_top = 142.0
+	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.CREAM, 12, 3, 4, 2))
 	layer.add_child(panel)
 	_guide_label = Label.new()
-	_guide_label.add_theme_font_size_override("font_size", 22)
-	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_guide_label.add_theme_font_size_override("font_size", 16)
+	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	# Long prompts wrap inside a capped width instead of running off the screen.
 	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_guide_label.custom_minimum_size.x = minf(860.0, get_viewport().get_visible_rect().size.x - 80.0)
+	_guide_label.custom_minimum_size.x = minf(300.0, get_viewport().get_visible_rect().size.x - 80.0)
 	panel.add_child(_guide_label)
 	_spot = TutorialSpotlight.new()
 	layer.add_child(_spot)
@@ -415,6 +428,8 @@ func _process(dt: float) -> void:
 	env.set_sea_y(vm.sea_y)
 	env.update(dt, v["wind"])
 	var hint := HINT_WATCH
+	if _following and not _follow_skipped:
+		hint = GameSettings.hint_for([["skip_follow", "skip the camera follow"]])
 	if v["my_turn"] and _steering(v):
 		hint = _hint_steer()
 	elif v["my_turn"] and v["phase"] != "settling":
@@ -615,6 +630,21 @@ func _hidden_by_terrain(from: Vector3, to: Vector3) -> bool:
 	return false
 
 
+## How far along the line from `target` to `pos` the camera can go before the ground rises above
+## the line (the target's own surroundings are skipped); at least MIN_CAMERA_DIST.
+func _clear_distance(target: Vector3, pos: Vector3) -> float:
+	var span := target.distance_to(pos)
+	var steps := 28
+	for i in range(1, steps + 1):
+		var t := float(i) / float(steps)
+		var p := target.lerp(pos, t)
+		if p.x < 0.0 or p.z < 0.0 or p.x >= _world.x or p.z >= _world.y:
+			continue
+		if p.y < ground_y(p.x, p.z) + 1.5:
+			return clampf(span * (t - 1.0 / float(steps)) - 1.5, minf(MIN_CAMERA_DIST, span), span)
+	return span
+
+
 func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState, mouse: Dictionary, dt: float) -> void:
 	if aim == null:
 		_rig = CameraMath.drag_orbit(_rig, float(mouse["dx"]), float(mouse["dy"]))
@@ -625,6 +655,13 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	var shot_list: Array = (v["projectiles"] as Array).filter(
 		func(p: Dictionary) -> bool: return str(p["weapon"]) != "jelly-mine"
 	)
+	_following = not shot_list.is_empty() or _blast_left > 0.0
+	if not _following:
+		_follow_skipped = false
+	elif _follow_skipped:
+		# Skipped: back to the active critter at once, not after the shot lands.
+		shot_list = []
+		_blast_left = 0.0
 	if not shot_list.is_empty():
 		goal = {"mode": "follow", "target": shot_list[0]["pos"], "dist": 38.0}
 	elif _blast_left > 0.0:
@@ -660,6 +697,18 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		}
 	_rig = CameraMath.step_rig(_rig, goal, dt)
 	var pos := CameraMath.rig_position(_rig)
+	if _rig.mode != "aim":
+		# Keep the camera out of hills: pull it in along the line to its target when ground is in
+		# the way (at once), and let it back out slowly once the way is clear.
+		var span := pos.distance_to(_rig.target)
+		_cam_pull = minf(_cam_pull, span)
+		var allowed := _clear_distance(_rig.target, pos)
+		if allowed < _cam_pull:
+			_cam_pull = allowed
+		else:
+			_cam_pull = lerpf(_cam_pull, allowed, CameraMath.smoothing(3.0, dt))
+		if _cam_pull < span:
+			pos = _rig.target + (pos - _rig.target).normalized() * _cam_pull
 	# Never let the camera sink under the ground or the soda.
 	pos.y = maxf(pos.y, maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0))
 	fx.listener = camera.position

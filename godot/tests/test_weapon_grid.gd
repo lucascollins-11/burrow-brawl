@@ -66,3 +66,11 @@ func test_the_grid_never_grows_taller_than_the_screen() -> void:
 	var tall := WeaponGrid.max_grid_height(720.0)
 	check(tall + 44.0 + 50.0 + WeaponGrid.MARGIN_BELOW + WeaponGrid.MARGIN_ABOVE <= 720.0, "fits 1280x720 with the bar and banner")
 	check(WeaponGrid.max_grid_height(300.0) >= 120.0, "tiny windows still get a scrolling strip")
+
+
+func test_long_names_break_in_two_at_the_middle_space() -> void:
+	check_eq(WeaponGrid.two_lines("Paper Plane Seeker"), "Paper Plane\nSeeker", "breaks near the middle")
+	check_eq(WeaponGrid.two_lines("Marble Meteor Shower"), "Marble Meteor\nShower", "three words")
+	check_eq(WeaponGrid.two_lines("Slingshot"), "Slingshot", "short names stay on one line")
+	check_eq(WeaponGrid.two_lines("Acorn Mortar"), "Acorn\nMortar", "twelve letters also fit better on two lines")
+	check_eq(WeaponGrid.two_lines("Supercalifragilistic"), "Supercalifragilistic", "no space, no break")
