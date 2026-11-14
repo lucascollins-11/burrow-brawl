@@ -9,13 +9,17 @@ extends PanelContainer
 signal picked(id: String)
 
 const COLUMNS := 8
-const TILE := Vector2(104, 92)
+const TILE := Vector2(112, 92)
+## Room kept free around the grid: the bottom bar below it, the banner and team bars above.
+const MARGIN_BELOW := 84.0
+const MARGIN_ABOVE := 70.0
 
 var _ammo: Dictionary = {}  # id -> count, -1 is unlimited
 var _current := ""
 var _tiles: Dictionary = {}  # id -> Button
 var _desc: Label
 var _grid: GridContainer
+var _scroll: ScrollContainer
 
 
 func _ready() -> void:
@@ -24,12 +28,15 @@ func _ready() -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	add_child(col)
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	col.add_child(_scroll)
 	var grid := GridContainer.new()
 	_grid = grid
 	grid.columns = COLUMNS
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
-	col.add_child(grid)
+	_scroll.add_child(grid)
 	for it in WeaponCatalog.ordered():
 		var b := _make_tile(it)
 		grid.add_child(b)
@@ -40,6 +47,7 @@ func _ready() -> void:
 	_desc.add_theme_font_size_override("font_size", 16)
 	col.add_child(_desc)
 	_refresh()
+	get_viewport().size_changed.connect(_fit)
 
 
 func _make_tile(it: Dictionary) -> Button:
@@ -75,7 +83,7 @@ func _make_tile(it: Dictionary) -> Button:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.add_theme_font_size_override("font_size", 11 if str(it["name"]).length() <= 12 else 10)
 	name_label.add_theme_constant_override("line_spacing", -2)
 	name_label.clip_text = true
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -128,8 +136,22 @@ func is_available(id: String) -> bool:
 	return int(_ammo.get(id, 0)) != 0
 
 
+## Tallest the panel may be: the screen minus the bar below and the banner above, minus the
+## description line and the panel's own padding. A taller grid scrolls instead of leaving the screen.
+static func max_grid_height(screen_h: float) -> float:
+	return maxf(120.0, screen_h - MARGIN_BELOW - MARGIN_ABOVE - 44.0 - 50.0)
+
+
+func _fit() -> void:
+	if _scroll == null or _grid == null or not is_inside_tree():
+		return
+	var want := _grid.get_combined_minimum_size().y
+	_scroll.custom_minimum_size = Vector2(_grid.get_combined_minimum_size().x + 4.0, minf(want, max_grid_height(get_viewport_rect().size.y)))
+
+
 func open() -> void:
 	visible = true
+	_fit()
 	var first: Control = _tiles.get(_current if _current != "" else "acorn-mortar")
 	if first != null and first.is_inside_tree():
 		first.grab_focus()
@@ -180,6 +202,7 @@ func _refresh() -> void:
 		# its new minimum size in its grow directions.
 		offset_left = offset_right
 		offset_top = offset_bottom
+		_fit()
 
 
 ## Columns for a grid of `count` tiles: a compact block for a few, the full width for many.

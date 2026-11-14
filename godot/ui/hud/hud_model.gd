@@ -78,7 +78,7 @@ static func turn_banner(v: Dictionary) -> String:
 	if v["phase"] == "over":
 		if winner == null:
 			return "Draw!"
-		return "%s wins!" % TeamStyle.name_of(int(winner))
+		return "%s wins!" % _team_name(v, int(winner))
 	var team := ""
 	if v["active_team"] != null:
 		team = _team_name(v, int(v["active_team"]))
