@@ -34,6 +34,15 @@ const LOOKS := {
 		"sun": "ffc48a", "sun_energy": 1.45, "sun_pitch": -28.0, "fog": "e8a6a0",
 		"cloud": "ffd9c9", "debris": "9c7a2b",
 	},
+	# Soap bars and a sponge in a steamy bathtub: porcelain blues, pink foam, warm light.
+	"bathtub-bay": {
+		"grass": "bfe8f2", "grass_dark": "7fc7dc", "soil": "f4e4f0", "rock": "9ab8d4",
+		"sand": "fff3d6", "bedrock": "5a6a8c",
+		"sea_shallow": "b8f4ff", "sea_deep": "2a9fd0", "sea_horizon": "e8fbff",
+		"sky_top": "7fc8f8", "sky_horizon": "fff1e0", "sky_bottom": "d6ecf5",
+		"sun": "fff6e0", "sun_energy": 1.5, "sun_pitch": -50.0, "fog": "e6f7ff",
+		"cloud": "ffffff", "debris": "f4e4f0",
+	},
 	# Icing on sponge cake in strawberry soda.
 	"frosted-bakery": {
 		"grass": "fff6f0", "grass_dark": "ffd6e3", "soil": "e8b56b", "rock": "b5763f",

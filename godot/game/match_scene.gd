@@ -35,6 +35,7 @@ var fx: MatchEffects
 var shots: ShotViews
 var crates: CrateViews
 var gear: GearFx
+var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
 
@@ -84,6 +85,9 @@ func _ready() -> void:
 	gear = GearFx.new()
 	gear.name = "Gear"
 	add_child(gear)
+	zones = ZoneViews.new()
+	zones.name = "Zones"
+	add_child(zones)
 	crates.name = "Crates"
 	crates.landed.connect(func(at: Vector3) -> void: fx.dust(at, 2.4))
 	add_child(crates)
@@ -136,6 +140,7 @@ func handle_match_start(msg: Dictionary) -> void:
 	_clear_critters()
 	shots.clear()
 	gear.clear()
+	zones.clear()
 	crates.clear()
 	_crates_seen = false
 	vm.set_teams(_teams_from_net(msg.get("teamIds", [])))
@@ -364,6 +369,7 @@ func _process(dt: float) -> void:
 	_sync_critters(v, active, aim, dt)
 	shots.sync(v["projectiles"], v["mines"])
 	gear.sync(v["critters"], dt)
+	zones.sync(v["zones"], dt)
 	crates.sync(v["crates"], dt, _crates_seen)
 	_crates_seen = true
 	_update_marker(v, active, aim)
@@ -440,6 +446,11 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var popped := _find(v["critters"], int(e.get("critterId", -1)))
 			if not popped.is_empty():
 				fx.burst((popped["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0), Color("8fd8ff"))
+		elif kind == "frozen" or kind == "thawed":
+			var iced := _find(v["critters"], int(e.get("critterId", -1)))
+			if not iced.is_empty():
+				var mid := (iced["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
+				fx.burst(mid, Color("bfe9ff"))
 		elif kind == "healed":
 			var healed := _find(v["critters"], int(e.get("critterId", -1)))
 			if not healed.is_empty():

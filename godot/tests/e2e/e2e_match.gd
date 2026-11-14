@@ -17,6 +17,9 @@ var a: Node
 var b: Node
 var scene: Node
 var shots_dir := ""
+## --theme=<id> picks the map theme; --tour stops after the first-turn screenshots (a map preview).
+var theme := "toybox-harbor"
+var tour := false
 var b_state: Dictionary = {}
 var a_patches := 0
 var b_patches := 0
@@ -29,6 +32,10 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shots="):
 			shots_dir = arg.trim_prefix("--shots=")
+		if arg.begins_with("--theme="):
+			theme = arg.trim_prefix("--theme=")
+		if arg == "--tour":
+			tour = true
 	if shots_dir != "":
 		DirAccess.make_dir_recursive_absolute(shots_dir)
 	a = get_node("/root/Net")
@@ -68,7 +75,7 @@ func _run() -> bool:
 		return false
 
 	# Short turns and a fixed map, as in the server's own two-player tests.
-	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": "toybox-harbor", "mapSize": 256}})
+	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": theme, "mapSize": 256}})
 	a.set_ready(true)
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
@@ -116,6 +123,13 @@ func _run() -> bool:
 	if not v["my_turn"]:
 		return _fail("turn 1 should be A's (team 0); local teams are %s" % [scene.vm.local_teams])
 	await _shot("1-start")
+	if tour:
+		# A look from above at the whole island, then done.
+		scene._rig.dist = 160.0
+		scene._rig.pitch_deg = 50.0
+		await _shot("overview", 6)
+		print("E2E ok: tour of ", theme)
+		return true
 
 	# A fires an acorn mortar toward the middle of the island.
 	var me: Dictionary = {}
@@ -141,8 +155,8 @@ func _run() -> bool:
 	# The software renderer takes seconds per frame and particles run on the clock, so slow the
 	# clock right down while the blast is photographed or it is over before the first frame.
 	Engine.time_scale = 0.03
-	scene.fx.explode(rig.target, 9.0)
-	await _shot("2b-blast", 4)
+	scene.fx.explode(rig.target, 12.0)
+	await _shot("2b-blast", 6)
 	Engine.time_scale = 1.0
 	var sea: float = scene.vm.sea_y
 	var mid: Vector2 = scene.get("_world")
@@ -232,6 +246,8 @@ func _fail(why: String) -> bool:
 ## Build a menu screen on top of the test for a few frames (and a screenshot), then remove it
 ## before the next step, so its own scene changes never fire.
 func _preview(scene_path: String, shot_name: String) -> void:
+	if tour:
+		return
 	var screen: Node = (load(scene_path) as PackedScene).instantiate()
 	add_child(screen)
 	for i in 5:
@@ -301,7 +317,7 @@ func _shot(shot_name: String, frames := 5) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
-	var path := shots_dir.path_join(shot_name + ".png")
+	var path := shots_dir.path_join((theme + "-" if tour else "") + shot_name + ".png")
 	if img == null or img.save_png(path) != OK:
 		print("E2E could not save ", path)
 	else:
@@ -337,6 +353,29 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 			"grounded": grounded, "act": acts[i], "shield": acts[i] == "rope", "anchor": twin.position + Vector3(6, 26, 0)
 		}
 		list.append(c)
+	# A fire puddle and a glue puddle, and the ice shell and feather glow on two more stand-ins.
+	var zone_list: Array = []
+	for i in 2:
+		var zat: Vector3 = (me["pos"] as Vector3) + right * (-9.0 + 18.0 * float(i)) + forward * 14.0
+		zat.y = scene.ground_y(zat.x, zat.z)
+		zone_list.append({"id": 1 + i, "kind": "fire" if i == 0 else "glue", "pos": zat, "r": 5.0, "turns": 2})
+	var zones := ZoneViews.new()
+	scene.add_child(zones)
+	for i in 2:
+		var zat: Vector3 = (me["pos"] as Vector3) + right * (-5.0 + 10.0 * float(i)) - forward * 8.0
+		zat.y = scene.ground_y(zat.x, zat.z)
+		var twin2 := Squirmling.create(1, "chef", Color("4aa3df"))
+		twin2.position = zat
+		twin2.rotation.y = rig.rotation.y
+		scene.add_child(twin2)
+		twin2.drive(0.016, false, Vector3.ZERO, true)
+		crowd.append(twin2)
+		list.append(
+			{
+				"id": 910 + i, "pos": zat, "heading_deg": rad_to_deg(rig.rotation.y), "alive": true,
+				"grounded": true, "act": "", "frozen": i == 0, "feather": i == 1
+			}
+		)
 	var mines: Array = []
 	for i in 2:
 		var at: Vector3 = (me["pos"] as Vector3) + right * (-3.0 + 6.0 * float(i)) + forward * 7.0
@@ -347,11 +386,18 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	for i in 4:
 		gear.sync(list, 0.05)
 		views.sync([], mines)
+		zones.sync(zone_list, 0.05)
 		await get_tree().process_frame
 	await _shot("1g-gear", 3)
 	for c: Dictionary in list:
 		c["act"] = ""
 		c["shield"] = false
+	gear.sync(list, 0.05)
+	if not (gear.state_of(910)["frozen"] and gear.state_of(911)["feather"]):
+		errors.append("the ice shell or the feather glow is missing")
+	for c: Dictionary in list:
+		c["frozen"] = false
+		c["feather"] = false
 	gear.sync(list, 0.05)
 	if not gear.state_of(900).is_empty():
 		errors.append("gear stayed after the acts ended")
@@ -362,4 +408,6 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	gear.queue_free()
 	scene.remove_child(views)
 	views.queue_free()
+	scene.remove_child(zones)
+	zones.queue_free()
 	print("E2E ok: gear and mines")
