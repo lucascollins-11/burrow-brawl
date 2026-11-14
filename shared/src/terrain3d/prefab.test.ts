@@ -145,9 +145,10 @@ describe("materials and edits", () => {
     expect(t.material![at(t, 16, 16, 22)]).toBe(MAT_PLASTER);
   });
 
-  it("leaves the existing themes without materials or decor", () => {
+  it("leaves the not-yet-upgraded themes without materials or decor", () => {
+    const upgraded = ["lighthouse-village", "toybox-harbor"];
     for (const th of THEMES) {
-      if (th.id === "lighthouse-village") continue;
+      if (upgraded.includes(th.id)) continue;
       const m = generate(themedRecipe(th.id, 1, MAP_SIZES[0]));
       expect(m.terrain.material).toBeUndefined();
       expect(m.terrain.decor).toBeUndefined();

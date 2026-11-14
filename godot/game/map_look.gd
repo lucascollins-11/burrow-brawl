@@ -18,6 +18,8 @@ const LOOKS := {
 	},
 	# Painted wooden blocks in a bathtub harbour: play-mat tops, red and blue sides, clear noon.
 	"toybox-harbor": {
+		# Structure palette: material id -> colour (see paint_terrain). Primary-colour toy plastic.
+		"materials": {1: "ffe066", 2: "e89a3a", 3: "e8473a", 5: "e8473a", 6: "f2b860", 10: "3f7fd8", 14: "3f7fd8", 15: "ffcf33", 4: "9fc4ea"},
 		"grass": "f4c542", "grass_dark": "e59a2e", "soil": "d9503f", "rock": "3f7fc4",
 		"sand": "fbe9b8", "bedrock": "2d3a66",
 		"sea_shallow": "8fe8ff", "sea_deep": "1f63b5", "sea_horizon": "d6f1ff",
@@ -109,6 +111,15 @@ static func paint_terrain(mat: ShaderMaterial, look: Dictionary) -> void:
 	mat.set_shader_parameter("grass_lip", Color(str(look["grass_lip"])) if look.has("grass_lip") else lip)
 	mat.set_shader_parameter("rock_band", Color(str(look["rock_band"])) if look.has("rock_band") else band)
 	mat.set_shader_parameter("shadow_tint", Color(str(look.get("shadow", "6a5acd"))))
+	# Structure palette: material id -> colour, for themes that recolour the building kit.
+	var pal := PackedColorArray()
+	pal.resize(16)
+	pal.fill(Color(0, 0, 0, 0))  # alpha 0: keep the built-in colour
+	var mats: Dictionary = look.get("materials", {})
+	for id in mats:
+		pal[int(id)] = Color(str(mats[id]))
+	mat.set_shader_parameter("use_palette", not mats.is_empty())
+	mat.set_shader_parameter("palette", pal)
 
 
 ## Colour saturation for the whole picture. Bright themes get a Storybook boost; pastel and already

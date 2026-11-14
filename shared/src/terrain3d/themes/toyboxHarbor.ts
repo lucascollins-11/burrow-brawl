@@ -1,240 +1,219 @@
-import { isqrt } from "../../fixed.js";
+// Toybox Harbor: a block harbour split by a channel. Two flat, square-edged block halves, a raised
+// tier in the north-west and a step in the east; the Block Keep is built across the channel and
+// its ground floor is the passage between the halves. Houses stack on each other like building
+// blocks, a long pier arm runs south with moored boats and a crane, and bridged islets ring it all.
+// Everything is voxels with detail anchors, so it all comes apart under fire.
+import { NX, NZ, PX, PZ, PrefabBuilder, UP } from "../build/builder.js";
+import { house, type HouseSpec } from "../build/house.js";
+import { crane, plankBridge, stairFlight } from "../build/pieces.js";
 import {
-  fillFromHeightField,
-  scatterObjects,
-  type Rect,
-  type Theme,
-  type ThemeCtx,
-} from "./kit.js";
+  MAT_PAINT_BLUE,
+  MAT_PAINT_RED,
+  MAT_PAINT_WHITE,
+  MAT_PAINT_YELLOW,
+  MAT_PLANKS,
+  MAT_TIMBER,
+} from "../materials.js";
+import type { Prefab } from "../prefab.js";
+import type { Theme, ThemeCtx } from "./kit.js";
+import {
+  clear,
+  faceDisc,
+  lamps,
+  put,
+  roundFloors,
+  shape,
+  towerWindows,
+  withIslets,
+} from "./layout.js";
 
-// Toybox Harbor: square-edged block islands around a long quay, joined by toy-train bridges.
-// A jack-in-the-box and a crane stand on the quay, alphabet-block stacks and stepped tiers on the
-// islands. Everything is boxes and spheres, so it all comes apart under fire.
+/** Building-block houses: primary colours, play-mat roofs. */
+const HOUSES: readonly Omit<HouseSpec, "id">[] = [
+  {
+    w: 20,
+    d: 18,
+    storeys: 2,
+    wall: MAT_PAINT_YELLOW,
+    trim: MAT_PAINT_RED,
+    base: MAT_PAINT_BLUE,
+    roof: "gable-x",
+    roofMat: MAT_PAINT_RED,
+    chimney: true,
+  },
+  {
+    w: 22,
+    d: 18,
+    storeys: 3,
+    wall: MAT_PAINT_BLUE,
+    trim: MAT_PAINT_WHITE,
+    base: MAT_PAINT_RED,
+    roof: "hip",
+    roofMat: MAT_PAINT_YELLOW,
+    balcony: 2,
+  },
+  {
+    w: 20,
+    d: 18,
+    storeys: 2,
+    wall: MAT_PAINT_RED,
+    trim: MAT_PAINT_YELLOW,
+    base: MAT_PAINT_BLUE,
+    roof: "gable-z",
+    roofMat: MAT_PAINT_BLUE,
+    shop: true,
+    sign: "sign-chandler",
+  },
+  {
+    w: 22,
+    d: 18,
+    storeys: 2,
+    wall: MAT_PAINT_WHITE,
+    trim: MAT_PAINT_BLUE,
+    base: MAT_PAINT_RED,
+    roof: "flat",
+    roofMat: MAT_PAINT_YELLOW,
+    garden: true,
+  },
+];
 
-const SEABED = 9;
-
-interface Platform extends Rect {
-  top: number;
-  quay: boolean;
+function home(i: number, extra: Partial<HouseSpec> = {}): Prefab {
+  const spec = HOUSES[i % HOUSES.length]!;
+  return house({ ...spec, ...extra, id: `toybox-${i}`, windowStep: 7 } as HouseSpec);
 }
 
-/** Smooth 0..256 ramp (smoothstep) for a 0..256 input. */
-function ease(p: number): number {
-  return (p * p * (768 - 2 * p)) >> 16;
-}
-
-function overlaps(a: Rect, b: Rect, gap: number): boolean {
-  return a.x0 - gap <= b.x1 && b.x0 - gap <= a.x1 && a.z0 - gap <= b.z1 && b.z0 - gap <= a.z1;
-}
-
-function layout(ctx: ThemeCtx): Platform[] {
-  const { w, d, rnd } = ctx;
-  const out: Platform[] = [];
-  // The quay runs along one edge, on a side the seed picks.
-  const along = rnd(100, 0, 2) === 0; // true: long in x
-  const longSide = along ? w : d;
-  const shortSide = along ? d : w;
-  const len = Math.floor((longSide * 7) / 10);
-  const depth = 34 + rnd(101, 0, 9);
-  const start = 20 + rnd(102, 0, longSide - 40 - len + 1);
-  const off = rnd(103, 0, 2) === 0 ? 18 : shortSide - 18 - depth;
-  out.push(
-    along
-      ? { x0: start, x1: start + len, z0: off, z1: off + depth, top: 33, quay: true }
-      : { z0: start, z1: start + len, x0: off, x1: off + depth, top: 33, quay: true },
-  );
-  const count = 4 + ((w * d) >> 15);
-  for (let i = 0; i < count; i++) {
-    const sx = 36 + rnd(110, i, 17);
-    const sz = 36 + rnd(111, i, 17);
-    let best: Platform | undefined;
-    let bestD = Infinity;
-    for (let tryN = 0; tryN < 40; tryN++) {
-      const x0 = 16 + rnd(112, i * 64 + tryN, w - 32 - sx);
-      const z0 = 16 + rnd(113, i * 64 + tryN, d - 32 - sz);
-      const p: Platform = {
-        x0,
-        z0,
-        x1: x0 + sx,
-        z1: z0 + sz,
-        top: 36 + rnd(114, i, 11),
-        quay: false,
-      };
-      if (out.some((o) => overlaps(p, o, 22))) continue;
-      const cx = (x0 + p.x1) >> 1;
-      const cz = (z0 + p.z1) >> 1;
-      let near = Infinity;
-      for (const o of out) {
-        const dx = cx - ((o.x0 + o.x1) >> 1);
-        const dz = cz - ((o.z0 + o.z1) >> 1);
-        near = Math.min(near, dx * dx + dz * dz);
-      }
-      // Prefer a spot about one bridge-length (75 voxels) from its neighbour: spread but connected.
-      const score = Math.abs(isqrt(near) - 75);
-      if (score < bestD) {
-        bestD = score;
-        best = p;
-      }
+/** The Block Keep: a castle of stacked toy blocks in colour courses, round striped towers. */
+function blockKeep(): Prefab {
+  const b = new PrefabBuilder("block-keep", 48, 70, 48);
+  const cols = [MAT_PAINT_RED, MAT_PAINT_BLUE, MAT_PAINT_YELLOW, MAT_PAINT_WHITE];
+  // Keep: 28 x 28, three storeys, alternating colour courses of 6-voxel blocks.
+  const k0 = 10;
+  const k1 = 37;
+  b.footing(MAT_PAINT_WHITE, 2, 2, 45, 45);
+  b.solid(MAT_PAINT_RED, k0, 0, k0, k1, 34, k1);
+  for (let y = 0; y < 34; y += 6)
+    for (let x = k0; x <= k1; x += 6)
+      b.paint(cols[((x - k0) / 6 + y / 6) & 3]!, x, y, k0, x + 5, y + 5, k1);
+  b.air(k0 + 2, 2, k0 + 2, k1 - 2, 32, k1 - 2);
+  for (const y of [12, 23]) b.solid(MAT_PLANKS, k0 + 2, y, k0 + 2, k1 - 2, y, k1 - 2);
+  for (let i = 0; i < 2; i++) {
+    const yb = 2 + i * 11;
+    const lane = k1 - 5 - i * 3;
+    for (let j = 0; j <= 10; j++)
+      b.solid(MAT_TIMBER, k0 + 3 + j, yb, lane, k0 + 3 + j, yb + j, lane + 2);
+    b.air(k0 + 3, yb + 10, lane, k0 + 13, yb + 11, lane + 2);
+  }
+  // Battlements: every other 3-voxel merlon on the parapet.
+  for (let x = k0; x <= k1; x += 6) {
+    b.solid(MAT_PAINT_YELLOW, x, 35, k0, x + 2, 37, k0 + 1);
+    b.solid(MAT_PAINT_YELLOW, x, 35, k1 - 1, x + 2, 37, k1);
+    b.solid(MAT_PAINT_YELLOW, k0, 35, x, k0 + 1, 37, x + 2);
+    b.solid(MAT_PAINT_YELLOW, k1 - 1, 35, x, k1, 37, x + 2);
+  }
+  // Gate: a round-topped arch through the front.
+  b.air(21, 1, k0, 26, 9, k0 + 1);
+  faceDisc(b, "air", 0, 23, 9, 3, k0, k0 + 1);
+  b.anchor("door", 23, 1, k0, NZ)
+    .anchor("lamp-wall", 18, 9, k0, NZ)
+    .anchor("lamp-wall", 29, 9, k0, NZ);
+  for (const y of [15, 26])
+    for (let x = k0 + 5; x < k1 - 3; x += 8) {
+      b.air(x, y, k0, x + 2, y + 4, k0 + 1).anchor("window", x + 1, y - 1, k0, NZ);
+      b.air(x, y, k1 - 1, x + 2, y + 4, k1).anchor("window", x + 1, y - 1, k1, PZ);
     }
-    if (best) out.push(best);
+  // Corner towers: round, 7 radius, stacked rings of colour with a cone of blocks on top.
+  (
+    [
+      [8, 8],
+      [39, 8],
+      [8, 39],
+      [39, 39],
+    ] as const
+  ).forEach(([cx, cz], t) => {
+    for (let y = 0; y < 48; y += 6) b.ring("solid", cols[(t + y / 6) & 3]!, cx, cz, 6, 2, y, y + 5);
+    b.disc("air", 0, cx, cz, 4, 2, 47);
+    roundFloors(b, MAT_PLANKS, cx, cz, 4, 12, 45);
+    for (let k = 0; k < 4; k++)
+      b.disc(
+        "solid",
+        cols[(t + k + 1) & 3]!,
+        cx,
+        cz,
+        6 - k * 2 > 0 ? 6 - k * 2 : 0,
+        48 + k * 3,
+        50 + k * 3,
+      );
+    b.anchor("flagpole", cx, 59, cz, UP);
+    towerWindows(b, cx, cz, 6, 30);
+  });
+  b.anchor("bunting", 23, 30, k0, NZ);
+  return b.build();
+}
+
+/** The harbour on a 256 core (the islets go round it). */
+function core(ctx: ThemeCtx): void {
+  const box = (x: number, z: number, x0: number, z0: number, x1: number, z1: number): number =>
+    Math.min(x - x0, x1 - x, z - z0, z1 - z);
+  const inside = (x: number, z: number): number =>
+    Math.max(
+      box(x, z, 22, 40, 116, 204),
+      box(x, z, 140, 40, 234, 204),
+      box(x, z, 150, 200, 166, 250),
+      box(x, z, 198, 200, 214, 244),
+      box(x, z, 150, 236, 214, 250),
+    );
+  const level = (x: number, z: number): number =>
+    z > 204 ? 30 : x < 92 && z < 100 ? 46 : x > 200 && z > 140 ? 40 : 34;
+  shape(ctx, inside, level, 40);
+  // Keep across the channel, with a passage through its ground floor from one half to the other.
+  const g = put(ctx, blockKeep(), 128, 120, 0, 4001, 35);
+  clear(ctx, 104, g, 116, 152, g + 8, 122);
+  // Block stairs from the low half up to the raised west tier and the east step.
+  put(ctx, stairFlight(12, 5, MAT_PAINT_YELLOW), 76, 108, 3, 4002, 35);
+  put(ctx, stairFlight(6, 5, MAT_PAINT_RED), 200, 130, 1, 4003, 35);
+  // Stacked houses: a second (and third) house set on the roof of the first, turned and shifted.
+  const stacks: [number, number, number][] = [
+    [56, 70, 47],
+    [56, 160, 35],
+    [190, 76, 35],
+    [214, 172, 41],
+  ];
+  stacks.forEach(([x, z, y], i) => {
+    const low = home(i, { roof: "flat", storeys: 2, garden: false });
+    put(ctx, low, x, z, i & 1 ? 0 : 2, 4010 + i, y);
+    const hi = home(i + 1, {
+      storeys: i === 2 ? 2 : 1,
+      roof: i === 2 ? "flat" : "gable-x",
+    });
+    const y2 = y + 2 * 11 + 2;
+    put(ctx, hi, x + (i & 1 ? 6 : -6), z + 3, i & 1 ? 2 : 0, 4020 + i, y2);
+    if (i === 2)
+      put(ctx, home(3, { storeys: 1, roof: "hip" }), x - 4, z + 6, 1, 4030, y2 + 2 * 11 + 2);
+  });
+  // Piers: bollards and moored boats along the arm, a crane at its head.
+  for (let z = 206; z < 246; z += 6) {
+    ctx.decor.push({ kind: "bollard", x: 150, y: 30, z, face: UP, v: z });
+    ctx.decor.push({ kind: "moored-boat", x: 150, y: 30, z, face: NX, v: z * 7 });
+    ctx.decor.push({ kind: "moored-boat", x: 214, y: 30, z: z - 2, face: PX, v: z * 3 });
   }
-  return out;
-}
-
-function heightField(ctx: ThemeCtx, plats: readonly Platform[]): Int32Array {
-  const { w, d } = ctx;
-  // Dead flat sea floor (cheap to encode) and flat-topped blocks with 7-voxel eased walls.
-  const out = new Int32Array(w * d).fill(SEABED * 256);
-  for (const p of plats)
-    for (let z = p.z0; z <= p.z1; z++)
-      for (let x = p.x0; x <= p.x1; x++) {
-        const e = Math.min(x - p.x0, p.x1 - x, z - p.z0, p.z1 - z);
-        const h = SEABED * 256 + ease(Math.min(256, Math.floor((e * 256) / 7))) * (p.top - SEABED);
-        if (h > out[z * w + x]!) out[z * w + x] = h;
-      }
-  return out;
-}
-
-/** Cubes stacked a little off true, like a toddler left them. */
-function blockStack(ctx: ThemeCtx, x: number, z: number, i: number): void {
-  const { rnd, box, surf, h } = ctx;
-  const s = 3 + rnd(120, i, 2); // half side
-  const n = 1 + rnd(121, i, 3);
-  let y = surf(x, z) + 1;
-  let ox = 0;
-  let oz = 0;
-  for (let k = 0; k < n && y + 2 * s + 2 < h; k++) {
-    box(x + ox - s, y, z + oz - s, x + ox + s, y + 2 * s - 1, z + oz + s);
-    y += 2 * s;
-    ox = rnd(122, i * 8 + k, 3) - 1;
-    oz = rnd(123, i * 8 + k, 3) - 1;
-  }
-}
-
-/** A raised tier with a staircase down one side, so it can be walked up. */
-function steppedTier(ctx: ThemeCtx, p: Platform, i: number): void {
-  const { box, rnd } = ctx;
-  const cx = (p.x0 + p.x1) >> 1;
-  const cz = (p.z0 + p.z1) >> 1;
-  const hw = 6 + rnd(130, i, 3);
-  const hd = 6 + rnd(131, i, 3);
-  const y = p.top + 1;
-  box(cx - hw, y, cz - hd, cx + hw, y + 3, cz + hd);
-  // Stairs on the -x side: four steps, two voxels deep each.
-  for (let s = 0; s < 4; s++)
-    box(cx - hw - 2 * (4 - s), y, cz - 1, cx - hw - 2 * (3 - s) - 1, y + s, cz + 1);
-}
-
-function jackInTheBox(ctx: ThemeCtx, cx: number, cz: number): void {
-  const { box, fill, surf, h } = ctx;
-  const y = surf(cx, cz) + 1;
-  if (y + 30 >= h) return;
-  box(cx - 4, y, cz - 4, cx + 4, y + 8, cz + 4);
-  for (let k = 0; k < 5; k++) fill(cx + (k % 2 === 0 ? -1 : 1), y + 10 + 2 * k, cz, 2);
-  fill(cx, y + 21, cz, 5);
-  fill(cx, y + 27, cz, 2);
-}
-
-function crane(ctx: ThemeCtx, cx: number, cz: number): void {
-  const { box, surf, h } = ctx;
-  const y = surf(cx, cz) + 1;
-  if (y + 30 >= h) return;
-  box(cx - 1, y, cz - 1, cx + 1, y + 25, cz + 1);
-  box(cx - 1, y + 25, cz - 1, cx + 15, y + 26, cz + 1);
-  box(cx + 15, y + 12, cz, cx + 15, y + 24, cz);
-}
-
-function edgePoint(p: Platform, ux: number, uz: number, len: number): [number, number] {
-  const cx = (p.x0 + p.x1) >> 1;
-  const cz = (p.z0 + p.z1) >> 1;
-  let last: [number, number] = [cx, cz];
-  for (let s = 0; s <= 200; s++) {
-    const x = cx + Math.floor((ux * s) / len);
-    const z = cz + Math.floor((uz * s) / len);
-    // Stay 8 voxels in: the walls ease down over the outer 7, below the water line at 3.
-    if (x < p.x0 + 8 || x > p.x1 - 8 || z < p.z0 + 8 || z > p.z1 - 8) break;
-    last = [x, z];
-  }
-  return last;
-}
-
-/** A toy-train bridge: a five-wide deck with a sleeper ridge every few voxels. */
-function bridge(ctx: ThemeCtx, a: Platform, b: Platform): void {
-  const { box, surf, w, d } = ctx;
-  const ax = (a.x0 + a.x1) >> 1;
-  const az = (a.z0 + a.z1) >> 1;
-  const dx = ((b.x0 + b.x1) >> 1) - ax;
-  const dz = ((b.z0 + b.z1) >> 1) - az;
-  const len = isqrt(dx * dx + dz * dz);
-  if (len === 0) return;
-  const [x0, z0] = edgePoint(a, dx, dz, len);
-  const [x1, z1] = edgePoint(b, -dx, -dz, len);
-  const y0 = surf(x0, z0) + 1;
-  const y1 = surf(x1, z1) + 1;
-  const span = isqrt((x1 - x0) ** 2 + (z1 - z0) ** 2);
-  const n = Math.max(1, span >> 1);
-  for (let s = 0; s <= n; s++) {
-    const x = x0 + Math.floor(((x1 - x0) * s) / n);
-    const z = z0 + Math.floor(((z1 - z0) * s) / n);
-    const y = y0 + Math.floor(((y1 - y0) * s) / n);
-    const lo = (v: number, m: number): number => Math.max(0, v - m);
-    box(lo(x, 2), y - 1, lo(z, 2), Math.min(w - 1, x + 2), y, Math.min(d - 1, z + 2));
-    if (s % 2 === 0)
-      box(lo(x, 3), y + 1, lo(z, 3), Math.min(w - 1, x + 3), y + 1, Math.min(d - 1, z + 3));
-  }
+  put(ctx, crane(), 206, 246, 3, 4040, 31);
+  // A plank footbridge over the channel's south end, so the halves also meet in the open.
+  put(ctx, plankBridge(34, 7), 128, 190, 0, 4050, 32);
+  lamps(ctx, [
+    [100, 150],
+    [100, 190],
+    [160, 150],
+    [160, 190],
+    [130, 196],
+    [158, 210],
+  ]);
 }
 
 export const toyboxHarbor: Theme = {
   id: "toybox-harbor",
   name: "Toybox Harbor",
-  minSize: 192,
+  minSize: 384,
+  sizeY: 128,
   build(ctx) {
-    const { t, rnd } = ctx;
-    const plats = layout(ctx);
-    fillFromHeightField(t, heightField(ctx, plats));
-
-    for (let i = 1; i < plats.length; i++) {
-      let best = 0;
-      let bestD = Infinity;
-      const cx = (plats[i]!.x0 + plats[i]!.x1) >> 1;
-      const cz = (plats[i]!.z0 + plats[i]!.z1) >> 1;
-      for (let j = 0; j < i; j++) {
-        const dx = cx - ((plats[j]!.x0 + plats[j]!.x1) >> 1);
-        const dz = cz - ((plats[j]!.z0 + plats[j]!.z1) >> 1);
-        if (dx * dx + dz * dz < bestD) {
-          bestD = dx * dx + dz * dz;
-          best = j;
-        }
-      }
-      bridge(ctx, plats[best]!, plats[i]!);
-    }
-
-    plats.forEach((p, k) => {
-      if (p.quay) {
-        const mid = (p.x0 + p.x1) >> 1;
-        const midZ = (p.z0 + p.z1) >> 1;
-        const longX = p.x1 - p.x0 >= p.z1 - p.z0;
-        const q = (f: number): [number, number] =>
-          longX
-            ? [p.x0 + Math.floor(((p.x1 - p.x0) * f) / 10), midZ]
-            : [mid, p.z0 + Math.floor(((p.z1 - p.z0) * f) / 10)];
-        jackInTheBox(ctx, ...q(3));
-        crane(ctx, ...q(8));
-        for (let s = 0; s < 4; s++) {
-          const [x, z] = q(1 + s * 2 + rnd(140, k * 8 + s, 2));
-          blockStack(ctx, x + rnd(141, s, 5) - 2, z + rnd(142, s, 7) - 3, k * 8 + s);
-        }
-        return;
-      }
-      steppedTier(ctx, p, k);
-      const stacks = 1 + rnd(143, k, 2);
-      for (let s = 0; s < stacks; s++) {
-        const x = p.x0 + 6 + rnd(144, k * 8 + s, p.x1 - p.x0 - 11);
-        const z = p.z0 + 6 + rnd(145, k * 8 + s, p.z1 - p.z0 - 11);
-        blockStack(ctx, x, z, k * 8 + s + 100);
-      }
-    });
-
-    scatterObjects(ctx, plats, 150);
+    withIslets(ctx, core, { house: (i) => home(i, { storeys: 1 }), salt: 4900, maxLevel: 36 });
   },
 };
