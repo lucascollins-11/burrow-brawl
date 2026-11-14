@@ -13,6 +13,7 @@ signal resume_pressed
 signal leave_pressed
 
 var _root: Control
+var _resume_button: Button
 var _menu_column: Control
 var _settings: SettingsMenu
 
@@ -50,7 +51,8 @@ func _ready() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.label_settings = MenuStyle.heading(48, Color("ffd23f"), 10)
 	col.add_child(title)
-	col.add_child(_button("Resume", MenuStyle.GREEN, close))
+	_resume_button = _button("Resume", MenuStyle.GREEN, close)
+	col.add_child(_resume_button)
 	col.add_child(_button("Settings", MenuStyle.BLUE, _open_settings))
 	col.add_child(_button("Leave match", MenuStyle.RED, func() -> void: leave_pressed.emit()))
 
@@ -63,6 +65,13 @@ func _button(text: String, color: Color, on_press: Callable) -> Button:
 	return b
 
 
+## B on a pad backs out of the pause menu (the settings screen handles its own B).
+func _input(ev: InputEvent) -> void:
+	if is_open() and _settings == null and ev is InputEventJoypadButton and ev.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		close()
+
+
 func is_open() -> bool:
 	return _root != null and _root.visible
 
@@ -71,6 +80,8 @@ func open() -> void:
 	if _root == null:
 		return
 	_root.visible = true
+	# Focus the first button so a pad can pick straight away.
+	_resume_button.grab_focus.call_deferred()
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -108,3 +119,4 @@ func _close_settings() -> void:
 		_settings.queue_free()
 		_settings = null
 	_menu_column.visible = true
+	_resume_button.grab_focus.call_deferred()

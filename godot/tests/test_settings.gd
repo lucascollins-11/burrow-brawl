@@ -5,6 +5,9 @@ const TMP := "user://test_settings.cfg"
 
 func _reset() -> void:
 	GameSettings.keys = GameSettings.default_keys()
+	GameSettings.pad_codes = GameSettings.default_pad_codes()
+	GameSettings.active_device = "keyboard"
+	GameSettings.active_family = PadMap.XBOX
 	GameSettings.sensitivity = 1.0
 	GameSettings.stick_sensitivity = 1.0
 	GameSettings.invert_y = false

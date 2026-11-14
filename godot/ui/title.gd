@@ -16,6 +16,8 @@ func _ready() -> void:
 	_nick_edit.text = Net.nickname
 	Net.entered_room.connect(_on_entered_room)
 	Net.enter_failed.connect(_on_enter_failed)
+	# Focus the main button, so a pad can navigate the menu with the D-pad or left stick.
+	_create_button.grab_focus.call_deferred()
 
 
 func _build() -> void:

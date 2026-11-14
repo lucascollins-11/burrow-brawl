@@ -51,6 +51,8 @@ func _ready() -> void:
 		_apply_practice_layout()
 		_apply_remembered_choices()
 	_refresh()
+	# Focus the main action so a pad can navigate the lobby.
+	(_start_button if _practice else _ready_button).grab_focus.call_deferred()
 
 
 ## Practice shows only the Match card, centred, with a Start practice button.
