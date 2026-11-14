@@ -8,6 +8,10 @@ const PAD := 1
 const S := CHUNK + 2  # samples per axis
 const CELLS := CHUNK + 1  # cells -1 .. CHUNK-1
 const ISO := 128
+## Rounds of Laplacian smoothing on the finished mesh: softens the voxel stair-steps into rounded,
+## hand-shaped hills (the Storybook look). Visual only: gameplay reads the density grid.
+const SMOOTH := 2
+const SMOOTH_PULL := 0.6
 
 # Corner i is at offset (i & 1, (i >> 1) & 1, (i >> 2) & 1); mask bit i is set when it is solid.
 # The 12 cell edges as corner pairs (EDGE_A[i], EDGE_B[i]) are built per call inside mesh_block.
@@ -18,8 +22,12 @@ const ISO := 128
 
 ## Returns { positions: PackedVector3Array, normals: PackedVector3Array,
 ## indices: PackedInt32Array }, positions relative to the
-## chunk origin. Empty arrays when the chunk has no surface.
-static func mesh_block(block: PackedByteArray) -> Dictionary:
+## chunk origin. Empty arrays when the chunk has no surface. `smooth` rounds of smoothing.
+## `crisp` (optional, same padded S^3 layout as `block`): a non-zero byte marks a voxel whose
+## surface must keep its hard edges, e.g. a voxel with a structure material id. Any vertex touching
+## such a voxel is left where surface nets put it. This is the hook for per-material smoothing:
+## hills stay soft, walls stay crisp.
+static func mesh_block(block: PackedByteArray, smooth := SMOOTH, crisp := PackedByteArray()) -> Dictionary:
 	var result := {
 		"positions": PackedVector3Array(),
 		"normals": PackedVector3Array(),
@@ -51,6 +59,8 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 		return result
 
 	var positions := PackedVector3Array()
+	var pinned := PackedByteArray()
+	var has_crisp := crisp.size() == block.size()
 	var normals := PackedVector3Array()
 	var cell_index := PackedInt32Array()
 	cell_index.resize(CELLS * CELLS * CELLS)
@@ -112,6 +122,13 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 				cell_index[(cy * CELLS + cz) * CELLS + cx] = positions.size()
 				positions.append(sum / float(n) + Vector3(cx - PAD, cy - PAD, cz - PAD))
 				normals.append(nrm)
+				var keep := cx == 0 or cy == 0 or cz == 0 or cx == CELLS - 1 or cy == CELLS - 1 or cz == CELLS - 1
+				if not keep and has_crisp:
+					for k in 8:
+						if crisp[b + offs[k]] != 0:
+							keep = true
+							break
+				pinned.append(1 if keep else 0)
 
 	if positions.is_empty():
 		return result
@@ -154,10 +171,59 @@ static func mesh_block(block: PackedByteArray) -> Dictionary:
 						here == 0
 					)
 
+	if smooth > 0 and not indices.is_empty():
+		_smooth(positions, normals, indices, pinned, smooth)
 	result["positions"] = positions
 	result["normals"] = normals
 	result["indices"] = indices
 	return result
+
+
+## Laplacian smoothing, then area-weighted normals. `pinned` vertices keep their place and their
+## gradient normal: those of the outer cells also belong to the neighbouring chunk's mesh (so both
+## chunks draw the seam identically), and the rest touch a `crisp` voxel.
+static func _smooth(
+	pos: PackedVector3Array, nrm: PackedVector3Array, idx: PackedInt32Array, pinned: PackedByteArray, rounds: int
+) -> void:
+	var n := pos.size()
+	var sum := PackedVector3Array()
+	var cnt := PackedInt32Array()
+	sum.resize(n)
+	cnt.resize(n)
+	for r in rounds:
+		sum.fill(Vector3.ZERO)
+		cnt.fill(0)
+		for t in range(0, idx.size(), 3):
+			var a := idx[t]
+			var b := idx[t + 1]
+			var c := idx[t + 2]
+			sum[a] += pos[b] + pos[c]
+			sum[b] += pos[a] + pos[c]
+			sum[c] += pos[a] + pos[b]
+			cnt[a] += 2
+			cnt[b] += 2
+			cnt[c] += 2
+		for i in n:
+			if pinned[i] == 0 and cnt[i] > 0:
+				pos[i] = pos[i].lerp(sum[i] / float(cnt[i]), SMOOTH_PULL)
+	var acc := PackedVector3Array()
+	acc.resize(n)
+	for t in range(0, idx.size(), 3):
+		var a := idx[t]
+		var b := idx[t + 1]
+		var c := idx[t + 2]
+		var f := (pos[b] - pos[a]).cross(pos[c] - pos[a])
+		acc[a] += f
+		acc[b] += f
+		acc[c] += f
+	for i in n:
+		if pinned[i] == 1:
+			continue
+		var v := acc[i].normalized()
+		if v == Vector3.ZERO:
+			continue
+		# Keep the outward side the gradient chose, whatever the winding gives.
+		nrm[i] = -v if v.dot(nrm[i]) < 0.0 else v
 
 
 ## True when sample layers y and y + 1 are both entirely air or both entirely rock, so the cells
