@@ -21,6 +21,7 @@ var pop_time := -1.0
 var _model: Node3D
 var _marker: Node3D
 var _tag: Node3D
+var _first_person := false
 var _rings: Array[Node3D] = []
 var _eyes: Array[Node3D] = []
 var _brows: Array[Node3D] = []
@@ -161,6 +162,49 @@ func fire() -> void:
 	_stretch_v -= 1.8
 	for i in range(N):
 		_vel[i] += Vector2(0.0, -4.0) * pow(float(i) / float(N - 1), 1.2)
+
+
+## First-person aim: the camera sits at the head, so hide the body and the tag.
+func set_first_person(on: bool) -> void:
+	if on == _first_person:
+		return
+	_first_person = on
+	if alive and pop_time < 0.0:
+		_model.visible = not on
+		if _tag != null:
+			_tag.visible = not on
+
+
+## Text height of a name tag on screen, in pixels at 720 p: big when the critter is close, easing
+## down to a floor that is still readable, never smaller. Scaled with the screen height.
+const TAG_PX_NEAR := 23.0
+const TAG_PX_FAR := 15.0
+
+
+## On-screen text size in pixels for a tag `dist` voxels from the camera (see TAG_PX_*).
+static func tag_pixels(dist: float, screen_h: float) -> float:
+	return lerpf(TAG_PX_NEAR, TAG_PX_FAR, smoothstep(20.0, 160.0, dist)) * screen_h / 720.0
+
+
+## Scale, fade and hide the tag for a camera at `cam`. The tag is scaled so its text is about
+## `tag_pixels` tall on screen, fades from 180 voxels and is gone by 260. `blocked` is true when
+## terrain is between the camera and the critter's head.
+func update_tag(cam: Vector3, blocked: bool, screen_h := 720.0, fov_deg := 60.0) -> void:
+	if _tag == null:
+		return
+	var dist := maxf(cam.distance_to(_tag.global_position), 1.0)
+	var fade := 1.0 - smoothstep(180.0, 260.0, dist)
+	var label := _tag.get_node_or_null("Name") as Label3D
+	var em_world := 1.0 if label == null else float(label.font_size) * label.pixel_size
+	var px_per_unit := (screen_h * 0.5) / (dist * tan(deg_to_rad(fov_deg * 0.5)))
+	_tag.scale = Vector3.ONE * tag_pixels(dist, screen_h) / (em_world * px_per_unit)
+	_tag.visible = alive and pop_time < 0.0 and not _first_person and not blocked and fade > 0.03
+	if label != null:
+		label.modulate.a = fade
+		label.outline_modulate.a = 0.95 * fade
+	var bar := _tag.get_node_or_null("Bar") as MeshInstance3D
+	if bar != null:
+		(bar.material_override as ShaderMaterial).set_shader_parameter("fade", fade)
 
 
 ## Alive or knocked out. Going from alive to knocked out pops the rings apart, then leaves the

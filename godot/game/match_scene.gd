@@ -23,6 +23,9 @@ const TERRAIN_SCRIPT := "res://terrain/terrain_view.gd"
 const LOBBY_SCENE := "res://ui/lobby.tscn"
 const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
+## Aiming is first person: the camera sits at the head. Below this rig distance the body is hidden.
+const FIRST_PERSON_BACK := 6.0
+const FIRST_PERSON_DIST := 12.0
 const HINT_WATCH := "Watching. Hold tight."
 const HINT_EMPTY := "Out of ammo for this one. Pick another weapon."
 
@@ -534,12 +537,33 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		var pitch := float(aim.pitch_deg) if is_active and aim != null else 0.0
 		node.drive(dt, is_active, vel, bool(c.get("grounded", true)), pitch)
 		var team_color: Color = _look(int(c["team"]))["color"]
-		CRITTER_MODEL.set_tag(node, "%s  %d" % [c["name"], c["hp"]], team_color.lightened(0.45))
+		var hp_frac := float(c["hp"]) / maxf(1.0, float(c["max_hp"]))
+		CRITTER_MODEL.set_tag(node, str(c["name"]), team_color.lightened(0.35), hp_frac)
+		node.set_first_person(is_active and aim != null and _rig.dist < FIRST_PERSON_DIST)
+		var head := pos + Vector3(0, CRITTER_MODEL.HEIGHT, 0)
+		node.update_tag(
+			camera.global_position, _hidden_by_terrain(camera.global_position, head), get_viewport().get_visible_rect().size.y, camera.fov
+		)
 	for id in _critters.keys():
 		if not seen.has(id):
 			(_critters[id] as Node).queue_free()
 			_critters.erase(id)
 			_prev_pos.erase(id)
+
+
+## True when the ground rises between `from` and `to` (a camera and a critter's head). Samples
+## the line, ignoring the last stretch next to the head so a critter standing on a slope is not
+## hidden by its own hill.
+func _hidden_by_terrain(from: Vector3, to: Vector3) -> bool:
+	if from.distance_to(to) > 260.0:
+		return false
+	for i in range(1, 11):
+		var p := from.lerp(to, float(i) / 12.0)
+		if p.x < 0.0 or p.z < 0.0 or p.x >= _world.x or p.z >= _world.y:
+			continue
+		if p.y < ground_y(p.x, p.z):
+			return true
+	return false
 
 
 func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState, mouse: Dictionary, dt: float) -> void:
@@ -557,14 +581,17 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	elif _blast_left > 0.0:
 		goal = {"mode": "follow", "target": _blast_at, "dist": 42.0}
 	elif aim != null and not active.is_empty():
-		var d := CameraMath.aim_direction(aim)
+		# First person: the camera sits at the head (target is a little way along the aim, and the
+		# camera is `dist` back from it). The rig eases in from the orbit view and back out again.
+		var cam_pitch := float(aim.pitch_deg) * CameraMath.FIRST_PERSON_PITCH_SHARE
+		var d := CameraMath.offset_dir(CameraMath.yaw_to_deg(aim.yaw), cam_pitch)
 		var p: Vector3 = active["pos"]
 		goal = {
 			"mode": "aim",
-			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.8, 0) + d * 22.0,
+			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.86, 0) + d * FIRST_PERSON_BACK,
 			"yaw_deg": CameraMath.camera_yaw_for_heading(CameraMath.yaw_to_deg(aim.yaw)),
-			"pitch_deg": -float(aim.pitch_deg),
-			"dist": CameraMath.AIM_DIST + 22.0,
+			"pitch_deg": -cam_pitch,
+			"dist": FIRST_PERSON_BACK,
 		}
 	else:
 		var tgt := _rig.target
@@ -627,9 +654,12 @@ func _make_marker() -> void:
 
 ## The spot under the crosshair, found by walking along the view ray until it dips under the
 ## ground. Null on the sky or the open sea.
-func _pick_ground() -> Variant:
+func _pick_ground(aim: CameraMath.AimState = null) -> Variant:
 	var from := camera.global_position
 	var dir := -camera.global_transform.basis.z
+	if aim != null:
+		# The camera is tipped less than the aim (first person), so follow the aim itself.
+		dir = CameraMath.aim_direction(aim)
 	var step := 1.0
 	var p := from
 	for i in range(700):
@@ -648,7 +678,7 @@ func _pick_ground() -> Variant:
 
 func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState) -> void:
 	var targeting := aim != null and controls.needs("target")
-	controls.target = _pick_ground() if targeting else null
+	controls.target = _pick_ground(aim) if targeting else null
 	_target_ring.visible = controls.target != null
 	if _target_ring.visible:
 		_target_ring.position = (controls.target as Vector3) + Vector3(0, 0.6, 0)
