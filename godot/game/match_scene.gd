@@ -68,7 +68,7 @@ var _ammo_hash := -1
 var _crates_seen := false
 ## Set for a practice match (config.practice): the guided prompts and the label that shows them.
 var _guide: PracticeGuide = null
-var _guide_label: Label = null
+var _guide_label: PromptLabel = null
 var _guide_layer: CanvasLayer = null
 var _spot: TutorialSpotlight = null
 var _done_panel: PanelContainer = null
@@ -240,6 +240,9 @@ func ground_y(x: float, z: float) -> float:
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev.is_action_pressed("skip_follow"):
 		_follow_skipped = _following
+	if ev is InputEventJoypadButton and ev.is_action_pressed("ui_cancel") and hud.close_grid():
+		get_viewport().set_input_as_handled()
+		return
 	if ev.is_action_pressed("pause") and controls.aim == null:
 		# Pause closes an open weapon grid first, so the two never show together.
 		if not pause.is_open() and hud.close_grid():
@@ -252,24 +255,19 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 ## Walk and aim hints use whatever keys the player has bound.
 func _hint_walk() -> String:
-	var walk := ""
-	for id in ["move_forward", "move_left", "move_back", "move_right"]:
-		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
-	return walk + " walk - " + GameSettings.hint_for(
+	return Prompts.walk_label() + " walk - " + GameSettings.hint_for(
 		[["jump", "jump"], ["backflip", "backflip"], ["toggle_aim", "aim"], ["skip", "skip"]]
 	)
 
 
 func _guide_keys() -> Dictionary:
-	var walk := ""
-	for id in ["move_forward", "move_left", "move_back", "move_right"]:
-		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
 	return {
-		"walk": walk,
-		"jump": GameSettings.key_label(int(GameSettings.keys.get("jump", 0))),
-		"aim": GameSettings.key_label(int(GameSettings.keys.get("toggle_aim", 0))),
-		"fire": GameSettings.key_label(int(GameSettings.keys.get("fire", 0))),
-		"weapon_menu": GameSettings.key_label(int(GameSettings.keys.get("weapon_menu", 0))),
+		"walk": Prompts.walk_label(),
+		"jump": Prompts.label_for("jump"),
+		"aim": Prompts.label_for("toggle_aim"),
+		"aim_move": Prompts.aim_move(),
+		"fire": Prompts.label_for("fire"),
+		"weapon_menu": Prompts.label_for("weapon_menu"),
 	}
 
 
@@ -300,9 +298,8 @@ func _setup_guide(practice: bool) -> void:
 	panel.offset_top = 142.0
 	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.CREAM, 12, 3, 4, 2))
 	layer.add_child(panel)
-	_guide_label = Label.new()
-	_guide_label.add_theme_font_size_override("font_size", 16)
-	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_guide_label = PromptLabel.new()
+	_guide_label.set_font_px(16, MenuStyle.INK)
 	# Long prompts wrap inside a capped width instead of running off the screen.
 	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guide_label.custom_minimum_size.x = minf(300.0, get_viewport().get_visible_rect().size.x - 80.0)
@@ -368,14 +365,11 @@ func _steering(v: Dictionary) -> bool:
 
 
 func _hint_steer() -> String:
-	var walk := ""
-	for id in ["move_forward", "move_left", "move_back", "move_right"]:
-		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
-	return walk + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
+	return Prompts.walk_label() + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
 
 
 func _hint_aim() -> String:
-	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
+	return Prompts.aim_phrase() + " - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
 
 func _process(dt: float) -> void:
@@ -434,7 +428,7 @@ func _process(dt: float) -> void:
 	_handle_events(events, v)
 	if _guide != null and _guide_label != null:
 		_guide.feed(v, aim != null, events, controls.weapon_id())
-		_guide_label.text = _guide.text(_guide_keys())
+		_guide_label.set_prompt(_guide.text(_guide_keys()))
 		_guide_label.visible = v["phase"] != "over" and not pause.is_open()
 		_update_tutorial_pointers()
 	_sync_critters(v, active, aim, dt)

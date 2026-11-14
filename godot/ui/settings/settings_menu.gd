@@ -6,12 +6,18 @@ extends Control
 
 signal closed
 
-const TABS := ["Sound", "Video", "Controls"]
+const TABS := ["Sound", "Video", "Controls", "Xbox", "PlayStation", "Switch Pro"]
+## Tab index of the first pad tab; the pad tabs follow in PadMap.FAMILIES order.
+const PAD_TAB_FIRST := 3
 
 var _tabs: TabContainer
 var _rebinding: String = ""
 var _key_buttons: Dictionary = {}  # action id -> Button
 var _status: Label
+## Pad rebinding in progress: the action id, and the family whose tab asked. "" when idle.
+var _pad_rebinding: String = ""
+var _pad_rebinding_family: String = ""
+var _pad_buttons: Dictionary = {}  # "family:action" -> Button
 
 
 func _ready() -> void:
@@ -19,6 +25,7 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	Input.joy_connection_changed.connect(_on_pads_changed)
 	_build()
 
 
@@ -33,7 +40,7 @@ func _build() -> void:
 	add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(760, 560)
+	panel.custom_minimum_size = Vector2(760, 640)
 	center.add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
@@ -50,6 +57,8 @@ func _build() -> void:
 	_tabs.add_child(_sound_tab())
 	_tabs.add_child(_video_tab())
 	_tabs.add_child(_controls_tab())
+	for family in PadMap.FAMILIES:
+		_tabs.add_child(_pad_tab(family))
 	for i in range(TABS.size()):
 		_tabs.set_tab_title(i, TABS[i])
 	column.add_child(_tabs)
@@ -73,10 +82,16 @@ func _build() -> void:
 	back.custom_minimum_size = Vector2(180, 0)
 	back.pressed.connect(close)
 	row.add_child(back)
+	# Start on the tab of the device in use, with focus ready for a pad.
+	if Prompts.pad_active():
+		_tabs.current_tab = PAD_TAB_FIRST + PadMap.FAMILIES.find(GameSettings.active_family)
+	_tabs.tab_changed.connect(func(_i: int) -> void: _focus_page.call_deferred())
+	_focus_page.call_deferred()
 
 
 func close() -> void:
 	_stop_rebinding()
+	_stop_pad_rebinding()
 	closed.emit()
 
 
@@ -229,6 +244,128 @@ func _controls_tab() -> Control:
 	return page
 
 
+# ------------------------------------------------------------------ pad tabs
+
+
+func _pad_tab(family: String) -> Control:
+	var page := _page(PadMap.FAMILY_NAMES[family])
+	var info := Label.new()
+	info.text = "Walk: left stick. Look: right stick."
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.modulate = Color(1, 1, 1, 0.7)
+	page.add_child(info)
+	var connected := Label.new()
+	connected.name = "Connected"
+	connected.modulate = Color(1, 1, 1, 0.7)
+	page.add_child(connected)
+	_refresh_connected(connected)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	page.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 6)
+	scroll.add_child(list)
+	var group := ""
+	for a in GameSettings.ACTIONS:
+		var id: String = a["id"]
+		if String(a["id"]).begins_with("move_"):
+			continue
+		if a["group"] != group:
+			group = a["group"]
+			var head := Label.new()
+			head.text = group
+			head.add_theme_color_override("font_color", MenuStyle.ORANGE.darkened(0.2))
+			head.add_theme_font_size_override("font_size", 22)
+			list.add_child(head)
+		var row := _row(list, a["label"])
+		(row.get_child(0) as Control).custom_minimum_size = Vector2(340, 0)
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(190, 0)
+		b.expand_icon = true
+		b.add_theme_constant_override("icon_max_width", 28)
+		b.pressed.connect(_start_pad_rebinding.bind(family, id))
+		row.add_child(b)
+		_pad_buttons["%s:%s" % [family, id]] = b
+	var reset := Button.new()
+	reset.text = "Reset %s buttons to defaults" % PadMap.FAMILY_NAMES[family]
+	reset.pressed.connect(
+		func() -> void:
+			GameSettings.reset_pad(family)
+			_stop_pad_rebinding()
+			_say("%s buttons back to the defaults." % PadMap.FAMILY_NAMES[family])
+	)
+	page.add_child(reset)
+	_refresh_pad_buttons()
+	return page
+
+
+func _refresh_connected(label: Label) -> void:
+	var pads := PadMap.connected_summary()
+	label.text = "Connected: " + (", ".join(pads) if not pads.is_empty() else "none yet, plug one in")
+
+
+## Pads plugged in or out while the menu is open update every tab's "Connected" line.
+func _on_pads_changed(_device: int, _connected: bool) -> void:
+	for page in _tabs.get_children():
+		var label := page.get_node_or_null("Connected")
+		if label is Label:
+			_refresh_connected(label as Label)
+
+
+func _refresh_pad_buttons() -> void:
+	for key in _pad_buttons:
+		var parts: PackedStringArray = str(key).split(":")
+		var family := parts[0]
+		var id := parts[1]
+		var b: Button = _pad_buttons[key]
+		if id == _pad_rebinding and family == _pad_rebinding_family:
+			b.text = "Press a button..."
+			b.icon = null
+			continue
+		var code := GameSettings.pad_code(family, id)
+		b.text = PadMap.button_name(family, code)
+		b.icon = PadGlyphs.texture(family, code) if code != PadMap.NONE else null
+
+
+func _start_pad_rebinding(family: String, id: String) -> void:
+	_stop_rebinding()
+	_pad_rebinding = id
+	_pad_rebinding_family = family
+	_refresh_pad_buttons()
+	_say("Press the new button on your pad. Esc on the keyboard cancels.")
+
+
+func _stop_pad_rebinding() -> void:
+	_pad_rebinding = ""
+	_pad_rebinding_family = ""
+	_refresh_pad_buttons()
+
+
+## Pad tabs are shown in order, so LB and RB step through the tabs.
+func _step_tab(delta: int) -> void:
+	_tabs.current_tab = posmod(_tabs.current_tab + delta, _tabs.get_tab_count())
+
+
+## Give the first control on the open tab the focus, so a pad can move around at once.
+func _focus_page() -> void:
+	var page := _tabs.get_current_tab_control()
+	var first := _first_focusable(page)
+	if first != null and is_inside_tree():
+		first.grab_focus()
+
+
+func _first_focusable(node: Node) -> Control:
+	if node is Control and (node as Control).focus_mode == Control.FOCUS_ALL and (node as Control).is_visible_in_tree():
+		return node as Control
+	for child in node.get_children():
+		var found := _first_focusable(child)
+		if found != null:
+			return found
+	return null
+
+
 # ------------------------------------------------------------------ rebinding
 
 
@@ -253,6 +390,19 @@ func _stop_rebinding() -> void:
 
 
 func _input(ev: InputEvent) -> void:
+	if _pad_rebinding != "":
+		_input_pad_rebind(ev)
+		return
+	if ev is InputEventJoypadButton and (ev as InputEventJoypadButton).pressed:
+		var b := (ev as InputEventJoypadButton).button_index
+		if b == JOY_BUTTON_LEFT_SHOULDER:
+			_step_tab(-1)
+		elif b == JOY_BUTTON_RIGHT_SHOULDER:
+			_step_tab(1)
+		elif ev.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			close()
+		return
 	if _rebinding == "" or not (ev is InputEventKey):
 		return
 	var k := ev as InputEventKey
@@ -273,11 +423,43 @@ func _input(ev: InputEvent) -> void:
 		_say("")
 
 
+func _consume() -> void:
+	var vp := get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
+
+
+func _input_pad_rebind(ev: InputEvent) -> void:
+	if ev is InputEventKey and (ev as InputEventKey).pressed:
+		if (ev as InputEventKey).physical_keycode == KEY_ESCAPE:
+			_consume()
+			_stop_pad_rebinding()
+			_say("")
+		return
+	var code := PadMap.code_for_event(ev)
+	if code == PadMap.NONE:
+		return
+	_consume()
+	var family := _pad_rebinding_family
+	var id := _pad_rebinding
+	var swapped := GameSettings.rebind_pad(family, id, code)
+	_pad_rebinding = ""
+	_pad_rebinding_family = ""
+	_refresh_pad_buttons()
+	if swapped != "":
+		_say("%s swapped with %s." % [GameSettings.action_def(swapped)["label"], GameSettings.action_def(id)["label"]])
+	else:
+		_say("")
+
+
 func _on_reset() -> void:
 	GameSettings.reset_to_defaults()
 	for c in get_children():
 		c.queue_free()
 	_key_buttons.clear()
+	_pad_buttons.clear()
+	_pad_rebinding = ""
+	_pad_rebinding_family = ""
 	_rebinding = ""
 	_build.call_deferred()
 

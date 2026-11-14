@@ -11,7 +11,7 @@ const WALK_DISTANCE := 3.0
 const STEPS: Array[String] = [
 	"Walk around with {walk}.",
 	"Jump with {jump}.",
-	"Press {aim} to aim, then move the mouse.",
+	"Press {aim} to aim, then {aim_move}.",
 	"Hold {fire} to charge the shot, and let go to fire.",
 	"Hit a target dummy. They never shoot back.",
 	"Open the weapon menu with {weapon_menu} and pick a different weapon.",
@@ -106,7 +106,7 @@ func text(keys: Dictionary = {}) -> String:
 	if finished():
 		return DONE
 	var line := STEPS[step]
-	for k: String in ["walk", "jump", "aim", "fire", "weapon_menu"]:
+	for k: String in ["walk", "jump", "aim", "aim_move", "fire", "weapon_menu"]:
 		line = line.replace("{%s}" % k, str(keys.get(k, k)))
 	return "Practice %d of %d: %s" % [step + 1, STEPS.size(), line]
 
