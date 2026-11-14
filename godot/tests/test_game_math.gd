@@ -184,8 +184,7 @@ func test_squirmling_head_trails_behind_when_walking() -> void:
 	for i in range(60):
 		s.drive(1.0 / 60.0, true, Vector3(0, 0, 8.0), true)
 	var head := s.find_child("Ring4", true, false) as Node3D
-	var tail := s.find_child("Ring0", true, false) as Node3D
-	check(head.position.z < tail.position.z - 0.02, "the head lags behind the tail in the walk direction")
+	check(head.position.z < Squirmling.curl_base(4).z - 0.02, "the head lags behind its resting spot in the walk direction")
 	s.free()
 
 

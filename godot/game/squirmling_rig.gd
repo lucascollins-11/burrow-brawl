@@ -33,6 +33,7 @@ var _prop: Node3D
 var _off := PackedVector2Array()  # per ring: sideways (x) and forward (y -> model z) offset
 var _vel := PackedVector2Array()
 var _stretch := 1.0
+var _air := 0.0  # 0 curled on the ground, 1 stretched out in the air
 var _stretch_v := 0.0
 var _t := 0.0
 var _phase := 0.0
@@ -141,6 +142,7 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 	elif not grounded and _was_grounded:
 		_stretch_v += 2.6  # the spring of a jump
 	_was_grounded = grounded
+	_air = lerpf(_air, 0.0 if grounded else 1.0, minf(1.0, dt * (7.0 if grounded else 10.0)))
 	_stretch_v += ((goal_stretch - _stretch) * 180.0 - _stretch_v * 11.0) * dt
 	_stretch = clampf(_stretch + _stretch_v * dt, 0.5, 1.45)
 
@@ -156,9 +158,10 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 	# The ring chain: the head end trails behind the motion, sways when idle, ripples when walking.
 	for i in range(N):
 		var w := pow(float(i) / float(N - 1), 1.4)
-		var goal := (-flat * 0.05).limit_length(0.42) * w
+		# The head end trails the motion; the tail rings drag behind along the ground.
+		var goal := (-flat * 0.05).limit_length(0.42) * (w + 0.35 * (1.0 - w) * _walk_amt)
 		goal.x += sin(_t * 1.7 - float(i) * 0.7) * (0.07 if active else 0.045) * w * (1.0 - _walk_amt)
-		goal.y += sin(_phase - float(i) * 0.9) * 0.12 * w * _walk_amt
+		goal.y += sin(_phase * 2.0 - float(i) * 1.1) * 0.05 * _walk_amt
 		var stiff := 130.0 - 14.0 * float(i)
 		_vel[i] += ((goal - _off[i]) * stiff - _vel[i] * 7.0) * dt
 		_off[i] += _vel[i] * dt
@@ -327,23 +330,26 @@ func is_wobbling() -> bool:
 
 func _pose_rings() -> void:
 	var wide := 1.0 / sqrt(_stretch)
-	# Inchworm: the gap above each ring shrinks as a scrunch wave runs tail to head, so the body
-	# bunches up, then reaches out again, one ring after the next.
-	var height := Squirmling.ring_base(0).y * _stretch
 	for i in range(N):
 		var ring := _rings[i]
-		var base := Squirmling.ring_base(i)
-		if i > 0:
-			var scrunch := 0.5 + 0.5 * sin(_phase - float(i) * 0.9)
-			height += Squirmling.RING_STEP * (_stretch - 0.3 * scrunch * _walk_amt + 0.06 * _walk_amt)
-		ring.position = Vector3(base.x + _off[i].x, height, _off[i].y)
+		var f := float(i) / float(N - 1)
+		var base := Squirmling.curl_base(i).lerp(Squirmling.ring_base(i), _air)
+		# The raised part stretches and squashes; the tail on the ground hardly does.
+		var y := base.y * (1.0 + (_stretch - 1.0) * lerpf(pow(f, 1.6), 1.0, _air))
+		# Slither: a wave runs from the head back along the body, wider towards the tail.
+		var amp := lerpf(0.30, 0.08, f) * _walk_amt * (1.0 - _air)
+		var s := float(N - 1 - i) * 1.1
+		var wave := sin(s - _phase) * amp
+		var wave_slope := -cos(s - _phase) * 1.1 * amp / 0.6
+		ring.position = Vector3(base.x + _off[i].x + wave, y + absf(wave) * 0.08, base.z + _off[i].y)
 		# The head keeps more of its shape so the face and hat do not smear.
 		var k := 0.5 if i == N - 1 else 1.0
 		ring.scale = Vector3(lerpf(1.0, wide, k), lerpf(1.0, _stretch, k), lerpf(1.0, wide, k))
 		var below := _off[i - 1] if i > 0 else Vector2.ZERO
 		var above := _off[i + 1] if i < N - 1 else _off[i] * 2.0 - below
 		var lean := (above - below) / (2.0 * Squirmling.RING_STEP)
-		ring.rotation = Vector3(atan(lean.y) * 0.8, 0.0, -atan(lean.x) * 0.8)
+		var tip := lerpf(Squirmling.curl_angle(i), 0.0, _air)
+		ring.rotation = Vector3(tip + atan(lean.y) * 0.8, atan(wave_slope) * 0.7, -atan(lean.x) * 0.8)
 
 
 ## Head turn (yaw, pitch in radians, clamped) towards a direction in the Squirmling's own frame.
