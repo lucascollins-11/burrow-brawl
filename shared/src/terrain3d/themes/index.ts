@@ -1,4 +1,4 @@
-import { type GeneratedMap, type MapRecipe } from "../api.js";
+import { type DecorAnchor, type GeneratedMap, type MapRecipe } from "../api.js";
 import { createTerrain } from "../grid.js";
 import { BEDROCK_Y, SEA_Y } from "../generate.js";
 import { findSpawns } from "../spawns.js";
@@ -67,6 +67,7 @@ export function generateThemed(recipe: MapRecipe): GeneratedMap {
   // Generation edits are part of the recipe, not the edit log.
   t.edits.length = 0;
   t.chunkVersion.fill(0);
+  if (ctx.decor.length) (t as { decor?: readonly DecorAnchor[] }).decor = ctx.decor;
   return {
     terrain: t,
     spawns: keepWalkableSpawns(t, findSpawns(t, recipe.seed >>> 0, true)),

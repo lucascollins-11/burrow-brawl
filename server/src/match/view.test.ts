@@ -4,6 +4,13 @@ import { describe, expect, it } from "vitest";
 import { createMatch, stepMatch, type Cmd, type MatchState } from "@burrow-brawl/shared";
 import { MatchRunner } from "./runner";
 import { ViewStream } from "./view";
+import { decodeVoxels } from "@burrow-brawl/shared/src/net";
+import {
+  createTerrain,
+  MAT_TIMBER,
+  stampPrefab,
+  type DecorAnchor,
+} from "@burrow-brawl/shared/src/terrain3d";
 
 const cfg = MatchRunner.configFor(
   {
@@ -66,5 +73,37 @@ describe("view stream", () => {
     // Its placer still stands beside it, so once armed it is set off.
     expect(full.mines![0]).toMatchObject({ armed: true, triggered: true });
     expect(full.mines![0]!.fuseTicks).toBeGreaterThanOrEqual(0);
+  });
+
+  it("sends materials and decor in match.start only when the map has them", () => {
+    const s = createMatch(cfg);
+    const v = new ViewStream(s);
+    const plain = v.terrain(s.sim.terrain);
+    expect(plain.material).toBeUndefined();
+    expect(plain.decor).toBeUndefined();
+    const t = createTerrain(32, 32, 32, 1, 2);
+    const decor: DecorAnchor[] = [];
+    (t as { decor?: readonly DecorAnchor[] }).decor = decor;
+    stampPrefab(
+      t,
+      {
+        id: "post",
+        sx: 1,
+        sy: 3,
+        sz: 1,
+        parts: [{ op: "solid", mat: MAT_TIMBER, x0: 0, y0: 0, z0: 0, x1: 0, y1: 2, z1: 0 }],
+        anchors: [{ kind: "lamp", x: 0, y: 2, z: 0, face: 4 }],
+      },
+      4,
+      5,
+      6,
+      0,
+      1,
+      decor,
+    );
+    const vt = new ViewStream(s).terrain(t);
+    const mat = decodeVoxels(vt.material!, 32 ** 3);
+    expect(mat[(6 * 32 + 6) * 32 + 4]).toBe(MAT_TIMBER);
+    expect(vt.decor).toEqual([{ kind: "lamp", x: 4, y: 7, z: 6, face: 4, v: expect.any(Number) }]);
   });
 });

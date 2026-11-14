@@ -147,7 +147,7 @@ export class ViewStream {
   private readonly lastCritter = new Map<number, string>();
   private events: SimEvent[] = [];
   private sentEdits: number;
-  private terrainCache: { edits: number; density: string } | null = null;
+  private terrainCache: { edits: number; density: string; material?: string } | null = null;
 
   constructor(state: MatchState) {
     this.sentEdits = state.sim.terrain.edits.length;
@@ -162,7 +162,11 @@ export class ViewStream {
   /** The whole world now: terrain, every critter, every projectile. */
   terrain(t: VoxelTerrain): ViewTerrain {
     if (this.terrainCache?.edits !== t.edits.length)
-      this.terrainCache = { edits: t.edits.length, density: encodeVoxels(t.density) };
+      this.terrainCache = {
+        edits: t.edits.length,
+        density: encodeVoxels(t.density),
+        ...(t.material ? { material: encodeVoxels(t.material) } : {}),
+      };
     return {
       sizeX: t.sizeX,
       sizeY: t.sizeY,
@@ -170,6 +174,8 @@ export class ViewStream {
       seaY: t.seaY,
       bedrockY: t.bedrockY,
       density: this.terrainCache.density,
+      ...(this.terrainCache.material !== undefined ? { material: this.terrainCache.material } : {}),
+      ...(t.decor ? { decor: t.decor.map((a) => ({ ...a })) } : {}),
     };
   }
 

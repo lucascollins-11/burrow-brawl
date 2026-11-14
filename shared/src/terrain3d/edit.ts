@@ -11,13 +11,18 @@ export function applyEdit(t: VoxelTerrain, edit: TerrainEdit): EditResult {
   const touched = new Set<number>();
   let changed = 0;
   const d = t.density;
+  const m = t.material;
 
   const set = (x: number, y: number, z: number, v: number): void => {
     const i = (y * t.sizeZ + z) * t.sizeX + x;
     const old = d[i]!;
     if (old === v) return;
     d[i] = v;
-    if (old >= SOLID !== v >= SOLID) changed++;
+    if (old >= SOLID !== v >= SOLID) {
+      changed++;
+      // Shared rule (materials.ts): material resets whenever solidity flips.
+      if (m) m[i] = 0;
+    }
     touched.add(
       (Math.floor(y / CHUNK) * t.chunksZ + Math.floor(z / CHUNK)) * t.chunksX +
         Math.floor(x / CHUNK),

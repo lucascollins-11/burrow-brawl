@@ -47,7 +47,9 @@ complete: a client that receives it throws away what it had.
   terrain: {
     sizeX: number, sizeY: number, sizeZ: number,
     seaY: number, bedrockY: number,
-    density: string             // section 5
+    density: string,            // section 5
+    material?: string,          // section 5; absent = all natural terrain
+    decor?: { kind, x, y, z, face, v }[]  // detail meshes on solid voxels (section 5)
   },
   state: ViewState,             // full: every critter
   weapons: WeaponInfo[]         // the weapon menu, then sub-munitions (see below)
@@ -163,6 +165,16 @@ bytes), and the result is base64 (standard alphabet, with padding). Decoding: re
 invalid.
 
 Outside the grid: below y = 0 is solid, everything else is air.
+
+`material` uses the same order and encoding: one material id per voxel (ids and names in
+`shared/src/terrain3d/materials.ts`; 0 is natural terrain, everything else is a built structure
+that the client draws crisp, never smoothed). It is cosmetic and only sent in `match.start`.
+`terrain.patch` carries density only, so the client keeps materials in step with one rule: when a
+voxel's solidity flips (crosses 128 either way), its material becomes 0.
+
+`decor` lists detail meshes from stamped prefabs (window frames, lamps, railings...). Each hangs on
+the solid voxel `(x, y, z)` and sticks out of `face` (0 = +x, 1 = +z, 2 = -x, 3 = -z, 4 = up,
+5 = down); `v` 0..255 picks a variant. When that voxel stops being solid, the detail breaks off.
 
 ## 6. What a view client does not need
 

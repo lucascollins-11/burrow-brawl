@@ -107,6 +107,25 @@ export interface ViewTerrain {
   bedrockY: number;
   /** Run-length pairs [count - 1, value], base64. */
   density: string;
+  /**
+   * Material id per voxel (shared/src/terrain3d/materials.ts), same order and encoding as
+   * density. Absent when the map has no built structures (every voxel is natural terrain).
+   * Patches carry density only: reset a voxel's material to 0 whenever its solidity flips.
+   */
+  material?: string;
+  /** Detail meshes hung on solid voxels; drop one when its voxel stops being solid. */
+  decor?: ViewDecor[];
+}
+
+/** See DecorAnchor in shared/src/terrain3d/api.ts. */
+export interface ViewDecor {
+  kind: string;
+  x: number;
+  y: number;
+  z: number;
+  /** 0 = +x, 1 = +z, 2 = -x, 3 = -z, 4 = up, 5 = down. */
+  face: number;
+  v: number;
 }
 
 export type ViewServerMessage =
