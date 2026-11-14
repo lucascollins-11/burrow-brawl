@@ -141,3 +141,11 @@ func test_melee_and_tracers_differ_by_weapon() -> void:
 	fx.tracer(Vector3.ZERO, Vector3(10, 0, 0), true, "pea-gatling")
 	check(fx.get_child_count() > before, "water and pea tracers draw")
 	fx.free()
+
+
+func test_quake_shakes_hard_and_rolls_rings_out() -> void:
+	var fx := _fx()
+	fx.quake(Vector3(10, 5, 10))
+	check(fx._shake >= 0.9, "the table thump kicks the camera hard")
+	check(fx.get_child_count() >= 3, "dust puffs appear at once")
+	fx.free()

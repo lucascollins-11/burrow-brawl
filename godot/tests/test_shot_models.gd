@@ -63,3 +63,11 @@ func test_mousetrap_is_a_mine_model_and_does_not_tumble() -> void:
 	check_eq(body.rotation, Vector3.ZERO, "a mine lies still")
 	check(body.get_child_count() > 3, "board, bar and cheese")
 	views.free()
+
+
+func test_air_strike_and_super_projectiles_have_their_own_models() -> void:
+	for w in ["paper-lantern", "giant-block", "meteor-marble", "pinata", "candy-bomb", "boulder-of-doom"]:
+		check(ShotModels.KNOWN.has(w), "%s has its own model" % w)
+		var m := ShotModels.make(w)
+		check(m.get_node("Body").get_child_count() > 1, "%s is more than a ball" % w)
+		m.free()

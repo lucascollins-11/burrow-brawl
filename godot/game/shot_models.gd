@@ -22,7 +22,7 @@ static var _mats: Dictionary = {}
 const KNOWN: Array[String] = [
 	"acorn-mortar", "fizz-grenade", "pinecone-popper", "pinecone-seed", "beehive-bomb", "hopper-ball",
 	"firecracker-bundle", "boulder-of-doom", "jelly-mine", "wind-up-robot", "marble-roller", "rc-racer",
-	"kite-bomber", "mousetrap-snapper",
+	"kite-bomber", "mousetrap-snapper", "paper-lantern", "giant-block", "meteor-marble", "pinata", "candy-bomb",
 ]
 ## Shots that travel along their own heading: drawn facing it, and animated by `animate`.
 ## Placed mines: dropped on the ground, never tumbled.
@@ -79,6 +79,21 @@ static func make(weapon: String) -> Node3D:
 		"boulder-of-doom":
 			_boulder(body)
 			trail = {"color": Color(0.7, 0.62, 0.5, 0.6), "size": 0.9, "rate": 20, "life": 1.0, "spark": false}
+		"paper-lantern":
+			_lantern(body)
+			trail = {"color": Color(1.0, 0.75, 0.35, 0.4), "size": 0.25, "rate": 12, "life": 0.6, "spark": false}
+		"giant-block":
+			_block(body)
+			trail = {"color": Color(1, 1, 1, 0.25), "size": 0.5, "rate": 14, "life": 0.5, "spark": false}
+		"meteor-marble":
+			_meteor(body)
+			trail = {"color": Color(1.0, 0.6, 0.2, 0.9), "size": 0.45, "rate": 50, "life": 0.45, "spark": true}
+		"pinata":
+			_pinata(body)
+			trail = {"color": Color(1.0, 0.5, 0.8, 0.8), "size": 0.2, "rate": 40, "life": 0.5, "spark": true}
+		"candy-bomb":
+			_candy(body)
+			trail = {"color": Color(1.0, 0.45, 0.7, 0.8), "size": 0.15, "rate": 30, "life": 0.35, "spark": true}
 		_:
 			_ball(body, GREY, 0.9, false)
 	root.add_child(_trail(trail))
@@ -361,6 +376,80 @@ static func _box(x: float, y: float, z: float) -> BoxMesh:
 	var b := BoxMesh.new()
 	b.size = Vector3(x, y, z)
 	return b
+
+
+## A paper lantern: glowing orange drum with darker ribs, caps and a flame inside.
+static func _lantern(body: Node3D) -> void:
+	var paper := _mi(_cyl(0.9, 0.9, 1.5), Color("ff9a3c"), Vector3.ZERO, 0.9)
+	var pm := (paper.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	pm.emission_enabled = true
+	pm.emission = Color("ffb347")
+	pm.emission_energy_multiplier = 1.2
+	paper.material_override = pm
+	body.add_child(paper)
+	for y in [-0.45, 0.0, 0.45]:
+		var rib := TorusMesh.new()
+		rib.inner_radius = 0.88
+		rib.outer_radius = 0.95
+		body.add_child(_mi(rib, RED.darkened(0.2), Vector3(0, y, 0), 0.8))
+	for y in [-0.8, 0.8]:
+		body.add_child(_mi(_cyl(0.6, 0.6, 0.18), DARK_BROWN, Vector3(0, y, 0), 0.8))
+	body.add_child(_mi(_cyl(0.03, 0.03, 0.8), BROWN, Vector3(0, 1.3, 0)))
+
+
+## A giant toy building block: red cube with four studs on top and a yellow stripe.
+static func _block(body: Node3D) -> void:
+	body.add_child(_mi(_box(4.5, 3.6, 4.5), RED, Vector3.ZERO, 0.4))
+	body.add_child(_mi(_box(4.6, 0.7, 4.6), YELLOW, Vector3(0, -0.5, 0), 0.4))
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			body.add_child(_mi(_cyl(0.65, 0.65, 0.5), RED.lightened(0.08), Vector3(sx * 1.1, 2.05, sz * 1.1), 0.4))
+
+
+## A glowing glass marble falling like a meteor: hot core, blue glass shell.
+static func _meteor(body: Node3D) -> void:
+	var glass := _mi(_sphere(1.0), Color(0.55, 0.75, 1.0), Vector3.ZERO, 0.05)
+	var gm := (glass.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	gm.emission_enabled = true
+	gm.emission = Color(1.0, 0.55, 0.2)
+	gm.emission_energy_multiplier = 1.6
+	glass.material_override = gm
+	body.add_child(glass)
+	for i in 3:
+		var a := float(i) * TAU / 3.0
+		body.add_child(_mi(_sphere(0.35, 0.5), Color("ff5fa2") if i % 2 == 0 else YELLOW, Vector3(cos(a) * 0.5, sin(a) * 0.4, sin(a) * 0.3), 0.3))
+
+
+## A party pinata: a round striped paper body with ears, a head and a fringe of crepe.
+static func _pinata(body: Node3D) -> void:
+	var pink := Color("ff5fa2")
+	body.add_child(_mi(_sphere(1.5, 0.85), pink, Vector3.ZERO, 0.8))
+	for dy in [-0.45, 0.0, 0.45]:
+		var band := TorusMesh.new()
+		band.inner_radius = 1.2 - absf(dy) * 0.6
+		band.outer_radius = 1.4 - absf(dy) * 0.6
+		body.add_child(_mi(band, YELLOW if dy == 0.0 else Color("4aa3df"), Vector3(0, dy, 0), 0.8))
+	body.add_child(_mi(_sphere(0.8), pink.lightened(0.1), Vector3(1.3, 0.9, 0), 0.8))
+	for dz in [-0.4, 0.4]:
+		body.add_child(_mi(_cyl(0.05, 0.25, 0.7), YELLOW, Vector3(1.3, 1.7, dz), 0.8))
+	body.add_child(_mi(_sphere(0.1), BLACK, Vector3(2.0, 1.05, 0.3), 0.3))
+	body.add_child(_mi(_sphere(0.1), BLACK, Vector3(2.0, 1.05, -0.3), 0.3))
+	for i in 6:
+		var a := float(i) * TAU / 6.0
+		body.add_child(_mi(_box(0.18, 0.9, 0.5), GREEN if i % 2 == 0 else YELLOW, Vector3(cos(a) * 0.9, -1.0, sin(a) * 0.9), 0.8))
+
+
+## A wrapped sweet: round candy with twisted wrapper ends.
+static func _candy(body: Node3D) -> void:
+	body.add_child(_mi(_sphere(0.55), Color("ff5fa2"), Vector3.ZERO, 0.3))
+	for sx in [-1.0, 1.0]:
+		var wrap := _mi(_cyl(0.05, 0.4, 0.5), BLUE, Vector3(sx * 0.75, 0, 0), 0.5)
+		wrap.rotation.z = deg_to_rad(-90.0 * sx)
+		body.add_child(wrap)
+	var stripe := TorusMesh.new()
+	stripe.inner_radius = 0.5
+	stripe.outer_radius = 0.58
+	body.add_child(_mi(stripe, WHITE, Vector3.ZERO, 0.3))
 
 
 static func _boulder(body: Node3D) -> void:

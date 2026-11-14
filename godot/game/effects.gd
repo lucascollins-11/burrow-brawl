@@ -481,6 +481,19 @@ func dust(at: Vector3, size := 2.0) -> void:
 	_kick(at, 0.08)
 
 
+## Tabletop Quake: the whole table thumps. A hard camera shake, three ground rings that roll out
+## from the thumper and a heap of dust.
+func quake(at: Vector3) -> void:
+	_kick(at, 1.0)
+	for i in 3:
+		var tw := create_tween()
+		tw.tween_interval(0.12 * float(i))
+		tw.tween_callback(func() -> void: _ring(at + Vector3(0, 0.2, 0), 18.0 + 14.0 * float(i), 0.9, Color(0.85, 0.72, 0.55, 0.7)))
+	puff(at + Vector3(0, 0.8, 0), 4.0)
+	puff(at + Vector3(3, 0.8, 2), 3.0)
+	puff(at + Vector3(-3, 0.8, -2), 3.0)
+
+
 ## Small puff for shots that do not explode (muzzle, impacts).
 func puff(at: Vector3, radius := 2.0) -> void:
 	var p := MeshInstance3D.new()
