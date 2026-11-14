@@ -3,6 +3,7 @@
 // turn controller. Same config + same commands at the same ticks => same state hash everywhere.
 
 import { Prng, StateHasher, type PrngState } from "../determinism";
+import { FIXED_ONE } from "../fixed";
 import type { Critter, CritterInput, FireCommand, SimEvent, SimState } from "../sim3d/api";
 import { PITCH_MAX, PITCH_MIN, YAW_STEPS } from "../sim3d/api";
 import { MAX_HEALTH } from "../sim3d/constants";
@@ -166,6 +167,12 @@ export interface MatchConfig {
    * The rules are the same; clients use it to show the guided prompts.
    */
   practice?: boolean;
+  /**
+   * Practice only: the sim team index of the target dummies. One dummy starts at a spot near the
+   * player so the first shots can land, and no crate drops as a dummy turn starts (those turns
+   * are skipped at once, so they would double the drops the player sees).
+   */
+  dummyTeam?: number;
   /** Sudden death: from the round after this one the soda rises every turn. 0 or absent = off. */
   suddenDeathRound?: number;
   /** Voxels the soda rises per turn once sudden death starts. Default 2. */
@@ -283,6 +290,8 @@ export function createMatch(cfg: MatchConfig): MatchState {
       });
     }
   }
+  if (cfg.dummyTeam !== undefined)
+    moveDummyNear(critters, cfg.dummyTeam, map.spawns.slice(spawnIndex));
   const sim = createWorld(map.terrain, critters);
   const first = turns.init(sim, rulesFor(cfg), 0, rng);
   return {
@@ -292,6 +301,46 @@ export function createMatch(cfg: MatchConfig): MatchState {
     moveYaw: -1,
     ammo: cfg.teamSizes.map(() => startingAmmo()),
     crates: [],
+  };
+}
+
+/** Practice: a dummy this far from the player (voxels, flat) is easy to reach with a first shot. */
+export const PRACTICE_NEAR_MIN = 25;
+export const PRACTICE_NEAR_MAX = 70;
+const PRACTICE_NEAR_IDEAL = 45;
+
+/**
+ * Move the first target dummy to the unused spawn closest to PRACTICE_NEAR_IDEAL voxels from the
+ * player's first critter, if one lies in [PRACTICE_NEAR_MIN, PRACTICE_NEAR_MAX]. Otherwise leave
+ * the spawns as they are. Deterministic: same config, same spots.
+ */
+function moveDummyNear(
+  critters: Critter[],
+  dummyTeam: number,
+  free: readonly { x: number; y: number; z: number }[],
+): void {
+  const player = critters.find((c) => c.team !== dummyTeam);
+  const dummy = critters.findIndex((c) => c.team === dummyTeam);
+  if (!player || dummy < 0) return;
+  const px = Math.floor(player.pos.x / FIXED_ONE);
+  const pz = Math.floor(player.pos.z / FIXED_ONE);
+  let best: { x: number; y: number; z: number } | undefined;
+  let bestScore = Infinity;
+  for (const sp of free) {
+    // Squared whole-voxel distances: integer maths only, so every machine picks the same spot.
+    const d2 = (sp.x - px) ** 2 + (sp.z - pz) ** 2;
+    if (d2 < PRACTICE_NEAR_MIN ** 2 || d2 > PRACTICE_NEAR_MAX ** 2) continue;
+    const score = Math.abs(d2 - PRACTICE_NEAR_IDEAL ** 2);
+    if (score < bestScore) {
+      bestScore = score;
+      best = sp;
+    }
+  }
+  if (!best) return;
+  const old = critters[dummy]!;
+  critters[dummy] = {
+    ...createCritter(old.id, old.team, best.x, best.y, best.z, old.hp),
+    grounded: true,
   };
 }
 
@@ -444,6 +493,7 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
   if (
     turnChanged &&
     next.phase !== "over" &&
+    (cfg.dummyTeam === undefined || next.activeTeam !== cfg.dummyTeam) &&
     crates.length < MAX_CRATES &&
     rng.chance(CRATE_CHANCE_NUM, CRATE_CHANCE_DEN)
   ) {
