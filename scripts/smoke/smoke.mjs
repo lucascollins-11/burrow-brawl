@@ -190,8 +190,13 @@ async function main() {
   await waitFor(async () => (await power()) >= 25, "the shot to charge");
   await alba.keyboard.up("f");
   // Firing ends control at once (retreat, then settling), long before the turn timer would.
+  // A short shot can finish retreat and settling between two polls on a slow runner, so the
+  // turn having already moved on also counts.
   await waitFor(
-    async () => /run for cover|settle/.test((await turnText(alba)) ?? ""),
+    async () => {
+      const t = (await turnText(alba)) ?? "";
+      return /run for cover|settle/.test(t) || (t !== "" && !t.includes("YOUR TURN"));
+    },
     "the shot to end Alba's control",
     20_000,
   );

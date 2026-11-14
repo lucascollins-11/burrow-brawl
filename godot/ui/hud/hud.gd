@@ -325,6 +325,13 @@ func update(
 	_minimap.queue_redraw()
 
 	_cross.visible = aim != null
+	if aim != null:
+		# The first-person camera tips less than the aim, so the crosshair rides above the centre.
+		var off := HudModel.crosshair_offset(
+			float(aim.pitch_deg), CameraMath.FIRST_PERSON_PITCH_SHARE, 60.0, get_viewport().get_visible_rect().size.y
+		)
+		_cross.offset_top = off
+		_cross.offset_bottom = off
 	_power_panel.visible = aim != null
 	if aim != null:
 		_power_label.text = "Power %d - aim %d deg" % [int(roundf(aim.power)), aim.pitch_deg]
@@ -391,7 +398,7 @@ static func sample_results(winner: int = 0, team_count: int = 4) -> Dictionary:
 				{
 					"id": id,
 					"team": t,
-					"name": "Squirmling %d" % id,
+					"name": CritterNames.name_of(int(id)),
 					"pos": Vector3.ZERO,
 					"heading_deg": 0.0,
 					"hp": (100 - t * 15) if alive else 0,

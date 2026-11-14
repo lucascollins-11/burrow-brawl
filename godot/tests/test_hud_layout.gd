@@ -39,3 +39,11 @@ func test_sample_results_make_a_finished_match_with_a_winner_on_top() -> void:
 		names[int(t["index"])] = str(t["name"])
 	check_eq(HudModel.turn_banner(v), "%s wins!" % names[2], "the banner uses the team's own name")
 	check_eq(rows[0]["name"], names[2], "so do the standings")
+
+
+func test_crosshair_rides_above_the_centre_by_the_part_of_the_aim_the_camera_skips() -> void:
+	check_eq(HudModel.crosshair_offset(0.0, 0.5, 60.0, 720.0), 0.0, "flat aim sits in the middle")
+	var up := HudModel.crosshair_offset(30.0, 0.5, 60.0, 720.0)
+	check(up < 0.0 and up > -360.0, "aiming up moves it up, within the screen")
+	check(HudModel.crosshair_offset(-20.0, 0.5, 60.0, 720.0) > 0.0, "aiming down moves it down")
+	check_eq(HudModel.crosshair_offset(40.0, 1.0, 60.0, 720.0), 0.0, "a camera that follows all of it needs no offset")

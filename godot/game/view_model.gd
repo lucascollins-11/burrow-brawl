@@ -239,7 +239,7 @@ func snapshot() -> Dictionary:
 			{
 				"id": id,
 				"team": e["team"],
-				"name": "Squirmling %d" % id,
+				"name": CritterNames.name_of(int(id)),
 				"pos": pos,
 				"heading_deg": yaw,
 				"hp": e["hp"],

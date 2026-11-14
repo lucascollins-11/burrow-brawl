@@ -381,6 +381,7 @@ export class Room {
       config = {
         ...config,
         practice: true,
+        dummyTeam: teams.findIndex((t) => t.id === practice.dummies),
         teamSizes: teams.map((t) => (t.id === practice.dummies ? PRACTICE_DUMMIES : 1)),
         turnTicks: PRACTICE_TURN_SECONDS * TICKS_PER_SECOND,
         windMax: 0,

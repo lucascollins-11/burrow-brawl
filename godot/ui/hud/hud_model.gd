@@ -120,3 +120,10 @@ static func standings(v: Dictionary) -> Array:
 		rows[i]["rank"] = i + 1
 		rows[i]["winner"] = winner != null and rows[i]["index"] == winner
 	return rows
+
+
+## Screen offset in pixels (negative is up) of the real aim from the centre of the screen, when the
+## camera only follows `share` of the aim pitch (vertical field of view `fov_deg`).
+static func crosshair_offset(aim_pitch_deg: float, share: float, fov_deg: float, screen_h: float) -> float:
+	var left_over := deg_to_rad(aim_pitch_deg * (1.0 - share))
+	return -tan(left_over) / tan(deg_to_rad(fov_deg * 0.5)) * screen_h * 0.5

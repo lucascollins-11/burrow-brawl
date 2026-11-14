@@ -47,7 +47,9 @@ func _ready() -> void:
 	_desc.add_theme_font_size_override("font_size", 16)
 	col.add_child(_desc)
 	_refresh()
-	get_viewport().size_changed.connect(_fit)
+	var vp := get_viewport()
+	if vp != null:
+		vp.size_changed.connect(_fit)
 
 
 func _make_tile(it: Dictionary) -> Button:
