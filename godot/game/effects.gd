@@ -63,7 +63,7 @@ func _ball(at: Vector3, mat: Material, start: float) -> MeshInstance3D:
 ## The blinding white centre: pops big and is gone in a blink.
 func _core_flash(at: Vector3, r: float) -> void:
 	var mat := _unshaded(Color(1.0, 1.0, 0.9, 1.0), 4.0)
-	var flash := _ball(at, mat, r * 0.3)
+	var flash := _ball(at + Vector3(0, r * 0.3, 0), mat, r * 0.3)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(flash, "scale", Vector3.ONE * r * 1.0, 0.12)
@@ -74,7 +74,8 @@ func _core_flash(at: Vector3, r: float) -> void:
 ## The fireball: yellow to orange to dark red while it swells and thins out.
 func _fireball(at: Vector3, r: float) -> void:
 	var mat := _unshaded(Color(1.0, 0.85, 0.3, 0.95), 2.2)
-	var ball := _ball(at, mat, r * 0.4)
+	# Lifted a little so a blast at the bottom of its own crater is not swallowed by the ground.
+	var ball := _ball(at + Vector3(0, r * 0.35, 0), mat, r * 0.4)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(ball, "scale", Vector3.ONE * r * 1.35, 0.5).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)

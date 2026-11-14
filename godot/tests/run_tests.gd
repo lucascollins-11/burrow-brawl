@@ -20,7 +20,24 @@ const SUITES := [
 ]
 
 
-func _init() -> void:
+var _ran := false
+
+
+## The tests run on the first frame, not in `_initialize`: the root window only joins the tree
+## after that, and tests that add nodes (effects, particles, timers) need `get_tree()` to work.
+func _initialize() -> void:
+	TestCase.tree = self
+
+
+func _process(_delta: float) -> bool:
+	if _ran:
+		return false
+	_ran = true
+	_run()
+	return true
+
+
+func _run() -> void:
 	var total := 0
 	var failed := 0
 	for path in SUITES:
