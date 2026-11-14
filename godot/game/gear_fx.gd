@@ -21,7 +21,9 @@ func sync(critters: Array, dt: float) -> void:
 		var id := int(c["id"])
 		var act := str(c.get("act", "")) if bool(c.get("alive", true)) else ""
 		var shield := bool(c.get("shield", false)) and bool(c.get("alive", true))
-		if act == "" and not shield:
+		var frozen := bool(c.get("frozen", false)) and bool(c.get("alive", true))
+		var feather := bool(c.get("feather", false)) and bool(c.get("alive", true))
+		if act == "" and not shield and not frozen and not feather:
 			_drop(id)
 			continue
 		seen[id] = true
@@ -30,7 +32,7 @@ func sync(critters: Array, dt: float) -> void:
 			var root := Node3D.new()
 			root.name = "Gear%d" % id
 			add_child(root)
-			g = {"root": root, "act": "", "shield": null, "rope": null}
+			g = {"root": root, "act": "", "shield": null, "rope": null, "ice": null, "glow": null}
 			_gear[id] = g
 		var root: Node3D = g["root"]
 		root.position = c["pos"]
@@ -46,6 +48,8 @@ func sync(critters: Array, dt: float) -> void:
 				root.add_child(part)
 		_animate(g, c, act)
 		_shield(g, shield)
+		_aura(g, "ice", frozen)
+		_aura(g, "glow", feather)
 		_rope(g, c, act)
 	for id in _gear.keys():
 		if not seen.has(id):
@@ -57,7 +61,13 @@ func state_of(id: int) -> Dictionary:
 	var g: Dictionary = _gear.get(id, {})
 	if g.is_empty():
 		return {}
-	return {"act": g["act"], "shield": g["shield"] != null, "rope": g["rope"] != null}
+	return {
+		"act": g["act"],
+		"shield": g["shield"] != null,
+		"rope": g["rope"] != null,
+		"frozen": g["ice"] != null,
+		"feather": g["glow"] != null,
+	}
 
 
 func clear() -> void:
@@ -160,6 +170,51 @@ func _build(act: String) -> Node3D:
 			dust.name = "Dust"
 			dust.position = Vector3(0, 0.4, 0)
 			part.add_child(dust)
+		"gatling":
+			# A crank-handle pea shooter held out in front: three barrels round a hub.
+			var gun := Node3D.new()
+			gun.name = "Gun"
+			gun.position = Vector3(0.0, 3.0, 2.0)
+			var hub := MeshInstance3D.new()
+			var hm := CylinderMesh.new()
+			hm.top_radius = 0.55
+			hm.bottom_radius = 0.55
+			hm.height = 1.2
+			hub.mesh = hm
+			hub.rotation.x = PI * 0.5
+			hub.material_override = _mat(Color("6b4a32"), 0.6)
+			gun.add_child(hub)
+			var barrels := Node3D.new()
+			barrels.name = "Barrels"
+			barrels.position = Vector3(0, 0, 1.4)
+			for i in 3:
+				var a := TAU * float(i) / 3.0
+				var barrel := MeshInstance3D.new()
+				var bm := CylinderMesh.new()
+				bm.top_radius = 0.2
+				bm.bottom_radius = 0.2
+				bm.height = 2.2
+				barrel.mesh = bm
+				barrel.rotation.x = PI * 0.5
+				barrel.position = Vector3(cos(a) * 0.38, sin(a) * 0.38, 0)
+				barrel.material_override = _mat(Color("b8bcc4"), 0.2)
+				barrels.add_child(barrel)
+			gun.add_child(barrels)
+			var crank := MeshInstance3D.new()
+			crank.mesh = _ball(0.22)
+			crank.position = Vector3(0.7, 0.5, -0.4)
+			crank.material_override = _mat(Color("e8503c"), 0.4)
+			gun.add_child(crank)
+			var flash := MeshInstance3D.new()
+			flash.name = "Flash"
+			flash.mesh = _ball(0.5)
+			flash.position = Vector3(0, 0, 2.7)
+			var fm := StandardMaterial3D.new()
+			fm.albedo_color = Color(0.7, 1.0, 0.55)
+			fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			flash.material_override = fm
+			gun.add_child(flash)
+			part.add_child(gun)
 		_:
 			return null
 	return part
@@ -184,6 +239,14 @@ func _animate(g: Dictionary, c: Dictionary, act: String) -> void:
 			var bit := part.get_node_or_null("Bit") as Node3D
 			if bit != null:
 				bit.rotation.y = _t * 22.0
+		"gatling":
+			var barrels := part.get_node_or_null("Gun/Barrels") as Node3D
+			if barrels != null:
+				barrels.rotation.z = _t * 26.0
+			var flash := part.get_node_or_null("Gun/Flash") as Node3D
+			if flash != null:
+				flash.visible = fposmod(_t, 0.12) < 0.07
+				flash.scale = Vector3.ONE * (0.8 + 0.5 * sin(_t * 90.0))
 		"jetpack":
 			var flying := not bool(c.get("grounded", true))
 			for side in ["-1", "1"]:
@@ -221,6 +284,96 @@ func _shield(g: Dictionary, on: bool) -> void:
 		(g["root"] as Node3D).add_child(bubble)
 		g["shield"] = bubble
 	bubble.scale = Vector3.ONE * (1.0 + 0.03 * sin(_t * 3.0))
+
+
+## An ice shell round a frozen Squirmling, or a warm feather glow with rising sparkles.
+func _aura(g: Dictionary, key: String, on: bool) -> void:
+	var node: Node3D = g[key]
+	if not on:
+		if node != null:
+			node.queue_free()
+			g[key] = null
+		return
+	if node == null:
+		node = _ice() if key == "ice" else _glow()
+		(g["root"] as Node3D).add_child(node)
+		g[key] = node
+		# Switch the sparkles on only now: starting an emitter outside the tree reads its transform.
+		var sparkles := node.get_node_or_null("Sparkles") as CPUParticles3D
+		if sparkles != null:
+			sparkles.emitting = true
+	if key == "glow":
+		node.scale = Vector3.ONE * (1.0 + 0.06 * sin(_t * 4.0))
+
+
+static func _ice() -> Node3D:
+	var shell := MeshInstance3D.new()
+	shell.name = "Ice"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(5.6, 7.4, 5.6)
+	shell.mesh = bm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.7, 0.92, 1.0, 0.42)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.roughness = 0.05
+	m.metallic = 0.3
+	m.emission_enabled = true
+	m.emission = Color(0.55, 0.85, 1.0)
+	m.emission_energy_multiplier = 0.5
+	shell.material_override = m
+	shell.position = Vector3(0, 3.3, 0)
+	shell.rotation.y = 0.35
+	# A few jagged crystals on top.
+	for i in 3:
+		var spike := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.0
+		cm.bottom_radius = 0.7
+		cm.height = 2.2 + float(i) * 0.5
+		cm.radial_segments = 5
+		spike.mesh = cm
+		spike.material_override = m
+		spike.position = Vector3(float(i - 1) * 1.5, 3.7 + cm.height * 0.5, float(i % 2) - 0.5)
+		spike.rotation.z = float(i - 1) * -0.3
+		shell.add_child(spike)
+	return shell
+
+
+static func _glow() -> Node3D:
+	var root := Node3D.new()
+	root.name = "Glow"
+	var aura := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 4.0
+	sm.height = 8.0
+	sm.radial_segments = 16
+	sm.rings = 8
+	aura.mesh = sm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(1.0, 0.92, 0.55, 0.2)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.85, 0.4)
+	m.emission_energy_multiplier = 0.8
+	aura.material_override = m
+	aura.position = Vector3(0, 3.0, 0)
+	root.add_child(aura)
+	var spark := _plume()
+	spark.name = "Sparkles"
+	spark.position = Vector3(0, 1.0, 0)
+	spark.direction = Vector3.UP
+	spark.spread = 40.0
+	spark.initial_velocity_min = 2.0
+	spark.initial_velocity_max = 4.0
+	spark.lifetime = 1.2
+	spark.amount = 14
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1.0, 0.95, 0.6, 0.9))
+	fade.set_color(1, Color(1.0, 0.95, 0.6, 0.0))
+	spark.color_ramp = fade
+	root.add_child(spark)
+	return root
 
 
 ## The rope runs from the critter's chest to the anchor, in world space.

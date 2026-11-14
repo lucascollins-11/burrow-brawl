@@ -1094,6 +1094,176 @@ describe("walkers and steerables", () => {
   });
 });
 
+describe("guns and melee", () => {
+  const fire = (fire: FireCommand): CritterInput => ({ critterId: 1, moveYaw: -1, fire });
+  const near = (dx: number, dz = 0): SimState => {
+    const s = world(true);
+    return {
+      ...s,
+      critters: s.critters.map((c) =>
+        c.id === 2
+          ? {
+              ...c,
+              pos: {
+                ...c.pos,
+                x: (40 + dx) * FIXED_ONE + FIXED_ONE / 2,
+                z: (64 + dz) * FIXED_ONE + FIXED_ONE / 2,
+              },
+            }
+          : c,
+      ),
+    };
+  };
+
+  it("Pea Gatling sprays a stream for three seconds and sweeps with the walk keys", () => {
+    const s = stepWorld(
+      near(20),
+      [fire({ weaponId: "pea-gatling", yaw: 0, pitch: 0, power: 0 })],
+      rng,
+    ).state;
+    expect(s.critters[0]!.gatling).toBeDefined();
+    expect(isSettled(s)).toBe(false);
+    const r = run(s, 200, (t) => [{ critterId: 1, moveYaw: t > 90 ? 256 : -1 }]);
+    const tracers = r.events.filter((e) => e.type === "tracer");
+    expect(tracers).toHaveLength(30);
+    expect(r.state.critters[0]!.gatling).toBeUndefined();
+    expect(r.state.critters[0]!.yaw).toBe(256); // swept round
+    expect(cell(r.state.critters[0]!.pos.x)).toBe(40); // without walking
+    const hurt = r.events.filter((e) => e.type === "damage" && e.critterId === 2);
+    expect(hurt.length).toBeGreaterThan(5);
+    expect(hurt.length).toBeLessThan(30);
+  });
+
+  it("Water Pistol barely hurts but shoves hard, leaving the ground alone", () => {
+    const s = stepWorld(
+      near(20),
+      [fire({ weaponId: "water-pistol", yaw: 0, pitch: 0, power: 0 })],
+      rng,
+    );
+    const c2 = s.state.critters[1]!;
+    expect(100 - c2.hp).toBeLessThanOrEqual(5);
+    expect(c2.vel.x).toBeGreaterThan(FIXED_ONE);
+    expect(s.state.terrain.edits).toHaveLength(0);
+  });
+
+  it("Spatula Swat hits in a frontal arc only; Pillow Bash shoves without hurting", () => {
+    const swat = (s: SimState) =>
+      stepWorld(s, [fire({ weaponId: "spatula-swat", yaw: 0, pitch: 0, power: 0 })], rng);
+    expect(swat(near(8, 8)).state.critters[1]!.hp).toBe(75); // 45 degrees off: inside 120
+    expect(swat(near(3, 12)).state.critters[1]!.hp).toBe(100); // 76 degrees off: outside
+    const bash = stepWorld(
+      near(8),
+      [fire({ weaponId: "pillow-bash", yaw: 0, pitch: 0, power: 0 })],
+      rng,
+    );
+    const c2 = bash.state.critters[1]!;
+    expect(c2.hp).toBe(100);
+    expect(c2.vel.x).toBeGreaterThan(3 * Math.abs(c2.vel.y));
+  });
+
+  it("Mousetrap Snapper waits, then snaps whoever steps on it high into the air", () => {
+    const trap = (s: SimState) =>
+      stepWorld(s, [fire({ weaponId: "mousetrap-snapper", yaw: 0, pitch: 0, power: 0 })], rng)
+        .state;
+    let s = trap(near(60));
+    s = {
+      ...s,
+      critters: s.critters.map((c) =>
+        c.id === 1 ? { ...c, pos: { ...c.pos, x: 10 * FIXED_ONE } } : c,
+      ),
+    };
+    s = run(s, 120).state;
+    expect(s.projectiles).toHaveLength(1);
+    expect(isSettled(s)).toBe(true);
+    const p = s.projectiles[0]!;
+    s = {
+      ...s,
+      critters: s.critters.map((c) =>
+        c.id === 2 ? { ...c, pos: { ...c.pos, x: p.pos.x, z: p.pos.z } } : c,
+      ),
+    };
+    let top = 0;
+    const r = run(s, 120, (_t, st) => {
+      top = Math.max(top, cell(st.critters[1]!.pos.y));
+      return [];
+    });
+    expect(r.events.filter((e) => e.type === "mineTriggered")).toHaveLength(1);
+    expect(top - GROUND).toBeGreaterThan(20);
+    expect(r.state.terrain.edits).toHaveLength(0);
+  });
+});
+
+describe("air strikes and supers", () => {
+  const at = (dx: number) => ({ x: 40 + dx, y: GROUND, z: 64 });
+  const cmd = (
+    weaponId: FireCommand["weaponId"],
+    extra: Partial<FireCommand> = {},
+  ): FireCommand => ({
+    weaponId,
+    yaw: 0,
+    pitch: 0,
+    power: 0,
+    ...extra,
+  });
+
+  it("Lantern Drift drops three lanterns that the wind carries", () => {
+    const calm = run(world(), 900, fireOnce(cmd("lantern-drift", { target: at(40) })));
+    const windy = run(
+      { ...world(), windX: 10 },
+      900,
+      fireOnce(cmd("lantern-drift", { target: at(40) })),
+    );
+    const xs = (r: typeof calm) =>
+      explosions(r.events)
+        .filter((e) => e.weaponId === "paper-lantern")
+        .map((e) => (e.edit as { x: number }).x);
+    expect(xs(calm)).toHaveLength(3);
+    expect(xs(windy)).toHaveLength(3);
+    const drift = xs(windy).map((x, i) => x - xs(calm)[i]!);
+    expect(drift.every((d) => d > 5)).toBe(true);
+  });
+
+  it("Toy Block Drop lands a giant block that stays as new terrain", () => {
+    const r = run(world(), 900, fireOnce(cmd("toy-block-drop", { target: at(30) })));
+    expect(explosions(r.events).filter((e) => e.weaponId === "giant-block")).toHaveLength(1);
+    expect(isSolid(r.state.terrain, 70, GROUND + 3, 64)).toBe(true);
+  });
+
+  it("Boulder of Doom grinds a tunnel and blows on reaching a critter", () => {
+    const r = run(world(true), 900, fireOnce(cmd("boulder-of-doom")));
+    const ex = explosions(r.events).filter((e) => e.weaponId === "boulder-of-doom");
+    expect(ex).toHaveLength(1);
+    expect(r.state.terrain.edits.length).toBeGreaterThan(2);
+    expect(r.state.critters[1]!.hp).toBeLessThan(100);
+  });
+
+  it("Marble Meteor Shower rains twenty marbles over about four seconds", () => {
+    const r = run(world(), 600, fireOnce(cmd("marble-meteor-shower")));
+    const ex = explosions(r.events).filter((e) => e.weaponId === "meteor-marble");
+    expect(r.events.filter((e) => e.type === "fired")).toHaveLength(1);
+    expect(ex).toHaveLength(20);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+
+  it("Party Pinata bursts into eight candy bombs", () => {
+    const r = run(world(), 900, fireOnce(cmd("party-pinata", { target: at(40) })));
+    const ex = explosions(r.events);
+    expect(ex.filter((e) => e.weaponId === "pinata")).toHaveLength(1);
+    expect(ex.filter((e) => e.weaponId === "candy-bomb")).toHaveLength(8);
+  });
+
+  it("Tabletop Quake hurts everyone and throws them out from the middle", () => {
+    const r = stepWorld(world(true), [fireOnce(cmd("tabletop-quake"))(0)[0]!], rng);
+    const [a, b] = r.state.critters;
+    expect(a!.hp).toBe(90);
+    expect(b!.hp).toBe(90);
+    expect(a!.vel.x).toBeLessThan(0); // x 40: left of the middle
+    expect(b!.vel.x).toBeGreaterThan(0); // x 100: right of it
+    expect(a!.vel.y).toBeGreaterThan(0);
+    expect(r.state.terrain.edits).toHaveLength(0);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -1153,7 +1323,20 @@ describe("weapon catalogue", () => {
       "marble-roller",
       "rc-racer",
       "kite-bomber",
+      "pea-gatling",
+      "water-pistol",
+      "spatula-swat",
+      "pillow-bash",
+      "mousetrap-snapper",
+      "lantern-drift",
+      "toy-block-drop",
+      "boulder-of-doom",
+      "marble-meteor-shower",
+      "party-pinata",
+      "tabletop-quake",
     ]);
+    expect(byId["tabletop-quake"]!.crateOnly).toBe(true);
+    expect(byId["acorn-mortar"]!.crateOnly).toBe(false);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);
     expect(byId["root-punch"]!.needs).toEqual([]);

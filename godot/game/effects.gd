@@ -264,19 +264,28 @@ func _smoke(at: Vector3, radius: float) -> void:
 
 ## The streak of an instant shot: a bright thin bar from the muzzle to where it stopped, gone in a
 ## blink, with a puff at the muzzle.
-func tracer(from: Vector3, to: Vector3, hit := false) -> void:
+func tracer(from: Vector3, to: Vector3, hit := false, weapon := "") -> void:
 	var span := to - from
 	var length := span.length()
 	if length < 0.01:
 		return
 	var bar := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(0.22, 0.22, 1.0)
+	# Pellets are yellow sparks, peas green and thin, water a fat blue squirt.
+	var glow := Color("ffd24a")
+	var thick := 0.22
+	if weapon == "water-pistol":
+		glow = Color("62b8ff")
+		thick = 0.45
+	elif weapon == "pea-gatling":
+		glow = Color("7ee06a")
+		thick = 0.16
+	box.size = Vector3(thick, thick, 1.0)
 	bar.mesh = box
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.95, 0.7, 0.95)
+	mat.albedo_color = Color(glow.r, glow.g, glow.b, 0.95).lerp(Color(1, 1, 1, 0.95), 0.55)
 	mat.emission_enabled = true
-	mat.emission = Color("ffd24a")
+	mat.emission = glow
 	mat.emission_energy_multiplier = 4.0
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -294,10 +303,12 @@ func tracer(from: Vector3, to: Vector3, hit := false) -> void:
 	tw.tween_property(mat, "albedo_color:a", 0.0, 0.28)
 	tw.chain().tween_callback(bar.queue_free)
 	puff(from, 1.6)
-	if hit:
+	if hit and weapon == "water-pistol":
+		splash(to, 1.6)
+	elif hit:
 		_sparks(to, 1.4)
 		puff(to, 1.8)
-	_kick(from, 0.12)
+	_kick(from, 0.12 if weapon != "pea-gatling" else 0.04)
 
 
 ## The Root Punch: a hard shock ring, sparks and a comic "POW!" when it connects.
@@ -310,6 +321,28 @@ func punch(at: Vector3, hits: int) -> void:
 		_kick(at, 0.3)
 	else:
 		_kick(at, 0.08)
+
+
+## A swing of the Spatula Swat (a wide silver arc and "WHAP!") or the Pillow Bash (a soft white
+## burst of feathers and "FWUMP!"); anything else is the Root Punch. `at` is where it landed.
+func melee(at: Vector3, hits: int, weapon: String) -> void:
+	if weapon == "spatula-swat":
+		_ring(at, 9.0, 0.35, Color(0.85, 0.88, 0.95, 0.9))
+		_ring(at + Vector3(0, 0.6, 0), 6.0, 0.25, Color(1.0, 1.0, 1.0, 0.8))
+		if hits > 0:
+			_sparks(at, 2.4)
+			_word(at + Vector3(0, 3.0, 0), "WHAP!", Color("d9dee4"))
+			_kick(at, 0.35)
+		else:
+			_kick(at, 0.1)
+	elif weapon == "pillow-bash":
+		burst(at + Vector3(0, 1.5, 0), Color("fff6e8"))
+		_ring(at, 8.0, 0.4, Color(1.0, 0.95, 0.9, 0.7))
+		if hits > 0:
+			_word(at + Vector3(0, 3.0, 0), "FWUMP!", Color("fff6e8"))
+			_kick(at, 0.3)
+	else:
+		punch(at, hits)
 
 
 ## A comic word that pops in over a point and floats away.

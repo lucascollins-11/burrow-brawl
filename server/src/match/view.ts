@@ -23,6 +23,7 @@ type StateMsg = Extract<ViewServerMessage, { t: "state" }>;
 /** What utility the critter is busy with, for animation. At most one at a time. */
 function critterAct(c: Critter): Pick<ViewCritter, "act" | "fuel" | "anchor"> {
   if (c.drillTicks !== undefined) return { act: "drill" };
+  if (c.gatling) return { act: "gatling" };
   if (c.jetFuel !== undefined) return { act: "jetpack", fuel: c.jetFuel };
   if (c.umbrella) return { act: "umbrella" };
   if (c.rope) return { act: "rope", anchor: { ...c.rope.anchor } };
@@ -78,7 +79,8 @@ export function viewMine(p: Projectile): ViewMine {
 /** Projectiles and placed mines, split for the wire. */
 function flyingAndMines(ps: readonly Projectile[]): Pick<ViewState, "projectiles" | "mines"> {
   return {
-    projectiles: ps.filter((p) => !isMineProjectile(p)).map(viewProjectile),
+    // Meteor marbles still waiting their turn to fall (age < 0) are not drawn yet.
+    projectiles: ps.filter((p) => !isMineProjectile(p) && p.age >= 0).map(viewProjectile),
     mines: ps.filter(isMineProjectile).map(viewMine),
   };
 }

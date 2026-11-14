@@ -62,6 +62,16 @@ export const WEAPON_CASES: WeaponCase[] = [
     target: "center",
     expect: ["fired", "explosion"],
   },
+  { weapon: "lantern-drift", pitch: 0, power: 0, target: "center", expect: ["fired", "explosion"] },
+  {
+    weapon: "toy-block-drop",
+    pitch: 0,
+    power: 0,
+    target: "center",
+    expect: ["fired", "explosion"],
+  },
+  // The supers (Boulder of Doom, Marble Meteor Shower, Party Pinata, Tabletop Quake) are crate-only:
+  // a team starts with none, so they have no row here; the sim tests cover them.
   { weapon: "jelly-mine", pitch: 0, power: 0, expect: ["fired"] },
   // Does not end the turn: the turn timer runs out after the tunnel.
   { weapon: "drill-hat", pitch: 0, power: 0, expect: ["fired"], label: "sideways" },
@@ -95,6 +105,11 @@ export const WEAPON_CASES: WeaponCase[] = [
   { weapon: "marble-roller", pitch: 20, power: 30, expect: ["fired", "explosion"] },
   { weapon: "rc-racer", pitch: 0, power: 0, triggerAfter: 60, expect: ["fired", "explosion"] },
   { weapon: "kite-bomber", pitch: 30, power: 0, triggerAfter: 90, expect: ["fired", "explosion"] },
+  { weapon: "pea-gatling", pitch: 0, power: 0, expect: ["fired", "tracer"] },
+  { weapon: "water-pistol", pitch: 0, power: 0, expect: ["fired", "tracer"] },
+  { weapon: "spatula-swat", pitch: 0, power: 0, expect: ["fired", "punch"] },
+  { weapon: "pillow-bash", pitch: 0, power: 0, expect: ["fired", "punch"] },
+  { weapon: "mousetrap-snapper", pitch: 0, power: 0, expect: ["fired"] },
   { weapon: "build-block", pitch: 0, power: 0, target: "center", expect: ["fired"] },
   { weapon: "bubble-shield", pitch: 0, power: 0, expect: ["fired"] },
   { weapon: "cookie-snack", pitch: 0, power: 0, expect: ["fired", "healed"] },

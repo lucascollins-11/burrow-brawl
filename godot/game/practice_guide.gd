@@ -16,11 +16,12 @@ const STEPS: Array[String] = [
 	"Hit a target dummy. They never shoot back.",
 	"Open the weapon menu with {weapon_menu} and pick a different weapon.",
 	"Look at the wind gauge in the top left, then fire into the wind.",
+	"Open the weapons ({weapon_menu}), pick the Soda Jetpack or Rope Claw, and use it.",
 	"Crates drop between turns. Walk into one to take it.",
 	"Knock a target dummy into the soda sea.",
 ]
 ## The HUD element to spotlight for each step, or "" for none. Names are read by Hud.highlight_target.
-const HIGHLIGHTS: Array[String] = ["", "", "", "", "", "weapons", "wind", "", ""]
+const HIGHLIGHTS: Array[String] = ["", "", "", "", "", "weapons", "wind", "weapons", "", ""]
 const DONE := "Tutorial complete. You know the basics now. Keep fighting the dummies, or leave from the pause menu."
 
 var step := 0
@@ -82,11 +83,15 @@ func feed(v: Dictionary, aiming: bool, events: Array, weapon_id: String) -> void
 			if _fired_by_us(v, events):
 				step += 1
 		7:
+			# A utility is on while the snapshot shows the jetpack or the rope under way.
+			if str(mine.get("act", "")) in ["jetpack", "rope"]:
+				step += 1
+		8:
 			for e in events:
 				if str(e.get("type", "")) == "crateTaken" and _team_of(v, int(e.get("critterId", -1))) in _local(v):
 					step += 1
 					break
-		8:
+		9:
 			for e in events:
 				if str(e.get("type", "")) != "died" or str(e.get("cause", "")) != "water":
 					continue

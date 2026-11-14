@@ -174,3 +174,87 @@ func test_view_model_keeps_acts_shields_and_mines() -> void:
 	check_eq(s["critters"][0]["act"], "", "act cleared")
 	check(not s["critters"][0]["shield"], "shield cleared")
 	check_eq((s["mines"] as Array).size(), 0, "mine gone")
+
+
+func test_frozen_gets_an_ice_shell_and_feather_a_glow() -> void:
+	var gear := GearFx.new()
+	gear.sync([_crit(1, {"frozen": true, "grounded": true}), _crit(2, {"feather": true, "grounded": true})], 0.016)
+	check(gear.state_of(1)["frozen"], "ice shell")
+	check(not gear.state_of(1)["feather"], "no glow on the frozen one")
+	check(gear.state_of(2)["feather"], "feather glow")
+	check(gear.get_node("Gear1/Ice") != null, "shell node")
+	check(gear.get_node("Gear2/Glow/Sparkles") != null, "sparkles")
+	gear.sync([_crit(1), _crit(2)], 0.016)
+	check(gear.state_of(1).is_empty() and gear.state_of(2).is_empty(), "both gone when thawed")
+	gear.free()
+
+
+func test_zones_come_and_dry_up() -> void:
+	var views := ZoneViews.new()
+	var fire := {"id": 1, "kind": "fire", "pos": Vector3(5, 3, 5), "r": 4.0, "turns": 2}
+	var glue := {"id": 2, "kind": "glue", "pos": Vector3(20, 3, 5), "r": 3.0, "turns": 3}
+	views.sync([fire, glue], 0.05)
+	check_eq(views.kinds(), {1: "fire", 2: "glue"}, "both puddles")
+	check(views.get_node("Zone1/Flames") != null, "fire has flames")
+	check(views.get_node("Zone2/Bubbles") != null, "glue bubbles")
+	views.sync([glue], 0.05)
+	check_eq(views.kinds(), {2: "glue"}, "the fire dried up")
+	views.free()
+
+
+func test_view_model_keeps_zones_frozen_and_feather() -> void:
+	var vm := ViewModel.new()
+	vm.apply_state(
+		{
+			"tick": 3,
+			"critters": [{"id": 1, "team": 0, "x": 0, "y": 0, "z": 0, "yaw": 0, "hp": 100, "status": "alive", "grounded": true, "frozen": true}],
+			"projectiles": [],
+			"zones": [{"id": 4, "kind": "glue", "x": 10, "y": 2, "z": 12, "r": 5, "turns": 3}],
+		},
+		true
+	)
+	var s := vm.snapshot()
+	check(s["critters"][0]["frozen"], "frozen")
+	check(not s["critters"][0]["feather"], "no feather")
+	check_eq((s["zones"] as Array).size(), 1, "one puddle")
+	check_eq(s["zones"][0]["pos"], Vector3(10.5, 2, 12.5), "centred on its voxel")
+
+
+func test_view_model_keeps_a_steered_shot_heading() -> void:
+	var vm := ViewModel.new()
+	vm.apply_state(
+		{
+			"tick": 3,
+			"critters": [],
+			"projectiles":
+			[
+				{"id": 1, "ownerId": 1, "weaponId": "rc-racer", "x": 0, "y": 0, "z": 0, "fuseTicks": -1, "heading": 0},
+				{"id": 2, "ownerId": 1, "weaponId": "acorn-mortar", "x": 0, "y": 0, "z": 0, "fuseTicks": 30},
+			],
+		},
+		true
+	)
+	var shots: Array = vm.snapshot()["projectiles"]
+	check_eq(shots[0]["heading_deg"], 90.0, "yaw 0 faces +x, heading 90")
+	check_eq(shots[1]["heading_deg"], INF, "a plain shot has no heading")
+
+
+func test_trigger_is_a_bindable_action_and_pops_a_shot_in_flight() -> void:
+	check(not GameSettings.action_def("trigger").is_empty(), "trigger is rebindable")
+	var seen := {}
+	for a in GameSettings.ACTIONS:
+		var k := int(a["key"])
+		if a["id"] != "pause" and a["id"] != "cancel_aim":
+			check(not seen.has(k), "%s has its own default key" % a["id"])
+		seen[k] = true
+
+
+func test_gatling_act_holds_a_spinning_gun() -> void:
+	var gear := GearFx.new()
+	gear.sync([_crit(1, {"act": "gatling", "grounded": true})], 0.05)
+	check_eq(gear.state_of(1).get("act", ""), "gatling", "gatling is drawn")
+	var barrels := gear.get_node("Gear1/Act/Gun/Barrels") as Node3D
+	var before := barrels.rotation.z
+	gear.sync([_crit(1, {"act": "gatling", "grounded": true})], 0.05)
+	check(barrels.rotation.z != before, "the barrels turn")
+	gear.free()

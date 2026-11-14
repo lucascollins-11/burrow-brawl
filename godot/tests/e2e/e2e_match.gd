@@ -152,17 +152,19 @@ func _run() -> bool:
 		return false
 	# A blast right where the camera looks, photographed within a few frames so it is still going.
 	var rig: Variant = scene.get("_rig")
-	# The software renderer takes seconds per frame and particles run on the clock, so slow the
-	# clock right down while the blast is photographed or it is over before the first frame.
-	Engine.time_scale = 0.03
-	scene.fx.explode(rig.target, 9.0)
-	await _shot("2b-blast", 4)
+	# The software renderer takes seconds per frame and effects run on the engine clock, so a
+	# blast is over before the first picture. Slow the clock, let about a quarter of a second of
+	# effect time pass, then freeze it for the capture.
+	scene.fx.explode(rig.target, 12.0)
+	print("E2E blast: %d effect nodes, camera %s looking at %s" % [scene.fx.get_child_count(), scene.camera.global_position, rig.target])
+	await _freeze_after(0.25)
+	await _shot("2b-blast", 1)
 	Engine.time_scale = 1.0
 	var sea: float = scene.vm.sea_y
 	var mid: Vector2 = scene.get("_world")
-	Engine.time_scale = 0.03
 	scene.fx.splash(Vector3(mid.x * 0.5, sea, mid.y * 0.5 + 40.0), 5.0)
-	await _shot("2c-splash", 4)
+	await _freeze_after(0.2)
+	await _shot("2c-splash", 1)
 	Engine.time_scale = 1.0
 	if not await _until(func() -> bool: return a_patches > 0 and b_patches > 0, "a terrain patch on both clients"):
 		return false
@@ -186,6 +188,14 @@ func _run() -> bool:
 	if scene._guide == null or scene._guide_label == null or scene._guide_label.text == "":
 		return _fail("the practice guide shows no prompt")
 	await _shot("5-practice", 1)
+	# The new steps, one picture each: a utility, then a crate.
+	for pair in [[7, "5b-practice-utility"], [8, "5c-practice-crate"]]:
+		scene._guide.step = pair[0]
+		for i in 3:
+			await get_tree().process_frame
+		if not scene._guide_label.text.begins_with("Practice %d of" % (pair[0] + 1)):
+			return _fail("practice step %d shows the wrong prompt: %s" % [pair[0] + 1, scene._guide_label.text])
+		await _shot(pair[1], 1)
 	scene._setup_guide(false)
 	# The close look comes last: under the software renderer it can outlast a turn.
 	await _closeup(_snap())
@@ -335,9 +345,9 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	scene.add_child(views)
 	var crowd: Array = []
 	var list: Array = []
-	var acts := ["jetpack", "umbrella", "boots", "drill", "rope"]
-	var offsets := [-14.0, -7.0, 7.0, 14.0, 21.0]
-	for i in 5:
+	var acts := ["jetpack", "umbrella", "boots", "drill", "rope", "gatling"]
+	var offsets := [-14.0, -7.0, 7.0, 14.0, 21.0, 28.0]
+	for i in 6:
 		var at: Vector3 = (me["pos"] as Vector3) + right * float(offsets[i])
 		at.y = scene.ground_y(at.x, at.z)
 		var grounded: bool = acts[i] != "jetpack" and acts[i] != "umbrella"
@@ -353,21 +363,60 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 			"grounded": grounded, "act": acts[i], "shield": acts[i] == "rope", "anchor": twin.position + Vector3(6, 26, 0)
 		}
 		list.append(c)
+	# A fire puddle and a glue puddle, and the ice shell and feather glow on two more stand-ins.
+	var zone_list: Array = []
+	for i in 2:
+		var zat: Vector3 = (me["pos"] as Vector3) + right * (-9.0 + 18.0 * float(i)) + forward * 14.0
+		zat.y = scene.ground_y(zat.x, zat.z)
+		zone_list.append({"id": 1 + i, "kind": "fire" if i == 0 else "glue", "pos": zat, "r": 5.0, "turns": 2})
+	var zones := ZoneViews.new()
+	scene.add_child(zones)
+	for i in 2:
+		var zat: Vector3 = (me["pos"] as Vector3) + right * (-5.0 + 10.0 * float(i)) - forward * 8.0
+		zat.y = scene.ground_y(zat.x, zat.z)
+		var twin2 := Squirmling.create(1, "chef", Color("4aa3df"))
+		twin2.position = zat
+		twin2.rotation.y = rig.rotation.y
+		scene.add_child(twin2)
+		twin2.drive(0.016, false, Vector3.ZERO, true)
+		crowd.append(twin2)
+		list.append(
+			{
+				"id": 910 + i, "pos": zat, "heading_deg": rad_to_deg(rig.rotation.y), "alive": true,
+				"grounded": true, "act": "", "frozen": i == 0, "feather": i == 1
+			}
+		)
+	var steered: Array = []
+	var weapons := ["wind-up-robot", "marble-roller", "rc-racer", "kite-bomber"]
+	for i in 4:
+		var sat: Vector3 = (me["pos"] as Vector3) + right * (-10.0 + 7.0 * float(i)) + forward * 20.0
+		sat.y = scene.ground_y(sat.x, sat.z) + (4.0 if weapons[i] == "kite-bomber" else 0.0)
+		steered.append({"id": 50 + i, "weapon": weapons[i], "pos": sat, "heading_deg": rad_to_deg(rig.rotation.y) + 40.0})
 	var mines: Array = []
 	for i in 2:
 		var at: Vector3 = (me["pos"] as Vector3) + right * (-3.0 + 6.0 * float(i)) + forward * 7.0
 		at.y = scene.ground_y(at.x, at.z) + 0.2
 		mines.append({"id": 1 + i, "weapon": "jelly-mine", "pos": at, "armed": i == 1, "triggered": false})
+	var trap_at: Vector3 = (me["pos"] as Vector3) + forward * 11.0 + right * 3.0
+	trap_at.y = scene.ground_y(trap_at.x, trap_at.z) + 0.2
+	mines.append({"id": 9, "weapon": "mousetrap-snapper", "pos": trap_at, "armed": true, "triggered": false})
 	scene._rig.dist = 46.0
 	scene._rig.pitch_deg = 14.0
 	for i in 4:
 		gear.sync(list, 0.05)
-		views.sync([], mines)
+		views.sync(steered, mines)
+		zones.sync(zone_list, 0.05)
 		await get_tree().process_frame
 	await _shot("1g-gear", 3)
 	for c: Dictionary in list:
 		c["act"] = ""
 		c["shield"] = false
+	gear.sync(list, 0.05)
+	if not (gear.state_of(910)["frozen"] and gear.state_of(911)["feather"]):
+		errors.append("the ice shell or the feather glow is missing")
+	for c: Dictionary in list:
+		c["frozen"] = false
+		c["feather"] = false
 	gear.sync(list, 0.05)
 	if not gear.state_of(900).is_empty():
 		errors.append("gear stayed after the acts ended")
@@ -378,4 +427,22 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 	gear.queue_free()
 	scene.remove_child(views)
 	views.queue_free()
+	scene.remove_child(zones)
+	zones.queue_free()
 	print("E2E ok: gear and mines")
+
+
+## Run the engine clock slowly until `seconds` of effect time have passed (or 40 frames), then
+## stop it, so the next screenshot shows the effect part-way through. Does nothing without a
+## real renderer. Callers put `Engine.time_scale` back to 1.
+func _freeze_after(seconds: float) -> void:
+	if shots_dir == "" or DisplayServer.get_name() == "headless":
+		return
+	Engine.time_scale = 0.05
+	var passed := 0.0
+	for i in 40:
+		await get_tree().process_frame
+		passed += get_process_delta_time()
+		if passed >= seconds:
+			break
+	Engine.time_scale = 0.0

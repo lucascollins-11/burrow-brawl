@@ -35,6 +35,9 @@ var fx: MatchEffects
 var shots: ShotViews
 var crates: CrateViews
 var gear: GearFx
+## critter id -> the weapon it last fired, so a melee `punch` knows which swing it was.
+var _swing: Dictionary = {}
+var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
 
@@ -84,6 +87,9 @@ func _ready() -> void:
 	gear = GearFx.new()
 	gear.name = "Gear"
 	add_child(gear)
+	zones = ZoneViews.new()
+	zones.name = "Zones"
+	add_child(zones)
 	crates.name = "Crates"
 	crates.landed.connect(func(at: Vector3) -> void: fx.dust(at, 2.4))
 	add_child(crates)
@@ -136,6 +142,7 @@ func handle_match_start(msg: Dictionary) -> void:
 	_clear_critters()
 	shots.clear()
 	gear.clear()
+	zones.clear()
 	crates.clear()
 	_crates_seen = false
 	vm.set_teams(_teams_from_net(msg.get("teamIds", [])))
@@ -256,6 +263,9 @@ func _setup_guide(practice: bool) -> void:
 	_guide_label = Label.new()
 	_guide_label.add_theme_font_size_override("font_size", 22)
 	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Long prompts wrap inside a capped width instead of running off the screen.
+	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_guide_label.custom_minimum_size.x = minf(860.0, get_viewport().get_visible_rect().size.x - 80.0)
 	panel.add_child(_guide_label)
 	_spot = TutorialSpotlight.new()
 	layer.add_child(_spot)
@@ -307,6 +317,21 @@ func _update_tutorial_pointers() -> void:
 	if _guide.finished() and not _done_shown and _done_panel != null:
 		_done_shown = true
 		_done_panel.visible = true
+
+
+## True while one of the local player's shots that can be steered (robot, racer, kite, marble) is out.
+func _steering(v: Dictionary) -> bool:
+	for p: Dictionary in v["projectiles"]:
+		if ShotModels.STEERED.has(str(p["weapon"])):
+			return true
+	return false
+
+
+func _hint_steer() -> String:
+	var walk := ""
+	for id in ["move_forward", "move_left", "move_back", "move_right"]:
+		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
+	return walk + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
 
 
 func _hint_aim() -> String:
@@ -364,6 +389,7 @@ func _process(dt: float) -> void:
 	_sync_critters(v, active, aim, dt)
 	shots.sync(v["projectiles"], v["mines"])
 	gear.sync(v["critters"], dt)
+	zones.sync(v["zones"], dt)
 	crates.sync(v["crates"], dt, _crates_seen)
 	_crates_seen = true
 	_update_marker(v, active, aim)
@@ -372,7 +398,9 @@ func _process(dt: float) -> void:
 	env.set_sea_y(vm.sea_y)
 	env.update(dt, v["wind"])
 	var hint := HINT_WATCH
-	if v["my_turn"] and v["phase"] != "settling":
+	if v["my_turn"] and _steering(v):
+		hint = _hint_steer()
+	elif v["my_turn"] and v["phase"] != "settling":
 		hint = _hint_aim() if aim != null else _hint_walk()
 		if empty and v["phase"] == "control":
 			hint = HINT_EMPTY
@@ -425,14 +453,23 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 					what = "+1 %s" % hud.weapon_title(str(e.get("weaponId", "")))
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
-			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})), bool(e.get("hit", false)))
+			fx.tracer(
+				ViewModel.point(e.get("from", {})),
+				ViewModel.point(e.get("to", {})),
+				bool(e.get("hit", false)),
+				str(e.get("weaponId", ""))
+			)
 		elif kind == "mineTriggered":
 			for p in (v["projectiles"] as Array) + (v["mines"] as Array):
 				if int(p["id"]) == int(e.get("projectileId", -1)):
 					fx.puff(p["pos"], 2.5)
 		elif kind == "punch":
 			var struck: Variant = e.get("hits", 0)
-			fx.punch(ViewModel.point(e.get("at", {})), (struck as Array).size() if struck is Array else int(struck))
+			fx.melee(
+				ViewModel.point(e.get("at", {})),
+				(struck as Array).size() if struck is Array else int(struck),
+				str(_swing.get(int(e.get("critterId", -1)), ""))
+			)
 		elif kind == "teleported":
 			var up := Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
 			fx.teleport(ViewModel.point(e.get("from", {})) + up, ViewModel.point(e.get("to", {})) + up)
@@ -440,12 +477,18 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var popped := _find(v["critters"], int(e.get("critterId", -1)))
 			if not popped.is_empty():
 				fx.burst((popped["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0), Color("8fd8ff"))
+		elif kind == "frozen" or kind == "thawed":
+			var iced := _find(v["critters"], int(e.get("critterId", -1)))
+			if not iced.is_empty():
+				var mid := (iced["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
+				fx.burst(mid, Color("bfe9ff"))
 		elif kind == "healed":
 			var healed := _find(v["critters"], int(e.get("critterId", -1)))
 			if not healed.is_empty():
 				var top := (healed["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0)
 				fx.heal(top, int(e.get("amount", 0)))
 		elif kind == "fired":
+			_swing[int(e.get("critterId", -1))] = str(e.get("weaponId", ""))
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:
 				shooter.fire()

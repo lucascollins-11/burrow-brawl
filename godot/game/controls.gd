@@ -24,6 +24,7 @@ const KEY_ACTIONS: Array = [
 	["fuse_down", "fuse_down"],
 	["fuse_up", "fuse_up"],
 	["fire", "fire_down"],
+	["trigger", "trigger"],
 ]
 ## The weapons known before the server says otherwise. A match replaces the list with the server's
 ## catalogue (see set_catalog), so new weapons need no change here.
@@ -173,6 +174,10 @@ func frame(dt: float) -> Dictionary:
 				weapon = mini(1, weapons.size() - 1)
 			"fire_down":
 				# After the shot is away, the fire key pops weapons that burst on command.
+				if not can_fire and _fired_needs_trigger:
+					_queued.append({"k": "trigger"})
+			"trigger":
+				# The detonate key pops a shot that is out and can be popped (racer, robot, kite...).
 				if not can_fire and _fired_needs_trigger:
 					_queued.append({"k": "trigger"})
 			"fuse_down":

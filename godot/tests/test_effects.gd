@@ -122,3 +122,22 @@ func test_crates_that_were_already_there_do_not_thump() -> void:
 		crates.sync(list, 0.05, false)
 	check_eq(landings.size(), 0, "no landing for crates seen at match start")
 	crates.free()
+
+
+func test_melee_and_tracers_differ_by_weapon() -> void:
+	var fx := _fx()
+	var before := fx.get_child_count()
+	fx.melee(Vector3(5, 5, 5), 1, "spatula-swat")
+	var spatula := fx.get_child_count() - before
+	before = fx.get_child_count()
+	fx.melee(Vector3(5, 5, 5), 0, "pillow-bash")
+	check(spatula > 2, "a spatula swing draws arcs, sparks and a word")
+	check(fx.get_child_count() - before > 2, "a pillow bash draws a feather burst")
+	before = fx.get_child_count()
+	fx.melee(Vector3(5, 5, 5), 1, "")
+	check(fx.get_child_count() > before, "no weapon falls back to the punch")
+	before = fx.get_child_count()
+	fx.tracer(Vector3.ZERO, Vector3(10, 0, 0), true, "water-pistol")
+	fx.tracer(Vector3.ZERO, Vector3(10, 0, 0), true, "pea-gatling")
+	check(fx.get_child_count() > before, "water and pea tracers draw")
+	fx.free()

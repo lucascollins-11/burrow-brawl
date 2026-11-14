@@ -1,0 +1,21 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "pea-gatling",
+  "name": "Pea Gatling",
+  "description": "A crank-handle pea shooter: three seconds of peas that you sweep across targets with the walk keys.",
+  "category": "hitscan",
+  "behavior": "spray",
+  "targeting": "aim-angle",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 4,
+  "blastRadius": 14,
+  "knockback": 40,
+  "params": {
+    "streamSeconds": 3,
+    "peaEveryTicks": 6,
+    "range": 400
+  }
+}

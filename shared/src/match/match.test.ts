@@ -302,6 +302,9 @@ describe("ammo", () => {
     expect(s.ammo[0]).toEqual(s.ammo[1]);
     expect(s.ammo[0]!["firecracker-bundle"]).toBe(1);
     expect(s.ammo[0]!["acorn-mortar"]).toBeUndefined();
+    // Supers come only from weapon crates.
+    expect(s.ammo[0]!["tabletop-quake"]).toBe(0);
+    expect(s.ammo[0]!["lantern-drift"]).toBe(2);
   });
 
   it("spends one on a shot, for the firing team only, and survives a snapshot", () => {
