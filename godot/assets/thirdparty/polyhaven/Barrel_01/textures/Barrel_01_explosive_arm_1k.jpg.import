@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cq1k1x53ctbly"
-path="res://.godot/imported/Barrel_01_explosive_arm_1k.jpg-6c4b5d9453612692ce61f8eb86f315b1.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/Barrel_01/textures/Barrel_01_explosive_arm_1k.jpg"
-dest_files=["res://.godot/imported/Barrel_01_explosive_arm_1k.jpg-6c4b5d9453612692ce61f8eb86f315b1.ctex"]
 
 [params]
 

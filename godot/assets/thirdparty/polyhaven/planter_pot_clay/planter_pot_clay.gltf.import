@@ -4,12 +4,11 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://bdyx8p5li856o"
-path="res://.godot/imported/planter_pot_clay.gltf-5cc86a8ebd0f03f1d7e81c26fb57bd2a.scn"
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/planter_pot_clay/planter_pot_clay.gltf"
-dest_files=["res://.godot/imported/planter_pot_clay.gltf-5cc86a8ebd0f03f1d7e81c26fb57bd2a.scn"]
 
 [params]
 

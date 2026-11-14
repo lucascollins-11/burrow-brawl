@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://q8b35nvcrp1i"
-path="res://.godot/imported/wooden_bucket_01_arm_1k.jpg-29ac10c758a1994af10b0c7dbdf9a6f2.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/wooden_bucket_01/textures/wooden_bucket_01_arm_1k.jpg"
-dest_files=["res://.godot/imported/wooden_bucket_01_arm_1k.jpg-29ac10c758a1994af10b0c7dbdf9a6f2.ctex"]
 
 [params]
 

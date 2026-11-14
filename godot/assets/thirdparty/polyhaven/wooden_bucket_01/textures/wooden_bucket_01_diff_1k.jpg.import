@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://caw3fd10f2b6t"
-path="res://.godot/imported/wooden_bucket_01_diff_1k.jpg-1c17775f6d15ea2ca980588ae43e801e.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/wooden_bucket_01/textures/wooden_bucket_01_diff_1k.jpg"
-dest_files=["res://.godot/imported/wooden_bucket_01_diff_1k.jpg-1c17775f6d15ea2ca980588ae43e801e.ctex"]
 
 [params]
 

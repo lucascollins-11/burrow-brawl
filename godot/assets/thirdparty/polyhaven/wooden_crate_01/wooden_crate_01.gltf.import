@@ -4,12 +4,11 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dtnbch4i80ui5"
-path="res://.godot/imported/wooden_crate_01.gltf-22fefc0dfbf197c55c204336b86ff55f.scn"
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/wooden_crate_01/wooden_crate_01.gltf"
-dest_files=["res://.godot/imported/wooden_crate_01.gltf-22fefc0dfbf197c55c204336b86ff55f.scn"]
 
 [params]
 

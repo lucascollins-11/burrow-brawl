@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cni3h53p377vs"
-path="res://.godot/imported/wooden_crate_01_diff_1k.jpg-838fd4eb78b742d50f47a38e28adf13b.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/wooden_crate_01/textures/wooden_crate_01_diff_1k.jpg"
-dest_files=["res://.godot/imported/wooden_crate_01_diff_1k.jpg-838fd4eb78b742d50f47a38e28adf13b.ctex"]
 
 [params]
 

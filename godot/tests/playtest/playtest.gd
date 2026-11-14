@@ -179,6 +179,8 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _key("skip", 0.1)
 		"camera":
 			return await _camera(s)
+		"view":
+			return await _view(s)
 		"menu":
 			return await _menu(str(s.get("open", "none")))
 		"opponent":
@@ -484,6 +486,35 @@ func _camera(s: Dictionary) -> Dictionary:
 		rig.yaw_deg = float(s["yaw"])
 	await _frames(int(s.get("frames", 6)))
 	return _ok("camera dist %.0f pitch %.0f yaw %.0f" % [rig.dist, rig.pitch_deg, rig.yaw_deg])
+
+
+## {do:view, pos:[x,y,z], at:[x,y,z], fov} puts a free camera at pos looking at `at` (map
+## screenshots); {do:view, off:true} hands the view back to the game camera.
+func _view(s: Dictionary) -> Dictionary:
+	if scene == null:
+		return _fail("no match")
+	var cam := scene.get_node_or_null("PlaytestViewCam") as Camera3D
+	if bool(s.get("off", false)):
+		if cam != null:
+			cam.queue_free()
+		scene.hud.set("visible", true)
+		await _frames(2)
+		return _ok("game camera")
+	if cam == null:
+		cam = Camera3D.new()
+		cam.name = "PlaytestViewCam"
+		cam.far = 4000.0
+		scene.add_child(cam)
+	cam.fov = float(s.get("fov", 55.0))
+	cam.current = true
+	# Clean map shots: hide the HUD unless asked to keep it.
+	scene.hud.set("visible", bool(s.get("hud", false)))
+	var pos: Array = s.get("pos", [256, 200, 600])
+	var at: Array = s.get("at", [256, 40, 256])
+	cam.position = Vector3(pos[0], pos[1], pos[2])
+	cam.look_at(Vector3(at[0], at[1], at[2]))
+	await _frames(int(s.get("frames", 6)))
+	return _ok("view from %s at %s" % [pos, at])
 
 
 ## {do:menu, open: pause|settings|weapons|none}

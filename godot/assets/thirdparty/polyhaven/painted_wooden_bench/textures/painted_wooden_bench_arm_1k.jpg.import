@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dphsm8rncx4bv"
-path="res://.godot/imported/painted_wooden_bench_arm_1k.jpg-d1dda783bde6a8ece83b43298f12491d.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/painted_wooden_bench/textures/painted_wooden_bench_arm_1k.jpg"
-dest_files=["res://.godot/imported/painted_wooden_bench_arm_1k.jpg-d1dda783bde6a8ece83b43298f12491d.ctex"]
 
 [params]
 
