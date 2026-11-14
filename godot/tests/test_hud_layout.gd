@@ -33,3 +33,9 @@ func test_sample_results_make_a_finished_match_with_a_winner_on_top() -> void:
 	check_eq(rows[0]["index"], 2, "the winner is first")
 	check(rows[0]["alive"] >= 1, "the winner has a survivor")
 	check_eq(HudModel.turn_banner(v).is_empty(), false, "there is a banner to show")
+	# The winner is named the same way in the banner, the standings and the team panel.
+	var names := {}
+	for t: Dictionary in v["teams"]:
+		names[int(t["index"])] = str(t["name"])
+	check_eq(HudModel.turn_banner(v), "%s wins!" % names[2], "the banner uses the team's own name")
+	check_eq(rows[0]["name"], names[2], "so do the standings")

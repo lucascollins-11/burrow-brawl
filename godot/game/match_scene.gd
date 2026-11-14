@@ -206,6 +206,9 @@ func ground_y(x: float, z: float) -> float:
 
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev.is_action_pressed("pause") and controls.aim == null:
+		# Pause closes an open weapon grid first, so the two never show together.
+		if not pause.is_open() and hud.close_grid():
+			return
 		pause.toggle()
 		return
 	if not pause.is_open():
@@ -357,6 +360,13 @@ func _process(dt: float) -> void:
 		_ammo_hash = left.hash()
 		hud.set_team_ammo(left)
 	var empty := bool(v["my_turn"]) and vm.ammo_left(ammo_team, controls.weapon_id()) == 0
+	if empty and v["phase"] == "control":
+		# A spent weapon (the one-shot jetpack, say) falls back to the first one with ammo left.
+		for w: Dictionary in controls.weapons:
+			if vm.ammo_left(ammo_team, str(w["id"])) != 0:
+				controls.select_id(str(w["id"]))
+				empty = false
+				break
 	controls.can_fire = controls.enabled and v["phase"] == "control" and not empty
 	controls.paused = pause.is_open()
 	if int(v["turn"]) != _last_turn:
@@ -560,6 +570,12 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		var tgt := _rig.target
 		if not active.is_empty():
 			tgt = (active["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.6, 0)
+		if v["phase"] == "over" and v["winner_team"] != null:
+			# The match is won: look at a survivor of the winning team, not at the empty sea.
+			for c: Dictionary in v["critters"]:
+				if bool(c["alive"]) and int(c["team"]) == int(v["winner_team"]):
+					tgt = (c["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.6, 0)
+					break
 		goal = {
 			"mode": "orbit",
 			"target": tgt,

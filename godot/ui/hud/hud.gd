@@ -34,6 +34,7 @@ var _weapon_list: Array = Controls.WEAPONS.duplicate(true)
 var _arsenal: Dictionary = {"acorn-mortar": -1, "fizz-grenade": -1}
 var _end_rows: VBoxContainer
 var _skip: Button
+var _bottom_bar: Control
 var _end_panel: PanelContainer
 var _end_label: Label
 var _again: Button
@@ -123,6 +124,7 @@ func _ready() -> void:
 
 	# Weapon name and skip button, bottom right; hint, bottom centre.
 	var bottom := _panel(8)
+	_bottom_bar = bottom
 	_place(bottom, Control.PRESET_BOTTOM_RIGHT, 10)
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 10)
@@ -152,11 +154,19 @@ func _ready() -> void:
 	_weapon_grid.set_ammo(_arsenal)
 	_weapon_grid.picked.connect(_on_weapon_id_picked)
 	_place(_weapon_grid, Control.PRESET_BOTTOM_RIGHT, 10)
-	_weapon_grid.offset_bottom = -72.0
+	_weapon_grid.offset_bottom = -WeaponGrid.MARGIN_BELOW
+	_weapon_grid.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	root.add_child(_weapon_grid)
 	_hint = _label(13, false)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_place(_hint, Control.PRESET_CENTER_BOTTOM, 8)
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Between the minimap on the left and the weapon bar on the right (see update); wraps to a
+	# second line, growing upwards, instead of running into the bar.
+	_hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_hint.offset_left = 180.0
+	_hint.offset_right = -540.0
+	_hint.offset_bottom = -8.0
+	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	root.add_child(_hint)
 
 	# End of match: winner banner, standings and the way out.
@@ -171,11 +181,12 @@ func _ready() -> void:
 	_end_rows.add_theme_constant_override("separation", 6)
 	_again = Button.new()
 	_again.text = "Back to lobby"
-	_again.custom_minimum_size = Vector2(0, 44)
-	_again.add_theme_font_size_override("font_size", 20)
+	_again.custom_minimum_size = Vector2(0, 48)
+	_paint_button(_again, MenuStyle.GREEN, 24)
 	_again.pressed.connect(func() -> void: again_pressed.emit())
 	var leave := Button.new()
 	leave.text = "Leave"
+	_paint_button(leave, MenuStyle.CREAM, 18)
 	leave.pressed.connect(func() -> void: leave_pressed.emit())
 	ev.add_child(_end_label)
 	ev.add_child(_end_rows)
@@ -255,6 +266,21 @@ func _on_weapon_id_picked(id: String) -> void:
 			return
 
 
+## A painted menu-style button (see MenuStyle) with dark text, for the end card.
+static func _paint_button(b: Button, color: Color, size: int) -> void:
+	MenuStyle.paint(b, color, size)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(c, MenuStyle.INK)
+
+
+## Close the weapon grid if it is open; true when it was.
+func close_grid() -> bool:
+	if _weapon_grid != null and _weapon_grid.visible:
+		_weapon_grid.close()
+		return true
+	return false
+
+
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev.is_action_pressed("weapon_menu") and _weapon_grid != null:
 		_weapon_grid.toggle()
@@ -310,6 +336,8 @@ func update(
 			_weapon_grid.set_current(_weapon_id(i))
 	_skip.disabled = not (v["my_turn"] and (v["phase"] == "control" or v["phase"] == "retreat"))
 	_hint.text = "" if over else hint
+	if _bottom_bar != null:
+		_hint.offset_right = -(_bottom_bar.size.x + 24.0)
 	_end_panel.visible = over
 	if over:
 		_end_label.text = HudModel.turn_banner(v)
