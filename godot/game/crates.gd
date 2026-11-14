@@ -5,6 +5,7 @@ extends Node3D
 ## after that it follows the server (it only ever moves down) and bobs a little so it reads as a
 ## pickup. A missing id means it was taken or sank.
 
+const Toon := preload("res://game/toon.gd")
 const SIZE := 2.6
 const DROP_FROM := 45.0
 const DROP_SECONDS := 0.9
@@ -84,6 +85,7 @@ static func make(kind: String) -> Node3D:
 
 static func _mat(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = 0.8
 	return m

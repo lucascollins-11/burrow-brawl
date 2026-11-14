@@ -5,6 +5,7 @@ extends Node3D
 ## Fed the critter list of a ViewModel snapshot every frame; nothing here reads the network.
 ## All parts are built from primitives and particles, like the rest of the match visuals.
 
+const Toon := preload("res://game/toon.gd")
 const SODA := Color("e8503c")
 const FIZZ := Color(0.8, 0.95, 1.0, 0.8)
 const DUST := Color(0.62, 0.5, 0.36, 0.7)
@@ -210,6 +211,7 @@ func _build(act: String) -> Node3D:
 			flash.mesh = _ball(0.5)
 			flash.position = Vector3(0, 0, 2.7)
 			var fm := StandardMaterial3D.new()
+			Toon.shade(fm)
 			fm.albedo_color = Color(0.7, 1.0, 0.55)
 			fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			flash.material_override = fm
@@ -272,6 +274,7 @@ func _shield(g: Dictionary, on: bool) -> void:
 		sm.rings = 10
 		bubble.mesh = sm
 		var m := StandardMaterial3D.new()
+		Toon.shade(m)
 		m.albedo_color = Color(0.55, 0.85, 1.0, 0.22)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -313,6 +316,7 @@ static func _ice() -> Node3D:
 	bm.size = Vector3(5.6, 7.4, 5.6)
 	shell.mesh = bm
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = Color(0.7, 0.92, 1.0, 0.42)
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.roughness = 0.05
@@ -350,6 +354,7 @@ static func _glow() -> Node3D:
 	sm.rings = 8
 	aura.mesh = sm
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = Color(1.0, 0.92, 0.55, 0.2)
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -421,6 +426,7 @@ func _rope(g: Dictionary, c: Dictionary, act: String) -> void:
 
 static func _mat(color: Color, rough: float) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = rough
 	return m
@@ -457,6 +463,7 @@ static func _plume() -> CPUParticles3D:
 	curve.add_point(Vector2(1.0, 1.5))
 	p.scale_amount_curve = curve
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -487,6 +494,7 @@ static func _dust() -> CPUParticles3D:
 	curve.add_point(Vector2(1.0, 1.4))
 	p.scale_amount_curve = curve
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
