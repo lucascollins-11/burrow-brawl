@@ -453,6 +453,11 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 				fx.explode(at, float(edit.get("r", 3)))
 				_blast_at = at
 				_blast_left = BLAST_HOLD_S
+				# Anyone close enough to flinch does, hit or not.
+				for cr: Dictionary in v["critters"]:
+					var rig: SquirmlingRig = _critters.get(int(cr["id"]), null)
+					if rig != null and (cr["pos"] as Vector3).distance_to(at) < 16.0 + float(edit.get("r", 3)):
+						rig.startle(at)
 		elif kind == "damage":
 			var c := _find(v["critters"], int(e.get("critterId", -1)))
 			if not c.is_empty():
@@ -462,6 +467,8 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var hit: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if hit != null:
 				hit.hurt()
+				if str(e.get("cause", "")) == "water":
+					hit.panic()
 		elif kind == "crateTaken":
 			var taker := _find(v["critters"], int(e.get("critterId", -1)))
 			if not taker.is_empty():
@@ -543,6 +550,8 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		node.rotation.y = deg_to_rad(float(c["heading_deg"]))
 		var is_active: bool = not active.is_empty() and active["id"] == id
 		var pitch := float(aim.pitch_deg) if is_active and aim != null else 0.0
+		node.set_look_target(_look_target_for(c, v))
+		node.set_cheer(v["phase"] == "over" and v["winner_team"] != null and int(v["winner_team"]) == int(c["team"]))
 		node.drive(dt, is_active, vel, grounded, pitch)
 		var team_color: Color = _look(int(c["team"]))["color"]
 		var hp_frac := float(c["hp"]) / maxf(1.0, float(c["max_hp"]))
@@ -557,6 +566,27 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 			(_critters[id] as Node).queue_free()
 			_critters.erase(id)
 			_smooth.erase(id)
+
+
+## What a Squirmling looks at: a shot in the air if there is one, else the nearest living rival.
+func _look_target_for(me: Dictionary, v: Dictionary) -> Vector3:
+	var here: Vector3 = me["pos"]
+	var best := Vector3.INF
+	var best_d := INF
+	for p: Dictionary in v["projectiles"]:
+		var d := here.distance_to(p["pos"])
+		if d < best_d and d < 70.0:
+			best_d = d
+			best = p["pos"]
+	if best != Vector3.INF:
+		return best
+	for c: Dictionary in v["critters"]:
+		if bool(c["alive"]) and int(c["team"]) != int(me["team"]):
+			var d := here.distance_to(c["pos"])
+			if d < best_d:
+				best_d = d
+				best = (c["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT * 0.8, 0)
+	return best
 
 
 ## Up direction of the ground around a point, from four nearby heights.

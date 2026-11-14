@@ -42,6 +42,15 @@ var _blink := 0.0
 var _next_blink := 2.0
 var _mood := 0.0  # -1 worried, 0 calm, 1 determined
 var _head_pitch := 0.0
+var _look_world := Vector3.INF  # what the Squirmling looks at, or INF for nothing
+var _look := Vector2.ZERO  # smoothed head turn (x yaw, y pitch), radians
+var _eye_home: Array[Vector3] = []
+var _startle := 0.0
+var _startle_dir := Vector2.ZERO
+var _brow_raise := 0.0  # seconds left of an idle eyebrow raise
+var _next_brow := 4.0
+var _cheer := false
+var _panic := 0.0
 var _moving := false
 var _walk_amt := 0.0  # 0 standing, 1 walking: fades the inchworm in and out
 var _fall_speed := 0.0
@@ -65,6 +74,7 @@ func bind() -> void:
 	var head := _rings[N - 1]
 	for side in ["L", "R"]:
 		_eyes.append(head.get_node("Eye" + side) as Node3D)
+		_eye_home.append(_eyes[_eyes.size() - 1].position)
 		_brows.append(head.get_node("Brow" + side) as Node3D)
 	_mouth = head.get_node("Mouth") as Node3D
 	_mouth_open = head.get_node("MouthOpen") as Node3D
@@ -150,7 +160,25 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 	var head := _rings[N - 1]
 	_head_pitch = lerpf(_head_pitch, -deg_to_rad(aim_pitch_deg) * 0.45, minf(1.0, dt * 8.0))
 	head.rotation.x += _head_pitch
-	head.rotation.y = 0.0 if active else sin(_t * 0.6) * 0.3
+	# Look at the target when there is one (the head follows, the eyes lead), else glance about.
+	var look_goal := Vector2(0.0 if active else sin(_t * 0.6) * 0.3, 0.0)
+	if _look_world != Vector3.INF and not active and is_inside_tree():
+		var to := (_look_world - (global_position + Vector3(0, Squirmling.HEIGHT * 0.8, 0))).rotated(Vector3.UP, -rotation.y)
+		look_goal = look_angles(to)
+	_look = _look.lerp(look_goal, minf(1.0, dt * 6.0))
+	head.rotation.y = _look.x * 0.75
+	head.rotation.x += -_look.y * 0.5
+	_startle = maxf(0.0, _startle - dt)
+	_panic = maxf(0.0, _panic - dt)
+	# A startle leans the head away from the blast; panic shakes it.
+	if _startle > 0.0:
+		head.rotation.z += _startle_dir.x * _startle * 0.5
+	if _panic > 0.0:
+		head.rotation.z += sin(_t * 40.0) * 0.18
+	# Victory: bounce on the spot, head up.
+	if _cheer and grounded:
+		_stretch_v += 0.0 if fposmod(_t, 0.7) > 0.05 else 3.0
+		head.rotation.x -= 0.25
 
 	_face(dt, active, grounded)
 	if _tuft != null:
@@ -296,10 +324,49 @@ func _pose_rings() -> void:
 		ring.rotation = Vector3(atan(lean.y) * 0.8, 0.0, -atan(lean.x) * 0.8)
 
 
+## Head turn (yaw, pitch in radians, clamped) towards a direction in the Squirmling's own frame.
+static func look_angles(local_dir: Vector3) -> Vector2:
+	var flat := Vector2(local_dir.x, local_dir.z).length()
+	var yaw := clampf(atan2(local_dir.x, local_dir.z), -1.0, 1.0)
+	var pitch := clampf(atan2(local_dir.y, maxf(flat, 0.001)), -0.5, 0.6)
+	return Vector2(yaw, pitch)
+
+
+## What to look at, in world space. INF looks at nothing.
+func set_look_target(p: Vector3) -> void:
+	_look_world = p
+
+
+## A blast went off nearby and missed: eyes wide, brows up, a flinch away from it.
+func startle(from_world: Vector3) -> void:
+	if not alive:
+		return
+	_startle = 0.8
+	var here := global_position if is_inside_tree() else position
+	var away := (here - from_world).rotated(Vector3.UP, -rotation.y)
+	_startle_dir = Vector2(clampf(away.x, -1.0, 1.0), clampf(away.z, -1.0, 1.0)).normalized()
+	_stretch_v += 1.6
+	for i in range(N):
+		_vel[i] += _startle_dir * 1.6 * float(i + 1) / float(N)
+
+
+## Falling into the sea: wide eyes, open mouth, a frantic shake.
+func panic() -> void:
+	if alive:
+		_panic = 1.2
+		_startle = maxf(_startle, 1.2)
+
+
+## Victory pose while true: bouncing, grin, brows up.
+func set_cheer(on: bool) -> void:
+	_cheer = on
+
+
 func _face(dt: float, active: bool, grounded: bool) -> void:
 	if _t >= _next_blink:
 		_blink = 0.13
-		_next_blink = _t + 1.8 + _rng.randf() * 3.5
+		# Now and then a double blink.
+		_next_blink = _t + (0.22 if _rng.randf() < 0.18 else 1.8 + _rng.randf() * 3.5)
 	_blink = maxf(0.0, _blink - dt)
 	var lid := 1.0
 	if _hurt > 0.0:
@@ -308,20 +375,37 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 		lid = 0.12
 	elif _fire > 0.0:
 		lid = 0.55
-	for eye in _eyes:
+	if _startle > 0.0 and _hurt <= 0.0:
+		lid = 1.35  # wide-eyed
+	elif _cheer:
+		lid = 0.55  # happy squint
+	for k in range(_eyes.size()):
+		var eye := _eyes[k]
 		eye.scale = Vector3(1.0, lerpf(eye.scale.y, lid, minf(1.0, dt * 30.0)), 1.0)
+		# Eyes glance ahead of the head towards what is being looked at.
+		var glance := Vector3(_look.x * 0.05, _look.y * 0.04, 0.0)
+		eye.position = eye.position.lerp(_eye_home[k] + glance, minf(1.0, dt * 20.0))
 	var mood := 0.0
 	if _hurt > 0.0 or not grounded:
 		mood = -1.0
 	elif active or _fire > 0.0:
 		mood = 1.0
 	_mood = lerpf(_mood, mood, minf(1.0, dt * 10.0))
-	for brow in _brows:
+	# An idle eyebrow raise now and then, one brow a little higher than the other.
+	_brow_raise = maxf(0.0, _brow_raise - dt)
+	if _t >= _next_brow:
+		_brow_raise = 0.45
+		_next_brow = _t + 3.0 + _rng.randf() * 5.0
+	var raise := sin(clampf(_brow_raise / 0.45, 0.0, 1.0) * PI)
+	if _startle > 0.0 or _cheer:
+		raise = 1.0
+	for bi in range(_brows.size()):
+		var brow := _brows[bi]
 		var sx: float = brow.get_meta("side", 1.0)
 		# Determined: inner ends down. Worried: inner ends up and the whole brow lifts.
 		brow.rotation.z = deg_to_rad((-6.0 + 22.0 * _mood) * sx)
-		brow.position.y = 0.22 + maxf(0.0, -_mood) * 0.06
-	var open := _hurt > 0.0 or _fire > 0.0 or not grounded
+		brow.position.y = 0.22 + maxf(0.0, -_mood) * 0.06 + raise * (0.07 if bi == 0 else 0.04)
+	var open := _hurt > 0.0 or _fire > 0.0 or not grounded or _startle > 0.3 or _cheer
 	_mouth_open.visible = open
 	_mouth.visible = not open
 
