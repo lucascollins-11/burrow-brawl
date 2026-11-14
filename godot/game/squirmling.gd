@@ -140,6 +140,40 @@ static func _face(head: Node3D) -> void:
 	oh.scale = Vector3(1.0, 1.2, 0.5)
 	oh.visible = false
 	head.add_child(oh)
+	_extra_mouths(head)
+
+
+## More mouth shapes for the rig to swap in: a stitched smile, a flat grimace, gritted teeth
+## (a cream bar with stitches across it) and a small tight gulp.
+static func _extra_mouths(head: Node3D) -> void:
+	var smile := Node3D.new()
+	smile.name = "MouthSmile"
+	for k in range(7):
+		var a := -0.9 + 0.3 * float(k)
+		var seg := _part(_box(Vector3(0.07, 0.025, 0.03)), BEAD, Vector3(a * 0.22, -0.2 + 0.14 * (a * a) * 0.9 - 0.04, 0.8), 0.6)
+		seg.rotation.z = deg_to_rad(-a * 38.0)
+		smile.add_child(seg)
+	smile.visible = false
+	head.add_child(smile)
+	var grimace := Node3D.new()
+	grimace.name = "MouthGrimace"
+	for k in range(5):
+		var seg := _part(_box(Vector3(0.09, 0.03, 0.03)), BEAD, Vector3(-0.2 + 0.1 * k, -0.18 + 0.012 * (k % 2), 0.81), 0.6)
+		grimace.add_child(seg)
+	grimace.visible = false
+	head.add_child(grimace)
+	var teeth := Node3D.new()
+	teeth.name = "MouthTeeth"
+	teeth.add_child(_part(_box(Vector3(0.36, 0.1, 0.04)), CREAM, Vector3(0.0, -0.18, 0.79), 0.5))
+	for k in range(4):
+		teeth.add_child(_part(_box(Vector3(0.012, 0.1, 0.045)), BEAD, Vector3(-0.135 + 0.09 * k, -0.18, 0.795), 0.6))
+	teeth.add_child(_part(_box(Vector3(0.38, 0.016, 0.045)), BEAD, Vector3(0.0, -0.18, 0.795), 0.6))
+	teeth.visible = false
+	head.add_child(teeth)
+	var gulp := _part(_sphere(0.05), BEAD, Vector3(0.0, -0.17, 0.78), 0.5)
+	gulp.name = "MouthGulp"
+	gulp.visible = false
+	head.add_child(gulp)
 
 
 ## A felt tool belt with a brass buckle and a pouch, worn around the second ring.
