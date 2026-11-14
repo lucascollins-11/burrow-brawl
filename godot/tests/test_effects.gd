@@ -3,7 +3,7 @@ extends TestCase
 
 func _fx() -> MatchEffects:
 	var fx := MatchEffects.new()
-	(Engine.get_main_loop() as SceneTree).root.add_child(fx)
+	tree.root.add_child(fx)
 	return fx
 
 
