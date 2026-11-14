@@ -34,6 +34,11 @@ import marbleRoller from "../../weapons/marble-roller.json";
 import rcRacer from "../../weapons/rc-racer.json";
 import kiteBomber from "../../weapons/kite-bomber.json";
 import kiteCharge from "../../weapons/kite-charge.json";
+import peaGatling from "../../weapons/pea-gatling.json";
+import waterPistol from "../../weapons/water-pistol.json";
+import spatulaSwat from "../../weapons/spatula-swat.json";
+import pillowBash from "../../weapons/pillow-bash.json";
+import mousetrapSnapper from "../../weapons/mousetrap-snapper.json";
 import type { WeaponData } from "./types";
 
 /** Every weapon id, sub-munitions included. The keys of the registry are exactly these. */
@@ -73,7 +78,12 @@ export type WeaponId =
   | "marble-roller"
   | "rc-racer"
   | "kite-bomber"
-  | "kite-charge";
+  | "kite-charge"
+  | "pea-gatling"
+  | "water-pistol"
+  | "spatula-swat"
+  | "pillow-bash"
+  | "mousetrap-snapper";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -119,6 +129,11 @@ const registry: WeaponRegistry = Object.freeze({
   "rc-racer": toWeaponData(rcRacer),
   "kite-bomber": toWeaponData(kiteBomber),
   "kite-charge": toWeaponData(kiteCharge),
+  "pea-gatling": toWeaponData(peaGatling),
+  "water-pistol": toWeaponData(waterPistol),
+  "spatula-swat": toWeaponData(spatulaSwat),
+  "pillow-bash": toWeaponData(pillowBash),
+  "mousetrap-snapper": toWeaponData(mousetrapSnapper),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

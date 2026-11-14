@@ -87,6 +87,11 @@ const WEAPON_IDS = [
   "marble-roller",
   "rc-racer",
   "kite-bomber",
+  "pea-gatling",
+  "water-pistol",
+  "spatula-swat",
+  "pillow-bash",
+  "mousetrap-snapper",
 ] as const satisfies readonly WeaponId[];
 
 const isIntIn = (v: unknown, min: number, max: number): v is number =>
