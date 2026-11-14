@@ -1,7 +1,14 @@
-import { SOLID, type MapObject, type SpawnPoint, type VoxelTerrain } from "../api.js";
+import {
+  SOLID,
+  type DecorAnchor,
+  type MapObject,
+  type SpawnPoint,
+  type VoxelTerrain,
+} from "../api.js";
 import { applyEdit } from "../edit.js";
 import { topSolidY } from "../grid.js";
-import { hashInt } from "../spawns.js";
+import { hashInt, mix32 } from "../spawns.js";
+import { stampPrefab, type Prefab } from "../prefab.js";
 
 /** What a theme gets to work with. Everything goes through the same edits the game uses. */
 export interface ThemeCtx {
@@ -18,6 +25,13 @@ export interface ThemeCtx {
   /** y of the highest solid voxel in the column (0 when empty). */
   surf(x: number, z: number): number;
   readonly objects: MapObject[];
+  /**
+   * Stamp a prefab with its rotated footprint's low corner at (x, y, z), after `rot` quarter
+   * turns. `salt` seeds the decor variants. Returns voxels written.
+   */
+  stamp(p: Prefab, x: number, y: number, z: number, rot: number, salt: number): number;
+  /** Detail anchors from every stamp so far, in stamp order. */
+  readonly decor: DecorAnchor[];
 }
 
 export interface Theme {
@@ -30,6 +44,7 @@ export interface Theme {
 }
 
 export function makeCtx(t: VoxelTerrain, seed: number): ThemeCtx {
+  const decor: DecorAnchor[] = [];
   return {
     t,
     seed,
@@ -42,6 +57,9 @@ export function makeCtx(t: VoxelTerrain, seed: number): ThemeCtx {
     box: (x0, y0, z0, x1, y1, z1) => void applyEdit(t, { op: "box", x0, y0, z0, x1, y1, z1 }),
     surf: (x, z) => Math.max(0, topSolidY(t, x, z)),
     objects: [],
+    decor,
+    stamp: (p, x, y, z, rot, salt) =>
+      stampPrefab(t, p, x, y, z, rot, mix32(seed, salt, 0x5eed), decor),
   };
 }
 

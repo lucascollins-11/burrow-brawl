@@ -41,6 +41,14 @@ export interface VoxelTerrain {
    * regenerate, replay, compare hashes. Appended to by applyEdit only.
    */
   readonly edits: TerrainEdit[];
+  /**
+   * Optional material id per voxel, same layout as density (see materials.ts). Absent on maps
+   * with no built structures, which means every voxel is natural terrain. Cosmetic only: never
+   * part of the hash, never read by the sim. Reset to 0 whenever a voxel's solidity flips.
+   */
+  readonly material?: Uint8Array;
+  /** Detail meshes from stamped prefabs, fixed at generation; absent when none were stamped. */
+  readonly decor?: readonly DecorAnchor[];
 }
 
 /** How a map is rebuilt from nothing. Sent in match.start and snapshots in place of voxel bytes. */
@@ -166,6 +174,20 @@ export interface MapObject {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+}
+
+/** A detail mesh hung on a solid voxel by a prefab (see prefab.ts). Client-only, no collision. */
+export interface DecorAnchor {
+  /** Detail kind, e.g. "window", "lamp", "railing". The client maps it to a mesh. */
+  readonly kind: string;
+  /** The solid voxel it hangs on: when that voxel stops being solid the detail breaks off. */
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** Side it sticks out of: 0 = +x, 1 = +z, 2 = -x, 3 = -z, 4 = up, 5 = down. */
+  readonly face: number;
+  /** Deterministic variant 0..255 (colour, flower pick, shutter state). */
+  readonly v: number;
 }
 
 export interface GeneratedMap {

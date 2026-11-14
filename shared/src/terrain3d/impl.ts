@@ -20,6 +20,18 @@ export {
 export { GENERATOR_VERSION, BEDROCK_Y, SEA_Y } from "./generate.js";
 export { createTerrain, PADDED } from "./grid.js";
 export { findSpawns, hashInt } from "./spawns.js";
+export * from "./materials.js";
+export {
+  ensureMaterial,
+  materialHash,
+  rotatedSize,
+  rotateFace,
+  rotateXZ,
+  stampPrefab,
+  type Prefab,
+  type PrefabAnchor,
+  type PrefabPart,
+} from "./prefab.js";
 
 /** The contract as one object (the free functions above, for callers that want to inject it). */
 export const terrain3d: Terrain3dApi = {
