@@ -16,6 +16,7 @@
 
 import { SOLID, type DecorAnchor } from "../api.js";
 import { house, MARGIN, type HouseSpec, type RoofKind } from "../build/house.js";
+import { LANDMARKS, turnToFace, type Landmark } from "../build/library.js";
 import {
   archBridge,
   beachHut,
@@ -640,6 +641,50 @@ function upperTown(s: Site): void {
   for (let x = 20; x < GORGE_X0 - 6; x += 4) deco(s, "railing", x, UPPER, Z_MIDDLE - 1, 4, 900 + x);
 }
 
+/**
+ * Library landmarks (baked from CC0 models) on open ground: each goes to the free, flat spot
+ * nearest its preferred point, doorway turned toward `face`. Skipped quietly when nothing fits.
+ */
+function landmarks(s: Site): void {
+  const picks: readonly [Landmark, number, number, number, number][] = [
+    // landmark, level, preferred x, preferred z, door faces
+    [LANDMARKS.windmill, HEAD, 430, 128, 2],
+    [LANDMARKS.church, MIDDLE, 460, 230, 3],
+    [LANDMARKS.tower, UPPER, 100, 100, 3],
+    [LANDMARKS.tavern, UPPER, 250, 100, 3],
+    [LANDMARKS.watermill, MIDDLE, 140, 230, 3],
+    [LANDMARKS.homeA, UPPER, 200, 44, 1],
+    [LANDMARKS.homeB, MIDDLE, 380, 230, 3],
+  ];
+  // Lanes, the market square and the inn stay open (the town is built after the landmarks).
+  const keep: Rect[] = [
+    { x0: 0, z0: 66, x1: 511, z1: 75 },
+    { x0: 0, z0: Z_MIDDLE - 8, x1: GORGE_X0, z1: Z_MIDDLE - 1 },
+    { x0: 0, z0: 196, x1: 511, z1: 205 },
+    { x0: 0, z0: 282, x1: 511, z1: 291 },
+    { x0: 262, z0: 150, x1: 320, z1: 216 },
+  ];
+  picks.forEach(([l, lvl, px, pz, face], k) => {
+    const rot = turnToFace(l, face);
+    const [sx, sz] = rotatedSize(l.prefab, rot);
+    let best: Rect | null = null;
+    let bestD = Infinity;
+    for (let dz = -48; dz <= 48; dz += 2)
+      for (let dx = -64; dx <= 64; dx += 2) {
+        const d = dx * dx + dz * dz;
+        if (d >= bestD) continue;
+        const x = px + dx - (sx >> 1);
+        const z = pz + dz - (sz >> 1);
+        const r = { x0: x, z0: z, x1: x + sx - 1, z1: z + sz - 1 };
+        if (free(s, r, 3) && !keep.some((q) => overlaps(r, q, 4)) && flatAt(s, r, lvl)) {
+          best = r;
+          bestD = d;
+        }
+      }
+    if (best) place(s, l.prefab, best.x0, lvl, best.z0, rot, 1200 + k, 2);
+  });
+}
+
 function greenery(s: Site): void {
   const { t, w, d } = s.t;
   let n = 0;
@@ -689,6 +734,8 @@ export const lighthouseVillage: Theme = {
     s.used.push({ x0: GORGE_X0 - 4, z0: 0, x1: HEAD_X + 2, z1: HEAD_Z + 6 });
     headland(s);
     harbour(s);
+    // Landmarks claim their ground before the streets fill in around them.
+    landmarks(s);
     middleTown(s);
     lowerTown(s);
     upperTown(s);

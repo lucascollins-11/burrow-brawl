@@ -258,9 +258,15 @@ func test_decor() -> void:
 	check(DecorView.rail_bars(posts).size() == 3, "a corner post links to its neighbour too")
 	var decor := posts.duplicate()
 	decor.append({"kind": "flagpole", "x": 20, "y": 9, "z": 20, "face": 4, "v": 3})
+	decor.append({"kind": "chimney-pot", "x": 12, "y": 9, "z": 12, "face": 4, "v": 0})
 	var dv := DecorView.new()
 	dv.build(decor, st)
-	check(dv.anchors == 5, "decor counts its anchors")
+	check(dv.anchors == 6, "decor counts its anchors")
+	check(dv.life.smoking() == 2, "a chimney pot smokes from both flues")
+	var hit := {"x0": 12, "y0": 9, "z0": 12, "sx": 1, "sy": 1, "sz": 1, "density": Codec.encode(PackedByteArray([0]))}
+	st.apply_patch(hit)
+	dv.on_patch(hit)
+	check(dv.life.smoking() == 0, "a broken chimney stops smoking")
 	# Blow away the voxel under the first post: it and the bar it starts break off, nothing else.
 	var patch := {"x0": 4, "y0": 9, "z0": 4, "sx": 1, "sy": 1, "sz": 1, "density": Codec.encode(PackedByteArray([0]))}
 	st.apply_patch(patch)

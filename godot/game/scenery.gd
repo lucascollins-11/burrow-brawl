@@ -29,13 +29,16 @@ const SETS := {
 	"bath": {"bubbles": 630, "soap": 180, "duck": 50, "sponge": 85, "tuft": 420, "library": 45},
 	"candy": {"sprinkle": 1820, "gumdrop": 265, "candle": 85, "cherry": 140, "flowers": 420, "library": 24},
 	"brass": {"gear": 295, "bolt": 630, "pipe": 100, "tuft": 980, "stone": 180, "library": 70},
+	# Lighthouse Village carries its own detail (decor anchors), and props would land on its
+	# roofs and quays: just a little grass and flowers.
+	"village": {"tuft": 700, "flowers": 300, "bush": 40},
 }
 const THEME_SET := {
 	"garden-patch": "garden", "picnic-atoll": "garden", "toybox-harbor": "toy",
 	"bathtub-bay": "bath", "frosted-bakery": "candy", "clockwork-mesa": "brass",
-	"lighthouse-village": "garden",
+	"lighthouse-village": "village",
 }
-const BUTTERFLIES := ["garden", "candy"]
+const BUTTERFLIES := ["garden", "candy", "village"]
 ## Library models that fit the Storybook set, with their height in world units (Squirmling = 6).
 const LIBRARY := {
 	"garden": [
