@@ -4,3 +4,6 @@ coverage
 pnpm-lock.yaml
 docs
 shared/weapons
+# Third-party files and the credits generated from their manifest (tools/assets/fetch.py)
+godot/assets/thirdparty
+CREDITS.md
