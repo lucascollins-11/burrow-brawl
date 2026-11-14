@@ -1,0 +1,88 @@
+{
+  "about": "Close-up strip of the Squirmling's curled posture: idle from two sides, slithering, a jump, and the first-person aim.",
+  "steps": [
+    {
+      "do": "start",
+      "mode": "match",
+      "theme": "toybox-harbor",
+      "critters": 2,
+      "seed": 99,
+      "turn_seconds": 90,
+      "opponent": "fire"
+    },
+    {
+      "do": "camera",
+      "dist": 18,
+      "pitch": 12,
+      "yaw": 90,
+      "name": "idle-side-a"
+    },
+    {
+      "do": "camera",
+      "dist": 18,
+      "pitch": 12,
+      "yaw": 0,
+      "name": "idle-side-b"
+    },
+    {
+      "do": "camera",
+      "dist": 20,
+      "pitch": 22,
+      "yaw": 90
+    },
+    {
+      "do": "walk",
+      "dir": "right",
+      "seconds": 0.3,
+      "name": "slither-a"
+    },
+    {
+      "do": "walk",
+      "dir": "right",
+      "seconds": 0.3,
+      "name": "slither-b"
+    },
+    {
+      "do": "walk",
+      "dir": "right",
+      "seconds": 0.3,
+      "name": "slither-c"
+    },
+    {
+      "do": "key",
+      "action": "jump",
+      "name": "jump-key"
+    },
+    {
+      "do": "wait",
+      "seconds": 0.2,
+      "name": "air-a"
+    },
+    {
+      "do": "wait",
+      "seconds": 0.2,
+      "name": "air-b"
+    },
+    {
+      "do": "wait",
+      "seconds": 0.5,
+      "name": "landed"
+    },
+    {
+      "do": "camera",
+      "dist": 18,
+      "pitch": 12,
+      "yaw": 0,
+      "name": "idle-after"
+    },
+    {
+      "do": "aim",
+      "at": "nearest_enemy",
+      "weapon": "acorn-mortar",
+      "name": "aim"
+    },
+    {
+      "do": "quit"
+    }
+  ]
+}

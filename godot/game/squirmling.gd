@@ -7,6 +7,7 @@ extends RefCounted
 ## tall with its tail at the node origin, facing +z. This file builds the parts; the node it returns
 ## is a SquirmlingRig, which owns the motion (walk, jump, hurt, fire, knock-out).
 
+const Toon := preload("res://game/toon.gd")
 const HEIGHT := 6.0
 const LOCAL_TOP := 2.62
 const SCALE := HEIGHT / LOCAL_TOP
@@ -31,6 +32,7 @@ static func _mat(color: Color, roughness := 0.9) -> StandardMaterial3D:
 	if _mats.has(key):
 		return _mats[key]
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = roughness
 	_mats[key] = m
@@ -56,6 +58,7 @@ static func _clay(color: Color) -> StandardMaterial3D:
 		_clay_normal.bump_strength = 5.0
 		_clay_normal.noise = noise
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = 0.92
 	m.normal_enabled = true
@@ -107,7 +110,30 @@ static func build_hat(style: String, color: Color) -> Node3D:
 	return Hats.make(style, color)
 
 
-## Centre of ring i (0 = tail, 4 = head) when standing still: a gentle S-curve up the body.
+## Resting pose: the back rings lie along the ground as a trailing tail, then the body curves
+## up so only the head and upper rings are raised (like a cobra, or a question mark lying down).
+## Tail to head. The head sits over the node origin; the tail trails behind it (-z).
+const CURL_POS := [
+	Vector3(0.0, 0.30, -2.04),
+	Vector3(0.0, 0.38, -1.44),
+	Vector3(0.0, 0.58, -0.86),
+	Vector3(0.0, 1.08, -0.42),
+	Vector3(0.0, 1.72, 0.0),
+]
+## How far each ring is tipped about x so its flat side follows the body: 90 degrees lies along z.
+const CURL_ANGLE_DEG := [88.0, 82.0, 66.0, 42.0, 8.0]
+
+
+static func curl_base(i: int) -> Vector3:
+	return CURL_POS[i]
+
+
+static func curl_angle(i: int) -> float:
+	return deg_to_rad(CURL_ANGLE_DEG[i])
+
+
+## Centre of ring i (0 = tail, 4 = head) standing straight up: a gentle S-curve. The rig blends
+## towards this pose in the air, so a jump stretches the whole body out.
 static func ring_base(i: int) -> Vector3:
 	return Vector3(sin(float(i) * 1.3) * 0.1, 0.23 + float(i) * RING_STEP, 0.0)
 

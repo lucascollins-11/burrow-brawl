@@ -58,7 +58,7 @@ func _build_sky() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.7
+	env.ambient_light_energy = 0.85
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_white = 5.0
 	# Glow only for things brighter than white (explosions, the sun), never the whole picture.
@@ -78,7 +78,7 @@ func _build_sky() -> void:
 	env.fog_depth_curve = 1.0
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.15
+	env.adjustment_saturation = MapLook.saturation(_look)
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
 	add_child(_world_env)

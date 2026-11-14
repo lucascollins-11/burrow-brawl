@@ -40,6 +40,7 @@ var fx: MatchEffects
 var shots: ShotViews
 var crates: CrateViews
 var gear: GearFx
+var aim_guide: AimGuide
 ## critter id -> the weapon it last fired, so a melee `punch` knows which swing it was.
 var _swing: Dictionary = {}
 var zones: ZoneViews
@@ -96,6 +97,8 @@ func _ready() -> void:
 	shots.lost.connect(_on_shot_lost)
 	add_child(shots)
 	crates = CrateViews.new()
+	aim_guide = AimGuide.new()
+	add_child(aim_guide)
 	gear = GearFx.new()
 	gear.name = "Gear"
 	add_child(gear)
@@ -422,6 +425,7 @@ func _process(dt: float) -> void:
 	zones.sync(v["zones"], dt)
 	crates.sync(v["crates"], dt, _crates_seen)
 	_crates_seen = true
+	aim_guide.update_guide(aim, active, controls.weapon_id(), Callable(self, "ground_y"))
 	_update_marker(v, active, aim)
 	_update_camera(v, active, aim, mouse, dt)
 
@@ -698,7 +702,7 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		var p: Vector3 = active["pos"]
 		goal = {
 			"mode": "aim",
-			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.86, 0) + d * FIRST_PERSON_BACK,
+			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.74, 0) + d * FIRST_PERSON_BACK,
 			"yaw_deg": CameraMath.camera_yaw_for_heading(CameraMath.yaw_to_deg(aim.yaw)),
 			"pitch_deg": -cam_pitch,
 			"dist": FIRST_PERSON_BACK,

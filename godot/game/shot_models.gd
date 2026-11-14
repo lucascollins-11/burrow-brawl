@@ -4,6 +4,7 @@ extends RefCounted
 ## as text. Each model is a Node3D with a "Body" child (the part that spins) and, for most, a
 ## smoke or spark trail that stays behind in the world. Unknown weapons get a plain grey ball.
 
+const Toon := preload("res://game/toon.gd")
 const BROWN := Color("8b5a2b")
 const DARK_BROWN := Color("5b3a1a")
 const BLUE := Color("4aa3df")
@@ -106,6 +107,7 @@ static func _mat(color: Color, rough := 0.7) -> StandardMaterial3D:
 	if _mats.has(key):
 		return _mats[key]
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = rough
 	_mats[key] = m
@@ -493,6 +495,7 @@ static func _trail(cfg: Dictionary) -> CPUParticles3D:
 	curve.add_point(Vector2(1.0, 0.0 if bool(cfg["spark"]) else 1.6))
 	p.scale_amount_curve = curve
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
