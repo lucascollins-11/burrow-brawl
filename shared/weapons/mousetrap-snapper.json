@@ -1,0 +1,26 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "mousetrap-snapper",
+  "name": "Mousetrap Snapper",
+  "description": "A giant mousetrap set down at your feet: the next critter to step on it is snapped high into the air.",
+  "category": "placed",
+  "behavior": "launch-trap",
+  "targeting": "none",
+  "ammo": 2,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 10,
+  "blastRadius": 22,
+  "knockback": 950,
+  "params": {
+    "armSeconds": 1,
+    "triggerRadius": 14,
+    "triggerDelayTicks": 1,
+    "dropSpeed": 30,
+    "maxBounces": 1,
+    "bounciness": 0.2,
+    "gravity": 600,
+    "noCrater": true
+  }
+}

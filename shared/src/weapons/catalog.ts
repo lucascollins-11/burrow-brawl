@@ -58,6 +58,11 @@ export const FIREABLE_WEAPONS: readonly WeaponId[] = [
   "marble-roller",
   "rc-racer",
   "kite-bomber",
+  "pea-gatling",
+  "water-pistol",
+  "spatula-swat",
+  "pillow-bash",
+  "mousetrap-snapper",
 ];
 
 /** Weapons that pop in flight on a `trigger` command. */

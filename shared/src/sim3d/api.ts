@@ -78,6 +78,8 @@ export interface Critter {
   readonly shield?: true;
   /** Snow Globe: frozen solid; takes no input, and its next turn is skipped (which thaws it). */
   readonly frozen?: true;
+  /** Pea Gatling: spraying for `ticks` more at `pitch`; the walk keys sweep the facing. */
+  readonly gatling?: { readonly ticks: number; readonly pitch: number };
   /** Feather Charm: this critter and the shots it fires fall at half gravity until the turn ends. */
   readonly feather?: true;
 }

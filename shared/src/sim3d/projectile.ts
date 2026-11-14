@@ -36,6 +36,7 @@ import { zoneFrom } from "./zones";
 import { applyEdit, isSolid, normalAt } from "./terrainOps";
 import {
   aimDir,
+  cosPitch,
   cosYaw,
   dot,
   length,
@@ -78,6 +79,7 @@ const FLIGHT: Partial<Record<WeaponId, Flight>> = {
   "rc-racer": "drive",
   "kite-bomber": "kite",
   "kite-charge": "impact",
+  "mousetrap-snapper": "bounce",
 };
 
 /** The weapons a fire command can launch as projectiles (strikes drop bombs instead of one shot). */
@@ -99,7 +101,8 @@ export type ProjectileWeaponId =
   | "wind-up-robot"
   | "marble-roller"
   | "rc-racer"
-  | "kite-bomber";
+  | "kite-bomber"
+  | "mousetrap-snapper";
 
 const FIREABLE: readonly string[] = [
   "acorn-mortar",
@@ -120,6 +123,7 @@ const FIREABLE: readonly string[] = [
   "marble-roller",
   "rc-racer",
   "kite-bomber",
+  "mousetrap-snapper",
 ] satisfies readonly ProjectileWeaponId[];
 
 export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
@@ -127,7 +131,10 @@ export function isProjectileWeapon(id: string): id is ProjectileWeaponId {
 }
 
 /** Weapons that hit along a line the moment they fire, with no projectile in flight. */
-const HITSCAN: readonly string[] = ["pepper-shotgun"];
+const HITSCAN: readonly string[] = ["pepper-shotgun", "water-pistol"];
+
+/** Swings that hit critters in front within reach (see punch). */
+const MELEE: readonly string[] = ["root-punch", "spatula-swat", "pillow-bash"];
 
 export function isHitscanWeapon(id: string): boolean {
   return HITSCAN.includes(id);
@@ -211,7 +218,8 @@ export function isInstantWeapon(id: string): boolean {
     isHitscanWeapon(id) ||
     isGearWeapon(id) ||
     isUtilityWeapon(id) ||
-    id === "root-punch" ||
+    MELEE.includes(id) ||
+    id === "pea-gatling" ||
     id === "teleport-burrow" ||
     id === "drill-hat"
   );
@@ -229,7 +237,8 @@ export function fireInstant(
   cmd: FireCommand,
   events: SimEvent[],
 ): Critter[] | null {
-  if (cmd.weaponId === "root-punch") return punch(critters, c, cmd, events);
+  if (MELEE.includes(cmd.weaponId)) return punch(critters, c, cmd, events);
+  if (cmd.weaponId === "pea-gatling") return startGatling(critters, c, cmd);
   if (cmd.weaponId === "teleport-burrow") return burrow(t, critters, c, cmd, events);
   if (cmd.weaponId === "drill-hat") return startDrill(critters, c, cmd);
   if (isUtilityWeapon(cmd.weaponId))
@@ -280,10 +289,14 @@ function punch(
   const reach = Math.floor((num(w, "range", 40) * LENGTH_NUM * FIXED_ONE) / LENGTH_DEN);
   const launch = aimDir(yaw, clampInt(num(w, "launchAngleDegrees", 70), PITCH_MIN, PITCH_MAX));
   const speed = speedPerTick(w.knockback);
+  const half = clampInt(Math.trunc(num(w, "arcDegrees", 180) / 2), 0, 90);
   const hit = (o: Critter): boolean => {
     if (o.status !== "alive" || o.id === c.id || o.team === c.team) return false;
     const d = { x: o.pos.x - c.pos.x, y: o.pos.y - c.pos.y, z: o.pos.z - c.pos.z };
-    return length(d) <= reach && dot({ x: d.x, y: 0, z: d.z }, face) >= 0;
+    if (length(d) > reach) return false;
+    // In the swing's arc: the angle from the facing is at most arcDegrees / 2 (180 = all ahead).
+    const flat = { x: d.x, y: 0, z: d.z };
+    return dot(flat, face) >= mulQ(length(flat), cosPitch(half));
   };
   events.push({
     type: "punch",
@@ -398,8 +411,7 @@ export function spawnShots(
   const w = loadWeapons()[cmd.weaponId];
   const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
   if (cmd.weaponId === "beehive-strike") return dropStrike(t, c, w, yaw, cmd.target, firstId);
-  if (cmd.weaponId === "firecracker-bundle" || cmd.weaponId === "jelly-mine")
-    return [dropCharge(c, w, yaw, firstId)];
+  if (cmd.weaponId === "firecracker-bundle" || isMine(w)) return [dropCharge(c, w, yaw, firstId)];
   // Walkers are set down ahead and head off along the aim.
   if (FLIGHT[cmd.weaponId] === "walk" || FLIGHT[cmd.weaponId] === "drive")
     return [{ ...dropCharge(c, w, yaw, firstId), heading: yaw }];
@@ -448,6 +460,50 @@ export function spawnShots(
         : {}),
     },
   ];
+}
+
+/**
+ * The Pea Gatling: from the next tick the critter sprays a pea every `peaEveryTicks` for
+ * `streamSeconds`, along its facing (turned by the walk keys) at the aimed pitch.
+ */
+function startGatling(critters: readonly Critter[], c: Critter, cmd: FireCommand): Critter[] {
+  const w = loadWeapons()["pea-gatling"];
+  const ticks = Math.max(1, Math.trunc(num(w, "streamSeconds", 3) * TICK_RATE));
+  const yaw = ((Math.trunc(cmd.yaw) % YAW_STEPS) + YAW_STEPS) % YAW_STEPS;
+  const pitch = clampInt(cmd.pitch, PITCH_MIN, PITCH_MAX);
+  return critters.map((o) => (o.id === c.id ? { ...o, yaw, gatling: { ticks, pitch } } : o));
+}
+
+/**
+ * One tick of a running Pea Gatling for critter `c`: a pea (one hitscan pellet) on every
+ * `peaEveryTicks`-th tick left, then the count goes down; the stream ends at zero.
+ */
+export function gatlingTick(
+  t: VoxelTerrain,
+  critters: readonly Critter[],
+  c: Critter,
+  events: SimEvent[],
+): Critter[] {
+  const g = c.gatling!;
+  const every = Math.max(1, Math.trunc(num(loadWeapons()["pea-gatling"], "peaEveryTicks", 6)));
+  let cs: Critter[] = [...critters];
+  if (g.ticks % every === 0 && c.status === "alive")
+    cs = fireHitscan(
+      t,
+      cs,
+      c,
+      { weaponId: "pea-gatling", yaw: c.yaw, pitch: g.pitch, power: 0 },
+      events,
+    );
+  return cs.map((o) => {
+    if (o.id !== c.id) return o;
+    if (g.ticks <= 1 || o.status !== "alive") {
+      const { gatling: _g, ...rest } = o;
+      void _g;
+      return rest;
+    }
+    return { ...o, gatling: { ...g, ticks: g.ticks - 1 } };
+  });
 }
 
 /** Shots their owner drives with the walk input (RC Racer, Kite Bomber). */
@@ -686,7 +742,7 @@ export function explode(
   const edit = { op: "carve", x, y, z, r } as const;
   // A Snow Globe's flurry freezes critters and leaves the ground alone.
   const freeze = w.params.freeze === true;
-  if (!freeze && r > 0) applyEdit(t, edit);
+  if (!freeze && r > 0 && w.params.noCrater !== true) applyEdit(t, edit);
   events.push({ type: "explosion", projectileId: p.id, weaponId: p.weaponId, edit });
   if (r === 0) return [...critters];
 

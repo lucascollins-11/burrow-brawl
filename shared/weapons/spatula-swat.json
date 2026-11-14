@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "spatula-swat",
+  "name": "Spatula Swat",
+  "description": "A big kitchen spatula swung wide: smacks everyone in a frontal arc.",
+  "category": "melee",
+  "behavior": "wide-swing",
+  "targeting": "aim-angle",
+  "ammo": null,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 25,
+  "blastRadius": 0,
+  "knockback": 360,
+  "params": {
+    "range": 55,
+    "arcDegrees": 120,
+    "launchAngleDegrees": 35,
+    "targetsEnemiesOnly": true
+  }
+}
