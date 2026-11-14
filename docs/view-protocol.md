@@ -56,6 +56,7 @@ WeaponInfo = {
   id, name, description,        // our own names and text, from shared/weapons/*.json
   needs: ("target" | "trigger" | "fuse" | "charge")[],
   ammo: number | null,          // per team per match; null = unlimited
+  crateOnly: boolean,           // a team starts with 0 and gets one per weapon crate (supers)
   fireable: boolean             // false for sub-munitions (seeds, bombs): name and draw only
 }
 ```
@@ -63,7 +64,9 @@ WeaponInfo = {
 `needs` says what the client collects for `fire`: `target` a voxel picked on the map
 (`fire.target`), `fuse` 1..5 seconds (`fire.fuseSeconds`), `charge` a power held on the fire key
 (`fire.power`); `trigger` means the shot can be popped in flight by sending `{ k: "trigger" }`.
-Clients build the weapon menu from this list and never hardcode it. Projectiles and events may
+Clients build the weapon menu from this list and never hardcode it. The supers (Boulder of Doom,
+Marble Meteor Shower, Party Piñata, Tabletop Quake) are `crateOnly`: show them greyed out at 0
+ammo. A Marble Meteor Shower's marbles join `projectiles` one by one as each starts to fall. Projectiles and events may
 name any id in the list, sub-munitions included.
 
 ### `state`

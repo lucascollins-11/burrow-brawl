@@ -2,7 +2,7 @@
   "$schema": "./weapon.schema.json",
   "id": "boulder-of-doom",
   "name": "Boulder of Doom",
-  "description": "A huge boulder rolls slowly off along your aim, grinding a tunnel through anything in its way, and blows up on the first critter it meets or after twelve seconds.",
+  "description": "A huge boulder rolls slowly along your aim, grinding a tunnel through anything in its way, and blows up on the first critter it meets or after 12 s.",
   "category": "super",
   "behavior": "rolling-boulder",
   "targeting": "aim-angle",

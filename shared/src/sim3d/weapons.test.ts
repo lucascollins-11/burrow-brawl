@@ -1193,6 +1193,77 @@ describe("guns and melee", () => {
   });
 });
 
+describe("air strikes and supers", () => {
+  const at = (dx: number) => ({ x: 40 + dx, y: GROUND, z: 64 });
+  const cmd = (
+    weaponId: FireCommand["weaponId"],
+    extra: Partial<FireCommand> = {},
+  ): FireCommand => ({
+    weaponId,
+    yaw: 0,
+    pitch: 0,
+    power: 0,
+    ...extra,
+  });
+
+  it("Lantern Drift drops three lanterns that the wind carries", () => {
+    const calm = run(world(), 900, fireOnce(cmd("lantern-drift", { target: at(40) })));
+    const windy = run(
+      { ...world(), windX: 10 },
+      900,
+      fireOnce(cmd("lantern-drift", { target: at(40) })),
+    );
+    const xs = (r: typeof calm) =>
+      explosions(r.events)
+        .filter((e) => e.weaponId === "paper-lantern")
+        .map((e) => (e.edit as { x: number }).x);
+    expect(xs(calm)).toHaveLength(3);
+    expect(xs(windy)).toHaveLength(3);
+    const drift = xs(windy).map((x, i) => x - xs(calm)[i]!);
+    expect(drift.every((d) => d > 5)).toBe(true);
+  });
+
+  it("Toy Block Drop lands a giant block that stays as new terrain", () => {
+    const r = run(world(), 900, fireOnce(cmd("toy-block-drop", { target: at(30) })));
+    expect(explosions(r.events).filter((e) => e.weaponId === "giant-block")).toHaveLength(1);
+    expect(isSolid(r.state.terrain, 70, GROUND + 3, 64)).toBe(true);
+  });
+
+  it("Boulder of Doom grinds a tunnel and blows on reaching a critter", () => {
+    const r = run(world(true), 900, fireOnce(cmd("boulder-of-doom")));
+    const ex = explosions(r.events).filter((e) => e.weaponId === "boulder-of-doom");
+    expect(ex).toHaveLength(1);
+    expect(r.state.terrain.edits.length).toBeGreaterThan(2);
+    expect(r.state.critters[1]!.hp).toBeLessThan(100);
+  });
+
+  it("Marble Meteor Shower rains twenty marbles over about four seconds", () => {
+    const r = run(world(), 600, fireOnce(cmd("marble-meteor-shower")));
+    const ex = explosions(r.events).filter((e) => e.weaponId === "meteor-marble");
+    expect(r.events.filter((e) => e.type === "fired")).toHaveLength(1);
+    expect(ex).toHaveLength(20);
+    expect(r.state.projectiles).toHaveLength(0);
+  });
+
+  it("Party Pinata bursts into eight candy bombs", () => {
+    const r = run(world(), 900, fireOnce(cmd("party-pinata", { target: at(40) })));
+    const ex = explosions(r.events);
+    expect(ex.filter((e) => e.weaponId === "pinata")).toHaveLength(1);
+    expect(ex.filter((e) => e.weaponId === "candy-bomb")).toHaveLength(8);
+  });
+
+  it("Tabletop Quake hurts everyone and throws them out from the middle", () => {
+    const r = stepWorld(world(true), [fireOnce(cmd("tabletop-quake"))(0)[0]!], rng);
+    const [a, b] = r.state.critters;
+    expect(a!.hp).toBe(90);
+    expect(b!.hp).toBe(90);
+    expect(a!.vel.x).toBeLessThan(0); // x 40: left of the middle
+    expect(b!.vel.x).toBeGreaterThan(0); // x 100: right of it
+    expect(a!.vel.y).toBeGreaterThan(0);
+    expect(r.state.terrain.edits).toHaveLength(0);
+  });
+});
+
 describe("wave 1a determinism", () => {
   it("the same shots give the same state, event for event", () => {
     const script = (tick: number): CritterInput[] => [
@@ -1257,7 +1328,15 @@ describe("weapon catalogue", () => {
       "spatula-swat",
       "pillow-bash",
       "mousetrap-snapper",
+      "lantern-drift",
+      "toy-block-drop",
+      "boulder-of-doom",
+      "marble-meteor-shower",
+      "party-pinata",
+      "tabletop-quake",
     ]);
+    expect(byId["tabletop-quake"]!.crateOnly).toBe(true);
+    expect(byId["acorn-mortar"]!.crateOnly).toBe(false);
     expect(byId["jelly-mine"]!.needs).toEqual([]);
     expect(byId["drill-hat"]!.needs).toEqual([]);
     expect(byId["root-punch"]!.needs).toEqual([]);

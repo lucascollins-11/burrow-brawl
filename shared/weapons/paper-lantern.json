@@ -16,7 +16,7 @@
   "knockback": 240,
   "params": {
     "gravity": 40,
-    "windScale": 3,
+    "windScale": 2,
     "damageFalloff": "linear"
   }
 }
