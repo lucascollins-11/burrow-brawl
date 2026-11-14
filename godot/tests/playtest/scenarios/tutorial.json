@@ -1,0 +1,27 @@
+{
+  "about": "The guided practice match, played with real key presses: walk, jump, aim with Tab, hold F to charge and release, weapon menu, a utility, then shots at the dummies.",
+  "steps": [
+    { "do": "screen", "scene": "howto", "page": 0 },
+    { "do": "screen", "scene": "howto", "page": 7 },
+    { "do": "start", "mode": "practice" },
+    { "do": "camera", "dist": 45, "pitch": 30 },
+    { "do": "walk", "dir": "forward", "seconds": 1.2 },
+    { "do": "walk", "dir": "left", "seconds": 0.6 },
+    { "do": "key", "action": "jump" },
+    { "do": "wait", "seconds": 1 },
+    { "do": "key", "action": "toggle_aim", "name": "aim-mode" },
+    { "do": "hold", "action": "fire", "seconds": 1.2, "name": "charge-and-release" },
+    { "do": "wait_for", "until": "my_turn", "timeout": 60 },
+    { "do": "menu", "open": "weapons" },
+    { "do": "menu", "open": "none" },
+    { "do": "fire", "weapon": "fizz-grenade", "at": "nearest_enemy", "fuse": 3 },
+    { "do": "wait_for", "until": "my_turn", "timeout": 60 },
+    { "do": "fire", "weapon": "soda-jetpack", "watch": false, "name": "jetpack" },
+    { "do": "key", "action": "jump" },
+    { "do": "wait", "seconds": 1.5 },
+    { "do": "skip" },
+    { "do": "play_turns", "count": 4 },
+    { "do": "camera", "focus": "overview", "name": "overview" },
+    { "do": "quit" }
+  ]
+}

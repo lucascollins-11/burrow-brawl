@@ -114,6 +114,19 @@ jobs:
             exit 1
           fi
 
+      - name: Agent playtest harness, headless smoke scenario
+        # The harness Claude sessions use to play the game (docs/agent-playtest.md). Exits 1 when a
+        # step fails; engine errors before PLAYTEST DONE fail the job too.
+        run: |
+          set -euo pipefail
+          timeout 300 godot --headless --path godot res://tests/playtest/playtest.tscn -- \
+            --server=http://127.0.0.1:8080 --scenario=res://tests/playtest/scenarios/smoke.json \
+            --out="$PWD/playtest-smoke" 2>&1 | tee playtest.log
+          if sed "/PLAYTEST DONE/q" playtest.log | grep -n "^ERROR:\|SCRIPT ERROR"; then
+            echo "The engine reported errors during the playtest"
+            exit 1
+          fi
+
       - name: Same match against the live server (probe, best effort)
         continue-on-error: true
         run: |
@@ -156,6 +169,24 @@ jobs:
           timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
             godot --path godot --rendering-driver vulkan --resolution 1280x720 \
             res://tests/e2e/e2e_match.tscn -- --server=http://127.0.0.1:8080 --shots="$PWD/shots" --theme=garden-patch --tour 2>&1 | tail -n 20
+
+      - name: Agent playtest, tutorial with screenshots (software renderer, best effort)
+        continue-on-error: true
+        run: |
+          timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" \
+            godot --path godot --rendering-driver vulkan --resolution 1280x720 \
+            res://tests/playtest/playtest.tscn -- --server=http://127.0.0.1:8080 \
+            --scenario=res://tests/playtest/scenarios/tutorial.json --out="$PWD/playtest-tutorial" 2>&1 | grep "^PLAYTEST" || true
+
+      - name: Upload playtest reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playtest-reports
+          path: |
+            playtest-smoke
+            playtest-tutorial
+          if-no-files-found: ignore
 
       - name: Server log
         if: always()

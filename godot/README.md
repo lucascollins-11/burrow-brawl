@@ -64,7 +64,8 @@ This needs the 4.4.1-stable export templates installed. CI installs them for you
   attaches it to a GitHub Release named `godot-pr-<number>` (a pre-release, replaced on each push).
   Pull requests from forks get the artifact only, because their token cannot write releases.
 
-Nobody can run Godot inside the agent workspaces yet, so CI is the build and test loop.
+Agent sessions can also run and play the game themselves with the playtest harness: see
+[docs/agent-playtest.md](../docs/agent-playtest.md).
 
 ## Layout
 
