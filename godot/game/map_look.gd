@@ -38,11 +38,12 @@ const LOOKS := {
 	},
 	# A sunny vegetable patch: bright lawn, dark soil, terracotta pots, a green pond.
 	"garden-patch": {
-		"grass": "62c24a", "grass_dark": "2f8f3a", "soil": "7a4a2e", "rock": "b8663f",
-		"sand": "e8d6a0", "bedrock": "3e3b34",
+		# Storybook palette (the look Lucas picked): violet rock with gold bands, a dark turf lip.
+		"grass": "8be04e", "grass_dark": "45b04a", "grass_lip": "2f7a3a", "soil": "c8794a",
+		"rock": "8a6a8f", "rock_band": "f0c070", "sand": "ffe3a3", "bedrock": "3e3b34",
 		"sea_shallow": "8fe0b0", "sea_deep": "1f7a6a", "sea_horizon": "d8f2c8",
 		"sky_top": "5aa8e8", "sky_horizon": "ffe9b0", "sky_bottom": "a8d08a",
-		"sun": "fff2c0", "sun_energy": 1.6, "sun_pitch": -42.0, "fog": "e6f2c8",
+		"sun": "fff0cc", "sun_energy": 1.5, "sun_pitch": -40.0, "sun_yaw": 200.0, "fog": "e6f2c8",
 		"cloud": "ffffff", "debris": "7a4a2e",
 		"saturation": 1.3,
 	},
