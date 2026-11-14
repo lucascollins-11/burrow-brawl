@@ -228,14 +228,14 @@ func test_view_model_keeps_a_steered_shot_heading() -> void:
 			"critters": [],
 			"projectiles":
 			[
-				{"id": 1, "ownerId": 1, "weaponId": "rc-racer", "x": 0, "y": 0, "z": 0, "fuseTicks": -1, "heading": 256},
+				{"id": 1, "ownerId": 1, "weaponId": "rc-racer", "x": 0, "y": 0, "z": 0, "fuseTicks": -1, "heading": 0},
 				{"id": 2, "ownerId": 1, "weaponId": "acorn-mortar", "x": 0, "y": 0, "z": 0, "fuseTicks": 30},
 			],
 		},
 		true
 	)
 	var shots: Array = vm.snapshot()["projectiles"]
-	check_eq(shots[0]["heading_deg"], 90.0, "256 steps is a quarter turn")
+	check_eq(shots[0]["heading_deg"], 90.0, "yaw 0 faces +x, heading 90")
 	check_eq(shots[1]["heading_deg"], INF, "a plain shot has no heading")
 
 
