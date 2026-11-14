@@ -1,0 +1,19 @@
+{
+  "about": "A full 1v1 online match (2 critters each) on Garden Patch: both sides fire acorns at each other until someone wins or 12 of our turns pass.",
+  "steps": [
+    {
+      "do": "start",
+      "mode": "match",
+      "theme": "garden-patch",
+      "critters": 2,
+      "seed": 7,
+      "turn_seconds": 45,
+      "opponent": "fire"
+    },
+    { "do": "camera", "focus": "overview", "name": "overview" },
+    { "do": "play_turns", "count": 12 },
+    { "do": "wait", "seconds": 2 },
+    { "do": "state", "name": "final" },
+    { "do": "quit" }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "about": "Short check that the harness and a 1v1 online match work: menus, walk, jump, fire, the rival's turn, pause and weapon menus.",
+  "steps": [
+    { "do": "screen", "scene": "title" },
+    {
+      "do": "start",
+      "mode": "match",
+      "theme": "toybox-harbor",
+      "critters": 2,
+      "seed": 99,
+      "turn_seconds": 60,
+      "opponent": "fire"
+    },
+    { "do": "camera", "focus": "overview", "name": "overview" },
+    { "do": "camera", "dist": 40, "pitch": 30 },
+    { "do": "walk", "dir": "forward", "seconds": 1.0 },
+    { "do": "key", "action": "jump" },
+    { "do": "aim", "weapon": "acorn-mortar", "at": "nearest_enemy" },
+    { "do": "fire", "at": "nearest_enemy" },
+    { "do": "wait_for", "until": "my_turn", "timeout": 90 },
+    { "do": "menu", "open": "weapons" },
+    { "do": "menu", "open": "pause" },
+    { "do": "menu", "open": "none" },
+    { "do": "skip" },
+    { "do": "quit" }
+  ]
+}
