@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cr1xouto2leie"
-path="res://.godot/imported/planter_pot_clay_diff_1k.jpg-4950c7d191c1062f5e8e86ecd862ea38.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/planter_pot_clay/textures/planter_pot_clay_diff_1k.jpg"
-dest_files=["res://.godot/imported/planter_pot_clay_diff_1k.jpg-4950c7d191c1062f5e8e86ecd862ea38.ctex"]
 
 [params]
 
