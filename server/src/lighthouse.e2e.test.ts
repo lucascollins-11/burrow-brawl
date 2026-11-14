@@ -21,7 +21,10 @@ async function readyRoom(): Promise<{ a: TestClient; b: TestClient; code: string
   b.send({ t: "room.join", code });
   await b.next("room.joined");
   await a.room((s) => s.members.length === 2);
-  await a.request({ t: "lobby.setSettings", patch: { mapTheme: "lighthouse-village", mapSize: 384 } });
+  await a.request({
+    t: "lobby.setSettings",
+    patch: { mapTheme: "lighthouse-village", mapSize: 384 },
+  });
   a.send({ t: "lobby.ready", ready: true });
   b.send({ t: "lobby.ready", ready: true });
   await a.room((s) => s.members.every((m) => m.ready));
@@ -38,7 +41,11 @@ describe("Lighthouse Village, two players", () => {
         config: { map: { theme: string; sizeX: number; sizeZ: number } };
         terrain: { decor?: unknown[] };
       };
-      expect(start.config.map).toMatchObject({ theme: "lighthouse-village", sizeX: 512, sizeZ: 512 });
+      expect(start.config.map).toMatchObject({
+        theme: "lighthouse-village",
+        sizeX: 512,
+        sizeZ: 512,
+      });
       expect((start.terrain.decor ?? []).length).toBeGreaterThan(1000);
     }
     expect(h.server.registry.get(code)!.phase).toBe("match");

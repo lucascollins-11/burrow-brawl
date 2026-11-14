@@ -84,7 +84,8 @@ export function createGameServer(config: ServerConfig, opts: GameServerOptions =
     const gap = t - lastBeat;
     const stalled = gap > config.heartbeatMs * 1.5;
     lastBeat = t;
-    if (stalled) console.warn(`[server] heartbeat ran ${Math.round(gap)} ms apart; not dropping anyone`);
+    if (stalled)
+      console.warn(`[server] heartbeat ran ${Math.round(gap)} ms apart; not dropping anyone`);
     for (const c of all) c.heartbeat(stalled);
   }, config.heartbeatMs);
   const sweep = () => {
