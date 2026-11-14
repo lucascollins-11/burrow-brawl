@@ -541,7 +541,9 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		CRITTER_MODEL.set_tag(node, str(c["name"]), team_color.lightened(0.35), hp_frac)
 		node.set_first_person(is_active and aim != null and _rig.dist < FIRST_PERSON_DIST)
 		var head := pos + Vector3(0, CRITTER_MODEL.HEIGHT, 0)
-		node.update_tag(camera.global_position, _hidden_by_terrain(camera.global_position, head))
+		node.update_tag(
+			camera.global_position, _hidden_by_terrain(camera.global_position, head), get_viewport().get_visible_rect().size.y, camera.fov
+		)
 	for id in _critters.keys():
 		if not seen.has(id):
 			(_critters[id] as Node).queue_free()
@@ -581,13 +583,14 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 	elif aim != null and not active.is_empty():
 		# First person: the camera sits at the head (target is a little way along the aim, and the
 		# camera is `dist` back from it). The rig eases in from the orbit view and back out again.
-		var d := CameraMath.aim_direction(aim)
+		var cam_pitch := float(aim.pitch_deg) * CameraMath.FIRST_PERSON_PITCH_SHARE
+		var d := CameraMath.offset_dir(CameraMath.yaw_to_deg(aim.yaw), cam_pitch)
 		var p: Vector3 = active["pos"]
 		goal = {
 			"mode": "aim",
 			"target": p + Vector3(0, CRITTER_MODEL.HEIGHT * 0.86, 0) + d * FIRST_PERSON_BACK,
 			"yaw_deg": CameraMath.camera_yaw_for_heading(CameraMath.yaw_to_deg(aim.yaw)),
-			"pitch_deg": -float(aim.pitch_deg),
+			"pitch_deg": -cam_pitch,
 			"dist": FIRST_PERSON_BACK,
 		}
 	else:
@@ -651,9 +654,12 @@ func _make_marker() -> void:
 
 ## The spot under the crosshair, found by walking along the view ray until it dips under the
 ## ground. Null on the sky or the open sea.
-func _pick_ground() -> Variant:
+func _pick_ground(aim: CameraMath.AimState = null) -> Variant:
 	var from := camera.global_position
 	var dir := -camera.global_transform.basis.z
+	if aim != null:
+		# The camera is tipped less than the aim (first person), so follow the aim itself.
+		dir = CameraMath.aim_direction(aim)
 	var step := 1.0
 	var p := from
 	for i in range(700):
@@ -672,7 +678,7 @@ func _pick_ground() -> Variant:
 
 func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState) -> void:
 	var targeting := aim != null and controls.needs("target")
-	controls.target = _pick_ground() if targeting else null
+	controls.target = _pick_ground(aim) if targeting else null
 	_target_ring.visible = controls.target != null
 	if _target_ring.visible:
 		_target_ring.position = (controls.target as Vector3) + Vector3(0, 0.6, 0)

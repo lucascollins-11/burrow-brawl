@@ -40,3 +40,17 @@ func test_tag_shows_name_health_and_hides_far_away_or_behind_terrain() -> void:
 	rig.set_first_person(false)
 	check(rig.get_node("Model").visible, "and brings them back")
 	rig.free()
+
+
+func test_tag_text_never_gets_smaller_than_the_floor_and_scales_with_the_screen() -> void:
+	check(SquirmlingRig.tag_pixels(500.0, 720.0) >= 14.0, "readable even far away")
+	check(SquirmlingRig.tag_pixels(10.0, 720.0) <= 23.0, "capped when close")
+	check(SquirmlingRig.tag_pixels(100.0, 1440.0) > SquirmlingRig.tag_pixels(100.0, 720.0), "bigger on a taller screen")
+	var rig := Squirmling.create(0, "miner", Color("e85d4a"))
+	(Engine.get_main_loop() as SceneTree).root.add_child(rig)
+	var label := rig.get_node("Tag/Name") as Label3D
+	for d in [30.0, 80.0, 150.0]:
+		rig.update_tag(rig.get_node("Tag").global_position + Vector3(0, 0, d), false)
+		var px: float = float(label.font_size) * label.pixel_size * (rig.get_node("Tag") as Node3D).scale.x * 360.0 / (d * tan(deg_to_rad(30.0)))
+		check(absf(px - SquirmlingRig.tag_pixels(d, 720.0)) < 0.5, "text is %d px at %d voxels" % [int(px), int(d)])
+	rig.free()

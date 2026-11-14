@@ -14,6 +14,9 @@ const AIM_DIST := 14.0
 const AIM_MIN_PITCH := -20
 const AIM_MAX_PITCH := 80
 const CHARGE_PER_SECOND := 70.0
+## The first-person aim camera tips only this share of the aim angle, so the horizon and the target
+## stay in view; the crosshair moves up the screen to show the real aim (HudModel.crosshair_offset).
+const FIRST_PERSON_PITCH_SHARE := 0.5
 
 
 ## Wrap degrees into [0, 360).
