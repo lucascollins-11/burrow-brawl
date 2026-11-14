@@ -24,6 +24,7 @@ const LOOKS := {
 		"sky_top": "3f8fe8", "sky_horizon": "cfeaff", "sky_bottom": "8fb6d9",
 		"sun": "fff4d6", "sun_energy": 1.6, "sun_pitch": -52.0, "fog": "dff1ff",
 		"cloud": "ffffff", "debris": "d9503f",
+		"saturation": 1.12,
 	},
 	# Brass and copper under a violet dusk.
 	"clockwork-mesa": {
@@ -33,6 +34,7 @@ const LOOKS := {
 		"sky_top": "4a3f8c", "sky_horizon": "f09a7a", "sky_bottom": "7a4a6b",
 		"sun": "ffc48a", "sun_energy": 1.45, "sun_pitch": -28.0, "fog": "e8a6a0",
 		"cloud": "ffd9c9", "debris": "9c7a2b",
+		"saturation": 1.2,
 	},
 	# A sunny vegetable patch: bright lawn, dark soil, terracotta pots, a green pond.
 	"garden-patch": {
@@ -42,6 +44,7 @@ const LOOKS := {
 		"sky_top": "5aa8e8", "sky_horizon": "ffe9b0", "sky_bottom": "a8d08a",
 		"sun": "fff2c0", "sun_energy": 1.6, "sun_pitch": -42.0, "fog": "e6f2c8",
 		"cloud": "ffffff", "debris": "7a4a2e",
+		"saturation": 1.3,
 	},
 	# Soap bars and a sponge in a steamy bathtub: porcelain blues, pink foam, warm light.
 	"bathtub-bay": {
@@ -51,6 +54,7 @@ const LOOKS := {
 		"sky_top": "7fc8f8", "sky_horizon": "fff1e0", "sky_bottom": "d6ecf5",
 		"sun": "fff6e0", "sun_energy": 1.5, "sun_pitch": -50.0, "fog": "e6f7ff",
 		"cloud": "ffffff", "debris": "f4e4f0",
+		"saturation": 1.08,
 	},
 	# Icing on sponge cake in strawberry soda.
 	"frosted-bakery": {
@@ -60,6 +64,7 @@ const LOOKS := {
 		"sky_top": "8fc2f2", "sky_horizon": "ffe0ea", "sky_bottom": "f2b5c7",
 		"sun": "fff0e0", "sun_energy": 1.5, "sun_pitch": -45.0, "fog": "ffe6ee",
 		"cloud": "ffffff", "debris": "e8b56b",
+		"saturation": 1.08,
 	},
 }
 
@@ -87,3 +92,15 @@ static func paint_terrain(mat: ShaderMaterial, look: Dictionary) -> void:
 		["rock_color", "rock"], ["sand_color", "sand"], ["bedrock_color", "bedrock"],
 	]:
 		mat.set_shader_parameter(pair[0], color(look, pair[1]))
+	# Storybook extras. A theme can name them; otherwise they come from its own colours.
+	var lip := color(look, "grass_dark").darkened(0.35)
+	var band := color(look, "soil").lightened(0.4)
+	mat.set_shader_parameter("grass_lip", Color(str(look["grass_lip"])) if look.has("grass_lip") else lip)
+	mat.set_shader_parameter("rock_band", Color(str(look["rock_band"])) if look.has("rock_band") else band)
+	mat.set_shader_parameter("shadow_tint", Color(str(look.get("shadow", "6a5acd"))))
+
+
+## Colour saturation for the whole picture. Bright themes get a Storybook boost; pastel and already
+## loud themes less, so nothing turns neon.
+static func saturation(look: Dictionary) -> float:
+	return float(look.get("saturation", 1.25))
