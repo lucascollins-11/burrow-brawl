@@ -42,6 +42,7 @@ const LOOKS := {
 		"sky_top": "5aa8e8", "sky_horizon": "ffe9b0", "sky_bottom": "a8d08a",
 		"sun": "fff2c0", "sun_energy": 1.6, "sun_pitch": -42.0, "fog": "e6f2c8",
 		"cloud": "ffffff", "debris": "7a4a2e",
+	},
 	# Soap bars and a sponge in a steamy bathtub: porcelain blues, pink foam, warm light.
 	"bathtub-bay": {
 		"grass": "f7b6d6", "grass_dark": "c9a3ea", "soil": "fbd9a4", "rock": "a6c4f2",
