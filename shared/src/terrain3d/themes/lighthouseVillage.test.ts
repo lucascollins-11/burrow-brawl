@@ -43,6 +43,11 @@ describe("lighthouse-village", () => {
       expect(d.face).toBeGreaterThanOrEqual(0);
       expect(d.face).toBeLessThanOrEqual(5);
     }
+    // Every anchor hangs on a solid voxel (later carving must not leave detail floating).
+    let floating = 0;
+    for (const d of t.decor!)
+      if (t.density[(d.y * t.sizeZ + d.z) * t.sizeX + d.x]! < SOLID) floating++;
+    expect(floating).toBe(0);
   });
 
   it("puts the lighthouse lantern high on the headland", () => {

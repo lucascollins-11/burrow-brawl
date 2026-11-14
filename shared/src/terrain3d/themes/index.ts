@@ -1,5 +1,5 @@
 import { type DecorAnchor, type GeneratedMap, type MapRecipe } from "../api.js";
-import { createTerrain } from "../grid.js";
+import { createTerrain, isSolid } from "../grid.js";
 import { BEDROCK_Y, SEA_Y } from "../generate.js";
 import { findSpawns } from "../spawns.js";
 import { keepWalkableSpawns, makeCtx, type Theme } from "./kit.js";
@@ -58,6 +58,32 @@ export function themedRecipe(theme: string, seed: number, size: number): MapReci
   };
 }
 
+/** Face directions of DecorAnchor.face (0 +x, 1 +z, 2 -x, 3 -z, 4 up, 5 down). */
+const FACE_DIR: readonly (readonly [number, number, number])[] = [
+  [1, 0, 0],
+  [0, 0, 1],
+  [-1, 0, 0],
+  [0, 0, -1],
+  [0, 1, 0],
+  [0, -1, 0],
+];
+
+/**
+ * Anchors that still make sense after the whole theme is built: the voxel they hang on is solid and
+ * the cell they face is open. Later carving (gorges, stairs, other buildings) can bury or strand
+ * detail that an earlier stamp placed.
+ */
+export function liveDecor(
+  t: Parameters<typeof isSolid>[0],
+  decor: readonly DecorAnchor[],
+): DecorAnchor[] {
+  return decor.filter((a) => {
+    if (!isSolid(t, a.x, a.y, a.z)) return false;
+    const d = FACE_DIR[a.face] ?? FACE_DIR[4]!;
+    return !isSolid(t, a.x + d[0], a.y + d[1], a.z + d[2]);
+  });
+}
+
 /** Generator 3: build the theme named by the recipe, then pick spawns with open sky above. */
 export function generateThemed(recipe: MapRecipe): GeneratedMap {
   const theme = getTheme(recipe.theme);
@@ -69,7 +95,8 @@ export function generateThemed(recipe: MapRecipe): GeneratedMap {
   // Generation edits are part of the recipe, not the edit log.
   t.edits.length = 0;
   t.chunkVersion.fill(0);
-  if (ctx.decor.length) (t as { decor?: readonly DecorAnchor[] }).decor = ctx.decor;
+  const decor = liveDecor(t, ctx.decor);
+  if (decor.length) (t as { decor?: readonly DecorAnchor[] }).decor = decor;
   return {
     terrain: t,
     spawns: keepWalkableSpawns(t, findSpawns(t, recipe.seed >>> 0, true)),
