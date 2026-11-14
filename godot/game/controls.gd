@@ -206,9 +206,22 @@ func frame(dt: float) -> Dictionary:
 				if aim != null and aim.charging:
 					_fire(aim)
 	if aim != null:
-		aim = CameraMath.charge_aim(CameraMath.nudge_aim(aim, dx, dy), dt)
+		var look := GameSettings.stick_look(stick_vector(), dt)
+		aim = CameraMath.charge_aim(CameraMath.nudge_aim(aim, dx + look.x, dy + look.y), dt)
 		return {"dx": 0.0, "dy": 0.0, "wheel": wheel}
 	return {"dx": dx, "dy": dy, "wheel": wheel}
+
+
+## The right stick of whichever connected pad is pushed furthest, as -1..1 on each axis.
+func stick_vector() -> Vector2:
+	if paused:
+		return Vector2.ZERO
+	var best := Vector2.ZERO
+	for device in Input.get_connected_joypads():
+		var v := Vector2(Input.get_joy_axis(device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(device, JOY_AXIS_RIGHT_Y))
+		if v.length() > best.length():
+			best = v
+	return best
 
 
 func skip() -> void:

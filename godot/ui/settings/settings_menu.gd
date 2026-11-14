@@ -183,6 +183,7 @@ func _video_tab() -> Control:
 func _controls_tab() -> Control:
 	var page := _page("Controls")
 	_slider(page, "Mouse sensitivity", GameSettings.sensitivity, GameSettings.SENSITIVITY_MIN, GameSettings.SENSITIVITY_MAX, 0.05, GameSettings.set_sensitivity, "%.2fx")
+	_slider(page, "Controller stick sensitivity", GameSettings.stick_sensitivity, GameSettings.SENSITIVITY_MIN, GameSettings.SENSITIVITY_MAX, 0.05, GameSettings.set_stick_sensitivity, "%.2fx")
 	_check(page, "Invert vertical aim", GameSettings.invert_y, GameSettings.set_invert_y)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
