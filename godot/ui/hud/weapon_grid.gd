@@ -9,7 +9,7 @@ extends PanelContainer
 signal picked(id: String)
 
 const COLUMNS := 8
-const TILE := Vector2(112, 92)
+const TILE := Vector2(112, 98)
 ## Room kept free around the grid: the bottom bar below it, the banner and team bars above.
 const MARGIN_BELOW := 84.0
 const MARGIN_ABOVE := 70.0
@@ -78,27 +78,42 @@ func _make_tile(it: Dictionary) -> Button:
 	icon.add_child(initials)
 	var name_label := Label.new()
 	name_label.name = "Name"
-	name_label.text = str(it["name"])
+	name_label.text = two_lines(str(it["name"]))
 	# Long names ("Pinecone Popper", "Mousetrap Snapper") wrap onto a second line.
-	name_label.position = Vector2(2, 41)
-	name_label.size = Vector2(TILE.x - 4, 28)
+	name_label.position = Vector2(2, 39)
+	name_label.size = Vector2(TILE.x - 4, 30)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_label.add_theme_font_size_override("font_size", 11 if str(it["name"]).length() <= 12 else 10)
+	# Two short lines break at the space nearest the middle (see two_lines), so nothing runs off the tile.
+	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_label.custom_minimum_size = Vector2(TILE.x - 4, 30)
+	name_label.add_theme_font_size_override("font_size", 10)
 	name_label.add_theme_constant_override("line_spacing", -2)
 	name_label.clip_text = true
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(name_label)
 	var ammo := Label.new()
 	ammo.name = "Ammo"
-	ammo.position = Vector2(2, 70)
+	ammo.position = Vector2(2, 77)
 	ammo.size = Vector2(TILE.x - 4, 18)
 	ammo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ammo.add_theme_font_size_override("font_size", 13)
 	ammo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(ammo)
 	return b
+
+
+## A long name split in two at the space nearest its middle ("Paper Plane\nSeeker"); short names and
+## names without a space are left alone.
+static func two_lines(item_name: String) -> String:
+	if item_name.length() <= 11 or not item_name.contains(" "):
+		return item_name
+	var best := -1
+	var mid := item_name.length() / 2
+	for i in item_name.length():
+		if item_name[i] == " " and (best < 0 or absi(i - mid) < absi(best - mid)):
+			best = i
+	return item_name.substr(0, best) + "\n" + item_name.substr(best + 1)
 
 
 ## Up to two letters: the first letters of the first two words ("Acorn Mortar" is "AM").
