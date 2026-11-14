@@ -8,6 +8,10 @@ Git LFS (see .gitattributes). CREDITS.md at the repo root is generated from the 
   fetch.py add-polyhaven ID [--res 1k]   add a Poly Haven model (CC0) and download it
   fetch.py add-zip --source S --id ID --url URL --license L --author A --page P [--subdir DIR]
                                           add any zip pack (CC0 or permissive only) and unpack it
+  fetch.py add-git --source S --id ID --url GIT_URL --commit SHA --license L --author A --page P
+                  [--subdir DIR] [--include GLOB ...]
+                                          add files from a public git repo at a pinned commit (only the
+                                          globs given, relative to subdir) when there is no zip download
   fetch.py sync                           download whatever is listed but missing, check hashes
   fetch.py credits                        rewrite CREDITS.md from the manifest
   fetch.py check                          fail if a file, hash, license or credit is missing
@@ -15,10 +19,13 @@ Git LFS (see .gitattributes). CREDITS.md at the repo root is generated from the 
 Standard library only, so it runs in CI and in any container.
 """
 import argparse
+import fnmatch
 import hashlib
 import io
 import json
 import os
+import subprocess
+import tempfile
 import sys
 import urllib.request
 import zipfile
@@ -106,6 +113,57 @@ def add_zip(args):
     print(f"added {args.source}/{args.id}: {len(entry['files'])} files")
 
 
+def add_git(args):
+    if args.license not in ALLOWED:
+        sys.exit(f"license {args.license} is not on the allowed list {sorted(ALLOWED)}")
+    entry = {
+        "source": args.source, "id": args.id, "name": args.name or args.id, "author": args.author,
+        "license": args.license, "page": args.page,
+        "git": {"url": args.url, "commit": args.commit, "subdir": args.subdir, "include": args.include or ["*"]},
+        "files": [],
+    }
+    _from_git(entry)
+    m = load()
+    replace(m, entry)
+    save(m)
+    print(f"added {args.source}/{args.id}: {len(entry['files'])} files")
+
+
+def _from_git(entry, only=None):
+    """Fetch the pinned commit into a temp dir and copy the matching files. With `only`, copy just
+    those paths and check them against the manifest hashes."""
+    g = entry["git"]
+    with tempfile.TemporaryDirectory() as tmp:
+        def git(*a):
+            subprocess.run(["git", "-C", tmp, *a], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        git("init", "-q")
+        git("remote", "add", "origin", g["url"])
+        git("fetch", "-q", "--depth", "1", "origin", g["commit"])
+        git("checkout", "-q", "FETCH_HEAD")
+        base = os.path.join(tmp, g.get("subdir") or "")
+        if only is not None:
+            for f in only:
+                with open(os.path.join(base, f["path"]), "rb") as fh:
+                    body = fh.read()
+                if sha(body) != f["sha256"]:
+                    sys.exit(f"{entry['source']}/{entry['id']}: {f['path']} changed upstream")
+                write_file(entry, f["path"], body)
+            return
+        entry["files"] = []
+        for root, _dirs, names in os.walk(base):
+            if "/.git" in root or root.endswith(".git"):
+                continue
+            for n in sorted(names):
+                rel = os.path.relpath(os.path.join(root, n), base)
+                if not any(fnmatch.fnmatch(rel, pat) for pat in g["include"]):
+                    continue
+                with open(os.path.join(root, n), "rb") as fh:
+                    body = fh.read()
+                write_file(entry, rel, body)
+                entry["files"].append({"path": rel, "sha256": sha(body)})
+        entry["files"].sort(key=lambda f: f["path"])
+
+
 def _unzip(entry, data):
     sub = (entry["zip"].get("subdir") or "").strip("/")
     entry["files"] = []
@@ -125,7 +183,9 @@ def sync(_args):
         missing = [f for f in a["files"] if not os.path.exists(os.path.join(folder(a), f["path"]))]
         if not missing:
             continue
-        if "zip" in a:
+        if "git" in a:
+            _from_git(a, missing)
+        elif "zip" in a:
             data = get(a["zip"]["url"])
             if sha(data) != a["zip"]["sha256"]:
                 sys.exit(f"{a['source']}/{a['id']}: zip changed upstream")
@@ -205,6 +265,13 @@ def main():
     z.add_argument("--name")
     z.add_argument("--subdir", default="")
     z.set_defaults(fn=add_zip)
+    gi = sub.add_parser("add-git")
+    for k in ("source", "id", "url", "commit", "license", "author", "page"):
+        gi.add_argument("--" + k, required=True)
+    gi.add_argument("--name")
+    gi.add_argument("--subdir", default="")
+    gi.add_argument("--include", nargs="*")
+    gi.set_defaults(fn=add_git)
     for name, fn in (("sync", sync), ("credits", credits), ("check", check)):
         sub.add_parser(name).set_defaults(fn=fn)
     args = p.parse_args()

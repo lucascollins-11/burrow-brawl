@@ -93,15 +93,15 @@ static func scale_mouse(dx: float, dy: float) -> Vector2:
 	return Vector2(dx * sensitivity, dy * sensitivity * (-1.0 if invert_y else 1.0))
 
 
-## Shadow atlas size, MSAA and glow for a quality preset (0 low, 1 medium, 2 high).
+## Shadow atlas size, MSAA, glow and scenery prop density for a quality preset (0 low, 1 medium, 2 high).
 static func quality_profile(q: int) -> Dictionary:
 	match clampi(q, 0, QUALITIES.size() - 1):
 		0:
-			return {"shadow_atlas": 1024, "msaa": Viewport.MSAA_DISABLED, "glow": false}
+			return {"shadow_atlas": 1024, "msaa": Viewport.MSAA_DISABLED, "glow": false, "props": 0.35}
 		1:
-			return {"shadow_atlas": 2048, "msaa": Viewport.MSAA_2X, "glow": true}
+			return {"shadow_atlas": 2048, "msaa": Viewport.MSAA_2X, "glow": true, "props": 0.7}
 		_:
-			return {"shadow_atlas": 4096, "msaa": Viewport.MSAA_4X, "glow": true}
+			return {"shadow_atlas": 4096, "msaa": Viewport.MSAA_4X, "glow": true, "props": 1.0}
 
 
 ## For the environment code: should the glow effect be on?

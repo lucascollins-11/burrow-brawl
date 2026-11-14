@@ -3,11 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dhyopirn53wgf"
-valid=false
+path="res://.godot/imported/street_lamp_01_diff_1k.jpg-3e0044ce64fd1f37f80c807f19f85ac9.ctex"
+metadata={
+"vram_texture": false
+}
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/street_lamp_01/textures/street_lamp_01_diff_1k.jpg"
+dest_files=["res://.godot/imported/street_lamp_01_diff_1k.jpg-3e0044ce64fd1f37f80c807f19f85ac9.ctex"]
 
 [params]
 

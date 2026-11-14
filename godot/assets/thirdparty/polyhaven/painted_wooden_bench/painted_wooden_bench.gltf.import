@@ -4,11 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://ck0y2sh8tl470"
-valid=false
+path="res://.godot/imported/painted_wooden_bench.gltf-01d3327b6b0d7b0519a2b0b2a1c012fb.scn"
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/painted_wooden_bench/painted_wooden_bench.gltf"
+dest_files=["res://.godot/imported/painted_wooden_bench.gltf-01d3327b6b0d7b0519a2b0b2a1c012fb.scn"]
 
 [params]
 

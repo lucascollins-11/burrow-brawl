@@ -3,11 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bpbxta4omgqhx"
-valid=false
+path="res://.godot/imported/Lantern_01_brass_diff_1k.jpg-941f0efde252da40ff55ef9fae7b7dd2.ctex"
+metadata={
+"vram_texture": false
+}
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/Lantern_01/textures/Lantern_01_brass_diff_1k.jpg"
+dest_files=["res://.godot/imported/Lantern_01_brass_diff_1k.jpg-941f0efde252da40ff55ef9fae7b7dd2.ctex"]
 
 [params]
 

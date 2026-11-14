@@ -4,11 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://b602waxndlen4"
-valid=false
+path="res://.godot/imported/street_lamp_01.gltf-031ddc173c737bc7208f5a77e9217c61.scn"
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/street_lamp_01/street_lamp_01.gltf"
+dest_files=["res://.godot/imported/street_lamp_01.gltf-031ddc173c737bc7208f5a77e9217c61.scn"]
 
 [params]
 
