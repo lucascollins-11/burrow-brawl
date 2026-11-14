@@ -34,11 +34,20 @@ const LOOKS := {
 		"sun": "ffc48a", "sun_energy": 1.45, "sun_pitch": -28.0, "fog": "e8a6a0",
 		"cloud": "ffd9c9", "debris": "9c7a2b",
 	},
+	# A sunny vegetable patch: bright lawn, dark soil, terracotta pots, a green pond.
+	"garden-patch": {
+		"grass": "62c24a", "grass_dark": "2f8f3a", "soil": "7a4a2e", "rock": "b8663f",
+		"sand": "e8d6a0", "bedrock": "3e3b34",
+		"sea_shallow": "8fe0b0", "sea_deep": "1f7a6a", "sea_horizon": "d8f2c8",
+		"sky_top": "5aa8e8", "sky_horizon": "ffe9b0", "sky_bottom": "a8d08a",
+		"sun": "fff2c0", "sun_energy": 1.6, "sun_pitch": -42.0, "fog": "e6f2c8",
+		"cloud": "ffffff", "debris": "7a4a2e",
+	},
 	# Soap bars and a sponge in a steamy bathtub: porcelain blues, pink foam, warm light.
 	"bathtub-bay": {
-		"grass": "bfe8f2", "grass_dark": "7fc7dc", "soil": "f4e4f0", "rock": "9ab8d4",
-		"sand": "fff3d6", "bedrock": "5a6a8c",
-		"sea_shallow": "b8f4ff", "sea_deep": "2a9fd0", "sea_horizon": "e8fbff",
+		"grass": "f7b6d6", "grass_dark": "c9a3ea", "soil": "fbd9a4", "rock": "a6c4f2",
+		"sand": "d9b04e", "bedrock": "5a5f8c",
+		"sea_shallow": "7fd4f2", "sea_deep": "1c63b0", "sea_horizon": "d6efff",
 		"sky_top": "7fc8f8", "sky_horizon": "fff1e0", "sky_bottom": "d6ecf5",
 		"sun": "fff6e0", "sun_energy": 1.5, "sun_pitch": -50.0, "fog": "e6f7ff",
 		"cloud": "ffffff", "debris": "f4e4f0",
