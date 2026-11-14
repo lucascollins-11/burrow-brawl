@@ -25,6 +25,7 @@ func _init() -> void:
 	test_mesher_empty_and_full()
 	test_mesher_sphere()
 	test_mesher_seams()
+	test_mesher_smoothing_rounds_off_steps()
 	bench()
 	print("terrain tests: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -282,6 +283,28 @@ func test_mesher_sphere() -> void:
 		if nor[v].dot(pos[v] - center) <= 0.0:
 			outward = false
 	check(outward, "vertex normals point out of the solid")
+
+
+func test_mesher_smoothing_rounds_off_steps() -> void:
+	# A hard-edged staircase (density 0 or 255) at a 1-in-2 slope. Smoothing should bring the
+	# vertex normals much closer to the slope's true normal than the raw stair-step mesh.
+	var s := Mesher.S
+	var b := PackedByteArray()
+	b.resize(s * s * s)
+	for y in range(s):
+		for z in range(s):
+			for x in range(s):
+				b[(y * s + z) * s + x] = 255 if y < 8 + x / 2 else 0
+	var want := Vector3(-0.5, 1.0, 0.0).normalized()
+	var spread := []
+	for rounds in [0, Mesher.SMOOTH]:
+		var m := Mesher.mesh_block(b, rounds)
+		var nor: PackedVector3Array = m["normals"]
+		var total := 0.0
+		for v in nor:
+			total += 1.0 - v.dot(want)
+		spread.append(total / float(nor.size()))
+	check(spread[1] < spread[0] * 0.7, "smoothing evens out stair-step normals (%.3f -> %.3f)" % spread)
 
 
 func test_mesher_seams() -> void:
