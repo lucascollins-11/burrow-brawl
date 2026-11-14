@@ -4,11 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://bxnknb0lftyad"
-valid=false
+path="res://.godot/imported/wooden_bucket_01.gltf-fc70d6b6648f48a8169b48e2338044ca.scn"
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/wooden_bucket_01/wooden_bucket_01.gltf"
+dest_files=["res://.godot/imported/wooden_bucket_01.gltf-fc70d6b6648f48a8169b48e2338044ca.scn"]
 
 [params]
 

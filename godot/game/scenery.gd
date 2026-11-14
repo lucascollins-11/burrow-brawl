@@ -33,6 +33,7 @@ const SETS := {
 const THEME_SET := {
 	"garden-patch": "garden", "picnic-atoll": "garden", "toybox-harbor": "toy",
 	"bathtub-bay": "bath", "frosted-bakery": "candy", "clockwork-mesa": "brass",
+	"lighthouse-village": "garden",
 }
 const BUTTERFLIES := ["garden", "candy"]
 ## Library models that fit the Storybook set, with their height in world units (Squirmling = 6).

@@ -4,11 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://c8txctlspclrh"
-valid=false
+path="res://.godot/imported/Lantern_01.gltf-9634a76fbf3f6c2b42f050700c14da6a.scn"
 
 [deps]
 
 source_file="res://assets/thirdparty/polyhaven/Lantern_01/Lantern_01.gltf"
+dest_files=["res://.godot/imported/Lantern_01.gltf-9634a76fbf3f6c2b42f050700c14da6a.scn"]
 
 [params]
 
