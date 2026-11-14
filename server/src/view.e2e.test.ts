@@ -100,7 +100,10 @@ describe("practice", () => {
     vc.send({ t: "room.create" });
     const { code } = await vc.room();
     expect(
-      await vc.request({ t: "lobby.setSettings", patch: { mapTheme: "lighthouse-village", mapSize: 512 } }),
+      await vc.request({
+        t: "lobby.setSettings",
+        patch: { mapTheme: "lighthouse-village", mapSize: 512 },
+      }),
     ).toMatchObject({ t: "ok" });
     expect(await vc.request({ t: "lobby.practice", turnSeconds: 30 })).toMatchObject({ t: "ok" });
     const runner = h.server.registry.get(code)!.match!;
