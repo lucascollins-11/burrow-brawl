@@ -78,7 +78,7 @@ Sent every 3 ticks (20 per second) while the match runs.
 ```
 ViewState = {
   tick: number,
-  turns: TurnState,             // turn, round, phase, activeTeam, activeCritter, phaseEndTick, winnerTeam, windX, windZ
+  turns: TurnState,             // turn, round, phase, activeTeam, activeCritter, phaseEndTick, winnerTeam, windX, windZ, gustX?, gustZ? (storms)
   seaY: number,                 // rises in sudden death
   critters: ViewCritter[],      // only critters that changed since the previous state message
   projectiles: ViewProjectile[] // always the full list; a missing id is gone; placed mines are not here

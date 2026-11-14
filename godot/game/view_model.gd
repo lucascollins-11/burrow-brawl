@@ -281,7 +281,11 @@ func snapshot() -> Dictionary:
 		"round": int(turns.get("round", 1)),
 		"turn": int(turns.get("turn", 0)),
 		"time_left": maxf(0.0, float(phase_end) - _render_tick) / TICKS_PER_SECOND,
-		"wind": Vector2(float(turns.get("windX", 0)), float(turns.get("windZ", 0))),
+		# In a storm a gust rides on the turn's wind (shared/src/match/gusts.ts): show what the sim feels.
+		"wind": Vector2(
+			clampf(float(turns.get("windX", 0)) + float(turns.get("gustX", 0)), -100.0, 100.0),
+			clampf(float(turns.get("windZ", 0)) + float(turns.get("gustZ", 0)), -100.0, 100.0)
+		),
 		"sea_y": sea_y,
 		"winner_team": turns.get("winnerTeam", null),
 		"my_turn": active_team != null and local_teams.has(int(active_team)),
