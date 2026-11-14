@@ -71,7 +71,7 @@ var _spot: TutorialSpotlight = null
 var _done_panel: PanelContainer = null
 var _done_shown := false
 var _last_tick_second := -1
-var _prev_pos: Dictionary = {}  # id -> Vector3, to tell walking from standing
+var _smooth: Dictionary = {}  # id -> CritterSmoother, the picture's follower of the sim position
 var _built := false
 var _world := Vector2(256, 256)
 
@@ -403,6 +403,10 @@ func _process(dt: float) -> void:
 	var cmds := controls.read_cmds()
 	if not cmds.is_empty():
 		_send_input(int(v["turn"]), cmds)
+		var me: SquirmlingRig = _critters.get(int(v["active_critter_id"]), null) if v["active_critter_id"] != null else null
+		for cmd in cmds:
+			if me != null and (cmd.get("k") == "jump" or cmd.get("k") == "backflip"):
+				me.coil()
 	var aim: CameraMath.AimState = controls.aim
 
 	var events := vm.take_events()
@@ -539,18 +543,22 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 			_critters[id] = node
 			add_child(node)
 		node.set_alive(c["alive"])
-		var pos: Vector3 = c["pos"]
-		# Speed from the change in the (already smoothed) position. A respawn or a teleport must not
-		# read as a huge shove, so it is capped.
-		var vel := Vector3.ZERO
-		if _prev_pos.has(id) and dt > 0.0:
-			vel = ((pos - (_prev_pos[id] as Vector3)) / dt).limit_length(60.0)
-		_prev_pos[id] = pos
+		var grounded: bool = bool(c.get("grounded", true))
+		var sm: CritterSmoother = _smooth.get(id, null)
+		if sm == null:
+			sm = CritterSmoother.new()
+			_smooth[id] = sm
+		# Draw the critter where the smoother is, not where the 20 Hz state is, so walking and
+		# climbing are continuous. Speed comes from the same smoothed motion.
+		var pos := sm.step(c["pos"], grounded, dt)
+		var vel := sm.vel
 		node.position = pos
+		if grounded:
+			node.set_ground_normal(_ground_normal(pos))
 		node.rotation.y = deg_to_rad(float(c["heading_deg"]))
 		var is_active: bool = not active.is_empty() and active["id"] == id
 		var pitch := float(aim.pitch_deg) if is_active and aim != null else 0.0
-		node.drive(dt, is_active, vel, bool(c.get("grounded", true)), pitch)
+		node.drive(dt, is_active, vel, grounded, pitch)
 		var team_color: Color = _look(int(c["team"]))["color"]
 		var hp_frac := float(c["hp"]) / maxf(1.0, float(c["max_hp"]))
 		CRITTER_MODEL.set_tag(node, str(c["name"]), team_color.lightened(0.35), hp_frac)
@@ -563,7 +571,18 @@ func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 		if not seen.has(id):
 			(_critters[id] as Node).queue_free()
 			_critters.erase(id)
-			_prev_pos.erase(id)
+			_smooth.erase(id)
+
+
+## Up direction of the ground around a point, from four nearby heights.
+func _ground_normal(p: Vector3) -> Vector3:
+	var d := 2.5
+	var n := Vector3(
+		ground_y(p.x - d, p.z) - ground_y(p.x + d, p.z),
+		2.0 * d,
+		ground_y(p.x, p.z - d) - ground_y(p.x, p.z + d)
+	)
+	return n.normalized()
 
 
 ## True when the ground rises between `from` and `to` (a camera and a critter's head). Samples
@@ -782,7 +801,7 @@ func _clear_critters() -> void:
 	for id in _critters.keys():
 		(_critters[id] as Node).queue_free()
 	_critters.clear()
-	_prev_pos.clear()
+	_smooth.clear()
 
 
 func _back_to_lobby() -> void:

@@ -42,6 +42,11 @@ var _blink := 0.0
 var _next_blink := 2.0
 var _mood := 0.0  # -1 worried, 0 calm, 1 determined
 var _head_pitch := 0.0
+var _moving := false
+var _walk_amt := 0.0  # 0 standing, 1 walking: fades the inchworm in and out
+var _fall_speed := 0.0
+var _tilt := Vector2.ZERO  # smoothed ground tilt: x pitch, y roll (radians)
+var _ground_normal := Vector3.UP
 var _was_grounded := true
 var _ever_driven := false
 var _pop_vel: Array[Vector3] = []
@@ -96,30 +101,46 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 	var local := velocity.rotated(Vector3.UP, -rotation.y) / Squirmling.SCALE
 	var flat := Vector2(local.x, local.z)
 	var speed := flat.length()
-	var moving := grounded and speed > 0.2
+	
+	# Walking has hysteresis so a speed that hovers at the threshold does not flicker the gait. The
+	# phase advances with distance covered, so the rings never slide ahead of the ground.
+	if _moving:
+		_moving = grounded and speed > 0.3
+	else:
+		_moving = grounded and speed > 0.6
+	_walk_amt = lerpf(_walk_amt, 1.0 if _moving else 0.0, minf(1.0, dt * 9.0))
+	if _moving:
+		_phase += dt * speed * 4.2
 
-	# Stretch and squash of the whole stack.
-	var goal_stretch := 1.0 + 0.025 * sin(_t * 2.2)
-	if moving:
-		_phase += dt * (7.0 + minf(speed, 8.0) * 0.9)
-		goal_stretch = 1.0 - 0.15 * (0.5 + 0.5 * sin(_phase))
+	# Stretch and squash of the whole stack: a small breath, plus the jump spring and landing squash.
+	var goal_stretch := 1.0 + 0.03 * sin(_t * 2.2) * (1.0 - _walk_amt)
 	if not grounded:
 		goal_stretch = 1.0 + clampf(local.y * 0.045, -0.1, 0.24)
+		_fall_speed = maxf(_fall_speed, -local.y)
 	if grounded and not _was_grounded:
-		_stretch_v -= 3.2  # landing squash
+		_stretch_v -= clampf(1.6 + _fall_speed * 0.4, 1.6, 6.0)  # landing squash, harder from higher
+		_fall_speed = 0.0
 	elif not grounded and _was_grounded:
 		_stretch_v += 2.6  # the spring of a jump
 	_was_grounded = grounded
 	_stretch_v += ((goal_stretch - _stretch) * 180.0 - _stretch_v * 11.0) * dt
 	_stretch = clampf(_stretch + _stretch_v * dt, 0.5, 1.45)
 
+	# Lean into the ground slope, smoothly, about the tail.
+	var n := _ground_normal if grounded else Vector3.UP
+	var nl := n.rotated(Vector3.UP, -rotation.y)
+	var tilt_goal := Vector2(
+		clampf(atan2(nl.z, maxf(nl.y, 0.2)), -0.6, 0.6), clampf(-atan2(nl.x, maxf(nl.y, 0.2)), -0.6, 0.6)
+	)
+	_tilt = _tilt.lerp(tilt_goal, minf(1.0, dt * 8.0))
+	_model.rotation = Vector3(_tilt.x, 0.0, _tilt.y)
+
 	# The ring chain: the head end trails behind the motion, sways when idle, ripples when walking.
 	for i in range(N):
 		var w := pow(float(i) / float(N - 1), 1.4)
 		var goal := (-flat * 0.05).limit_length(0.42) * w
-		goal.x += sin(_t * 1.7 - float(i) * 0.7) * (0.07 if active else 0.035) * w
-		if moving:
-			goal.y += sin(_phase - float(i) * 0.8) * 0.12 * w
+		goal.x += sin(_t * 1.7 - float(i) * 0.7) * (0.07 if active else 0.045) * w * (1.0 - _walk_amt)
+		goal.y += sin(_phase - float(i) * 0.9) * 0.12 * w * _walk_amt
 		var stiff := 130.0 - 14.0 * float(i)
 		_vel[i] += ((goal - _off[i]) * stiff - _vel[i] * 7.0) * dt
 		_off[i] += _vel[i] * dt
@@ -133,9 +154,9 @@ func drive(dt: float, active: bool, velocity: Vector3, grounded: bool, aim_pitch
 
 	_face(dt, active, grounded)
 	if _tuft != null:
-		var flick := sin(_t * (14.0 if moving else 5.0)) * (0.35 if moving else 0.12)
+		var flick := sin(_t * (14.0 if _moving else 5.0)) * (0.35 if _moving else 0.12)
 		# A quick double flick every few seconds while standing.
-		if not moving and fposmod(_t, 3.7) < 0.5:
+		if not _moving and fposmod(_t, 3.7) < 0.5:
 			flick = sin(_t * 26.0) * 0.5
 		_tuft.rotation.x = deg_to_rad(-35.0) + flick
 	if _prop != null:
@@ -152,6 +173,18 @@ func hurt() -> void:
 		var w := float(i + 1) / float(N)
 		var side := 1.0 if i % 2 == 0 else -1.0
 		_vel[i] += Vector2(side * 2.4, _rng.randf_range(-1.2, 1.2)) * w
+
+
+## The ground's up direction under the Squirmling, in world space. The scene sets it each frame.
+func set_ground_normal(n: Vector3) -> void:
+	_ground_normal = n
+
+
+## A jump was just asked for: crouch and coil before the spring (the server's answer comes a
+## moment later).
+func coil() -> void:
+	if alive and _was_grounded:
+		_stretch_v -= 2.4
 
 
 ## Fired a weapon: the body kicks backwards from the head down and springs back.
@@ -244,10 +277,16 @@ func is_wobbling() -> bool:
 
 func _pose_rings() -> void:
 	var wide := 1.0 / sqrt(_stretch)
+	# Inchworm: the gap above each ring shrinks as a scrunch wave runs tail to head, so the body
+	# bunches up, then reaches out again, one ring after the next.
+	var height := Squirmling.ring_base(0).y * _stretch
 	for i in range(N):
 		var ring := _rings[i]
 		var base := Squirmling.ring_base(i)
-		ring.position = Vector3(base.x + _off[i].x, base.y * _stretch, _off[i].y)
+		if i > 0:
+			var scrunch := 0.5 + 0.5 * sin(_phase - float(i) * 0.9)
+			height += Squirmling.RING_STEP * (_stretch - 0.3 * scrunch * _walk_amt + 0.06 * _walk_amt)
+		ring.position = Vector3(base.x + _off[i].x, height, _off[i].y)
 		# The head keeps more of its shape so the face and hat do not smear.
 		var k := 0.5 if i == N - 1 else 1.0
 		ring.scale = Vector3(lerpf(1.0, wide, k), lerpf(1.0, _stretch, k), lerpf(1.0, wide, k))

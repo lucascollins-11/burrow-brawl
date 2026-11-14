@@ -1,0 +1,23 @@
+{
+  "about": "Close-up strip of Squirmling movement: walking, a jump (coil, spring, flight) and the landing.",
+  "steps": [
+    {
+      "do": "start",
+      "mode": "match",
+      "theme": "toybox-harbor",
+      "critters": 2,
+      "seed": 99,
+      "turn_seconds": 60,
+      "opponent": "fire"
+    },
+    { "do": "camera", "dist": 16, "pitch": 18, "yaw": 90 },
+    { "do": "walk", "dir": "right", "seconds": 0.5, "name": "walk-a" },
+    { "do": "walk", "dir": "right", "seconds": 0.3, "name": "walk-b" },
+    { "do": "key", "action": "jump", "name": "jump-key" },
+    { "do": "wait", "seconds": 0.25, "name": "air-a" },
+    { "do": "wait", "seconds": 0.2, "name": "air-b" },
+    { "do": "wait", "seconds": 0.3, "name": "landing" },
+    { "do": "wait", "seconds": 0.4, "name": "settle" },
+    { "do": "quit" }
+  ]
+}
