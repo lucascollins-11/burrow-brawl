@@ -69,16 +69,20 @@ func _make_tile(it: Dictionary) -> Button:
 	var name_label := Label.new()
 	name_label.name = "Name"
 	name_label.text = str(it["name"])
-	name_label.position = Vector2(2, 44)
-	name_label.size = Vector2(TILE.x - 4, 22)
+	# Long names ("Pinecone Popper", "Mousetrap Snapper") wrap onto a second line.
+	name_label.position = Vector2(2, 41)
+	name_label.size = Vector2(TILE.x - 4, 28)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.add_theme_constant_override("line_spacing", -2)
 	name_label.clip_text = true
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(name_label)
 	var ammo := Label.new()
 	ammo.name = "Ammo"
-	ammo.position = Vector2(2, 66)
+	ammo.position = Vector2(2, 70)
 	ammo.size = Vector2(TILE.x - 4, 18)
 	ammo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ammo.add_theme_font_size_override("font_size", 13)

@@ -155,7 +155,10 @@ func _run() -> bool:
 	# The software renderer takes seconds per frame and effects run on the engine clock, so a
 	# blast is over before the first picture. Slow the clock, let about a quarter of a second of
 	# effect time pass, then freeze it for the capture.
-	scene.fx.explode(rig.target, 12.0)
+	# On the ground under the camera's target, so the ball is not buried in the island.
+	var blast_at: Vector3 = rig.target
+	blast_at.y = scene.ground_y(blast_at.x, blast_at.z) + 1.0
+	scene.fx.explode(blast_at, 12.0)
 	print("E2E blast: %d effect nodes, camera %s looking at %s" % [scene.fx.get_child_count(), scene.camera.global_position, rig.target])
 	await _freeze_after(0.25)
 	await _shot("2b-blast", 1)

@@ -20,7 +20,8 @@ const SUITES := [
 ]
 
 
-func _init() -> void:
+func _initialize() -> void:
+	TestCase.tree = self
 	var total := 0
 	var failed := 0
 	for path in SUITES:

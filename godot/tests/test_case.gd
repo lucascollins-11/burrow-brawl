@@ -2,6 +2,9 @@
 class_name TestCase
 extends RefCounted
 
+## The scene tree the runner runs in, for tests that need nodes in the tree.
+static var tree: SceneTree = null
+
 var failures: Array[String] = []
 
 
