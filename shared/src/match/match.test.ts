@@ -10,6 +10,8 @@ import {
   loadMatch,
   mapRecipeFor,
   mapSizeFor,
+  PRACTICE_NEAR_MAX,
+  PRACTICE_NEAR_MIN,
   saveMatch,
   stepMatch,
   type Cmd,
@@ -419,5 +421,59 @@ describe("statuses across turns", () => {
     expect(r.state.sim.critters.find((c) => c.id === me.id)!.frozen).toBeUndefined();
     const later = run(r.state, 120);
     expect(later.turns.turn).toBeGreaterThan(s.turns.turn);
+  });
+});
+
+describe("practice", () => {
+  const practiceCfg = (seed: number): MatchConfig => ({
+    ...cfg,
+    seed,
+    teamSizes: [1, 3],
+    windMax: 0,
+    practice: true,
+    dummyTeam: 1,
+    map: mapRecipeFor(seed, 2),
+  });
+  const flat = (a: { pos: { x: number; z: number } }, b: { pos: { x: number; z: number } }) =>
+    Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) / 65536;
+
+  it("starts one dummy within reach of the player", () => {
+    let near = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const s = createMatch(practiceCfg(seed));
+      const player = s.sim.critters.find((c) => c.team === 0)!;
+      const dummies = s.sim.critters.filter((c) => c.team === 1);
+      expect(dummies).toHaveLength(3);
+      for (const d of dummies) expect(d.grounded).toBe(true);
+      const closest = Math.min(...dummies.map((d) => flat(d, player)));
+      if (closest >= PRACTICE_NEAR_MIN && closest <= PRACTICE_NEAR_MAX + 1) near++;
+      // No two critters share a spot.
+      const spots = new Set(s.sim.critters.map((c) => `${c.pos.x},${c.pos.z}`));
+      expect(spots.size).toBe(4);
+    }
+    expect(near).toBeGreaterThanOrEqual(6);
+  });
+
+  it("leaves normal matches' spawns alone", () => {
+    const a = createMatch(cfg);
+    const b = createMatch({ ...cfg, practice: true });
+    expect(b.sim.critters.map((c) => c.pos)).toEqual(a.sim.critters.map((c) => c.pos));
+  });
+
+  it("drops no crate as a dummy turn starts", () => {
+    const c = practiceCfg(3);
+    let s = createMatch(c);
+    let intoDummy = 0;
+    // Everyone skips at once (the server skips the dummies the same way), so turns fly by.
+    for (let i = 0; i < 3000; i++) {
+      const cmds: Cmd[] = s.turns.phase === "control" ? [{ k: "skip" }] : [];
+      const step = stepMatch(c, s, cmds);
+      if (step.turnChanged && step.state.turns.activeTeam === 1) {
+        intoDummy++;
+        expect(step.events.some((e) => e.type === "crateDropped")).toBe(false);
+      }
+      s = step.state;
+    }
+    expect(intoDummy).toBeGreaterThan(0);
   });
 });
