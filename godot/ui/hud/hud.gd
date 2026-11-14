@@ -336,6 +336,9 @@ func update(
 	if aim != null:
 		_power_label.text = "Power %d - aim %d deg" % [int(roundf(aim.power)), aim.pitch_deg]
 		_power_bar.value = aim.power
+		# The fill warms up from green to red as the charge builds.
+		var fill := _flat(Color("5cc46a").lerp(Color("e85d4a"), clampf(aim.power / 100.0, 0.0, 1.0)), 6, 0)
+		_power_bar.add_theme_stylebox_override("fill", fill)
 	for i in range(_weapon_buttons.size()):
 		_weapon_buttons[i].set_pressed_no_signal(_weapon_names[i] == weapon_name)
 	for i in range(_weapon_list.size()):
