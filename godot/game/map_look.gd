@@ -193,10 +193,13 @@ static func with_sky(look: Dictionary, weather: String, time: String) -> Diction
 	out["rain"] = {"rain": 1.0, "storm": 2.0}.get(weather, 0.0)
 	out["lightning"] = weather == "storm"
 	if weather == "fog":
-		out["fog_near"] = 40.0
-		out["fog_far"] = 380.0
-		out["fog_density"] = 0.85
-		out["fog_sky"] = 0.85
+		# A light haze over everything; the real fog is the drifting banks (Weather), so the
+		# island stays playable between them.
+		out["fog_near"] = 90.0
+		out["fog_far"] = 650.0
+		out["fog_density"] = 0.45
+		out["fog_sky"] = 0.45
+		out["fog_banks"] = 1.0
 	elif weather in ["rain", "storm"]:
 		out["fog_near"] = 120.0
 		out["fog_far"] = 900.0

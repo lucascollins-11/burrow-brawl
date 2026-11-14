@@ -39,7 +39,8 @@ func test_weather_sets_rain_wetness_fog_and_lightning() -> void:
 	check(float(rain["rain"]) > 0.0 and float(rain["wetness"]) > 0.0 and not bool(rain["lightning"]), "rain")
 	check(float(storm["rain"]) > float(rain["rain"]) and bool(storm["lightning"]), "a storm rains harder, with lightning")
 	check(float(storm["sun_energy"]) < float(rain["sun_energy"]), "a storm is darker than rain")
-	check(float(fog["fog_near"]) < 60.0 and float(fog["rain"]) == 0.0, "fog comes in close, no rain")
+	check(float(fog["fog_near"]) < 120.0 and float(fog["rain"]) == 0.0, "fog comes in closer, no rain")
+	check(float(fog.get("fog_banks", 0.0)) > 0.0 and float(fog["fog_density"]) < 0.6, "fog is light haze plus drifting banks")
 
 
 func test_environment_builds_moon_and_stars_only_at_night() -> void:
@@ -74,6 +75,17 @@ func test_storm_rains_and_strikes_with_a_flash() -> void:
 	root.add_child(clear)
 	clear.setup(MapLook.with_sky(MapLook.for_theme("garden-patch"), "clear", "day"), env, 128.0, 128.0, 20.0)
 	check(clear.get_node_or_null("Rain") == null and not clear.lightning, "clear weather: nothing")
+	check(clear.get_node_or_null("FogBanks") == null, "clear weather: no fog banks")
+	var foggy := Weather.new()
+	root.add_child(foggy)
+	foggy.setup(MapLook.with_sky(MapLook.for_theme("garden-patch"), "fog", "day"), env, 128.0, 128.0, 20.0, 1.0, func(_x: float, _z: float) -> float: return 30.0)
+	var bank := foggy.get_node_or_null("FogBanks") as MultiMeshInstance3D
+	check(bank != null and foggy.fog_bank_count() >= 5, "fog: drifting banks")
+	var t0 := foggy.fog_puffs[0]
+	check(t0.y > 30.0 and t0.y < 45.0, "fog hugs the ground")
+	foggy.update(1.0, Vector3(64, 40, 64), Vector2(50, 0))
+	check(foggy.fog_puffs[0].distance_to(t0) > 1.0, "fog drifts")
+	foggy.free()
 	w.free()
 	clear.free()
 	env.free()

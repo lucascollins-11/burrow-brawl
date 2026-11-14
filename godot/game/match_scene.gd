@@ -212,7 +212,7 @@ func handle_match_start(msg: Dictionary) -> void:
 		weather = Weather.new()
 		weather.name = "Weather"
 		add_child(weather)
-	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density)
+	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density, Callable(self, "ground_y"))
 	_apply_glow_setting()
 	_rig.target = Vector3(_world.x * 0.5, vm.sea_y + 25.0, _world.y * 0.5)
 	_rig.dist = 90.0
@@ -860,7 +860,7 @@ func set_sky(weather_id: String, time_id: String) -> void:
 	_paint_ground(look)
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
 	var density := float(GameSettings.quality_profile(GameSettings.quality).get("props", 1.0))
-	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density)
+	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density, Callable(self, "ground_y"))
 	_apply_glow_setting()
 
 
