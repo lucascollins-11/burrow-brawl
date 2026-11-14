@@ -16,7 +16,7 @@ const STEPS: Array[String] = [
 	"Hit a target dummy. They never shoot back.",
 	"Open the weapon menu with {weapon_menu} and pick a different weapon.",
 	"Look at the wind gauge in the top left, then fire into the wind.",
-	"Pick a utility from the weapon menu ({weapon_menu}), such as the Soda Jetpack or the Rope Claw, and use it. It does not end your turn.",
+	"Open the weapons ({weapon_menu}), pick the Soda Jetpack or Rope Claw, and use it.",
 	"Crates drop between turns. Walk into one to take it.",
 	"Knock a target dummy into the soda sea.",
 ]

@@ -261,6 +261,9 @@ func _setup_guide(practice: bool) -> void:
 	_guide_label = Label.new()
 	_guide_label.add_theme_font_size_override("font_size", 22)
 	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Long prompts wrap inside a capped width instead of running off the screen.
+	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_guide_label.custom_minimum_size.x = minf(860.0, get_viewport().get_visible_rect().size.x - 80.0)
 	panel.add_child(_guide_label)
 	_spot = TutorialSpotlight.new()
 	layer.add_child(_spot)
