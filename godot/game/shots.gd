@@ -30,12 +30,19 @@ func sync(shots: Array, mines := []) -> void:
 			m = _make(str(p["weapon"]))
 			_nodes[id] = m
 			add_child(m)
+		var before := m.position
 		m.position = p["pos"]
+		var weapon := str(p["weapon"])
+		if ShotModels.STEERED.has(weapon):
+			# Face the way it travels and move its limbs; the speed comes from how far it went.
+			if p.has("heading_deg") and float(p["heading_deg"]) != INF:
+				m.rotation.y = deg_to_rad(float(p["heading_deg"]))
+			ShotModels.animate(m, weapon, now, before.distance_to(m.position) * 60.0)
 		if p.has("armed"):
 			ShotModels.blink_mine(m, now, bool(p["armed"]), bool(p.get("triggered", false)))
 		# Tumble in flight; the trail particles stay behind in world space.
 		var body := m.get_node_or_null("Body") as Node3D
-		if body != null and str(p["weapon"]) != "jelly-mine":
+		if body != null and not ShotModels.MINES.has(str(p["weapon"])) and not ShotModels.STEERED.has(str(p["weapon"])):
 			var t := float(Time.get_ticks_msec()) / 1000.0
 			body.rotation = Vector3(t * 3.1 + float(id), t * 4.3, t * 2.2)
 	for id in _nodes.keys():

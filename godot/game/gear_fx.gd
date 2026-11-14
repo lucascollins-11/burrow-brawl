@@ -170,6 +170,51 @@ func _build(act: String) -> Node3D:
 			dust.name = "Dust"
 			dust.position = Vector3(0, 0.4, 0)
 			part.add_child(dust)
+		"gatling":
+			# A crank-handle pea shooter held out in front: three barrels round a hub.
+			var gun := Node3D.new()
+			gun.name = "Gun"
+			gun.position = Vector3(0.0, 3.0, 2.0)
+			var hub := MeshInstance3D.new()
+			var hm := CylinderMesh.new()
+			hm.top_radius = 0.55
+			hm.bottom_radius = 0.55
+			hm.height = 1.2
+			hub.mesh = hm
+			hub.rotation.x = PI * 0.5
+			hub.material_override = _mat(Color("6b4a32"), 0.6)
+			gun.add_child(hub)
+			var barrels := Node3D.new()
+			barrels.name = "Barrels"
+			barrels.position = Vector3(0, 0, 1.4)
+			for i in 3:
+				var a := TAU * float(i) / 3.0
+				var barrel := MeshInstance3D.new()
+				var bm := CylinderMesh.new()
+				bm.top_radius = 0.2
+				bm.bottom_radius = 0.2
+				bm.height = 2.2
+				barrel.mesh = bm
+				barrel.rotation.x = PI * 0.5
+				barrel.position = Vector3(cos(a) * 0.38, sin(a) * 0.38, 0)
+				barrel.material_override = _mat(Color("b8bcc4"), 0.2)
+				barrels.add_child(barrel)
+			gun.add_child(barrels)
+			var crank := MeshInstance3D.new()
+			crank.mesh = _ball(0.22)
+			crank.position = Vector3(0.7, 0.5, -0.4)
+			crank.material_override = _mat(Color("e8503c"), 0.4)
+			gun.add_child(crank)
+			var flash := MeshInstance3D.new()
+			flash.name = "Flash"
+			flash.mesh = _ball(0.5)
+			flash.position = Vector3(0, 0, 2.7)
+			var fm := StandardMaterial3D.new()
+			fm.albedo_color = Color(0.7, 1.0, 0.55)
+			fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			flash.material_override = fm
+			gun.add_child(flash)
+			part.add_child(gun)
 		_:
 			return null
 	return part
@@ -194,6 +239,14 @@ func _animate(g: Dictionary, c: Dictionary, act: String) -> void:
 			var bit := part.get_node_or_null("Bit") as Node3D
 			if bit != null:
 				bit.rotation.y = _t * 22.0
+		"gatling":
+			var barrels := part.get_node_or_null("Gun/Barrels") as Node3D
+			if barrels != null:
+				barrels.rotation.z = _t * 26.0
+			var flash := part.get_node_or_null("Gun/Flash") as Node3D
+			if flash != null:
+				flash.visible = fposmod(_t, 0.12) < 0.07
+				flash.scale = Vector3.ONE * (0.8 + 0.5 * sin(_t * 90.0))
 		"jetpack":
 			var flying := not bool(c.get("grounded", true))
 			for side in ["-1", "1"]:

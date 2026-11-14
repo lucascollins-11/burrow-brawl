@@ -150,6 +150,8 @@ func apply_state(msg: Dictionary, snap := false) -> void:
 		e["owner"] = int(p.get("ownerId", 0))
 		e["weapon"] = str(p.get("weaponId", ""))
 		e["fuse"] = int(p.get("fuseTicks", -1))
+		# Steered shots (robot, racer, kite) say which way they face, in yaw steps.
+		e["heading"] = CameraMath.yaw_to_deg(int(p["heading"])) if p.has("heading") else INF
 		_projectiles[id] = e
 	for id in _projectiles.keys():
 		if not seen.has(id):
@@ -260,6 +262,7 @@ func snapshot() -> Dictionary:
 				"id": id,
 				"weapon": p["weapon"],
 				"pos": _lerp_between(p["a"], p["b"], p["ta"], p["tb"], _render_tick),
+				"heading_deg": p["heading"],
 			}
 		)
 	var active_team = turns.get("activeTeam", null)

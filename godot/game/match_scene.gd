@@ -35,6 +35,8 @@ var fx: MatchEffects
 var shots: ShotViews
 var crates: CrateViews
 var gear: GearFx
+## critter id -> the weapon it last fired, so a melee `punch` knows which swing it was.
+var _swing: Dictionary = {}
 var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
@@ -314,6 +316,21 @@ func _update_tutorial_pointers() -> void:
 		_done_panel.visible = true
 
 
+## True while one of the local player's shots that can be steered (robot, racer, kite, marble) is out.
+func _steering(v: Dictionary) -> bool:
+	for p: Dictionary in v["projectiles"]:
+		if ShotModels.STEERED.has(str(p["weapon"])):
+			return true
+	return false
+
+
+func _hint_steer() -> String:
+	var walk := ""
+	for id in ["move_forward", "move_left", "move_back", "move_right"]:
+		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
+	return walk + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
+
+
 func _hint_aim() -> String:
 	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
@@ -378,7 +395,9 @@ func _process(dt: float) -> void:
 	env.set_sea_y(vm.sea_y)
 	env.update(dt, v["wind"])
 	var hint := HINT_WATCH
-	if v["my_turn"] and v["phase"] != "settling":
+	if v["my_turn"] and _steering(v):
+		hint = _hint_steer()
+	elif v["my_turn"] and v["phase"] != "settling":
 		hint = _hint_aim() if aim != null else _hint_walk()
 		if empty and v["phase"] == "control":
 			hint = HINT_EMPTY
@@ -431,14 +450,23 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 					what = "+1 %s" % hud.weapon_title(str(e.get("weaponId", "")))
 				fx.pickup((taker["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0), what)
 		elif kind == "tracer":
-			fx.tracer(ViewModel.point(e.get("from", {})), ViewModel.point(e.get("to", {})), bool(e.get("hit", false)))
+			fx.tracer(
+				ViewModel.point(e.get("from", {})),
+				ViewModel.point(e.get("to", {})),
+				bool(e.get("hit", false)),
+				str(e.get("weaponId", ""))
+			)
 		elif kind == "mineTriggered":
 			for p in (v["projectiles"] as Array) + (v["mines"] as Array):
 				if int(p["id"]) == int(e.get("projectileId", -1)):
 					fx.puff(p["pos"], 2.5)
 		elif kind == "punch":
 			var struck: Variant = e.get("hits", 0)
-			fx.punch(ViewModel.point(e.get("at", {})), (struck as Array).size() if struck is Array else int(struck))
+			fx.melee(
+				ViewModel.point(e.get("at", {})),
+				(struck as Array).size() if struck is Array else int(struck),
+				str(_swing.get(int(e.get("critterId", -1)), ""))
+			)
 		elif kind == "teleported":
 			var up := Vector3(0, CRITTER_MODEL.HEIGHT * 0.5, 0)
 			fx.teleport(ViewModel.point(e.get("from", {})) + up, ViewModel.point(e.get("to", {})) + up)
@@ -457,6 +485,7 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 				var top := (healed["pos"] as Vector3) + Vector3(0, CRITTER_MODEL.HEIGHT, 0)
 				fx.heal(top, int(e.get("amount", 0)))
 		elif kind == "fired":
+			_swing[int(e.get("critterId", -1))] = str(e.get("weaponId", ""))
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:
 				shooter.fire()
