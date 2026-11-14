@@ -22,12 +22,12 @@ enum Shape { SPHERE, CYL, CONE, CAP, BOX }
 const SETS := {
 	"garden": {
 		"tuft": 3600, "flowers": 1500, "mushroom": 110, "bush": 260, "stone": 180, "fence": 70,
-		"library": 34,
+		"library": 90,
 	},
-	"toy": {"block": 700, "cone": 260, "ball": 300, "flag": 90, "stone": 120, "library": 40},
-	"bath": {"bubbles": 900, "soap": 260, "duck": 70, "sponge": 120, "tuft": 600, "library": 20},
-	"candy": {"sprinkle": 2600, "gumdrop": 380, "candle": 120, "cherry": 200, "flowers": 600},
-	"brass": {"gear": 420, "bolt": 900, "pipe": 140, "tuft": 1400, "stone": 260, "library": 50},
+	"toy": {"block": 700, "cone": 260, "ball": 300, "flag": 90, "stone": 120, "library": 70},
+	"bath": {"bubbles": 900, "soap": 260, "duck": 70, "sponge": 120, "tuft": 600, "library": 45},
+	"candy": {"sprinkle": 2600, "gumdrop": 380, "candle": 120, "cherry": 200, "flowers": 600, "library": 24},
+	"brass": {"gear": 420, "bolt": 900, "pipe": 140, "tuft": 1400, "stone": 260, "library": 70},
 }
 const THEME_SET := {
 	"garden-patch": "garden", "picnic-atoll": "garden", "toybox-harbor": "toy",
@@ -35,15 +35,33 @@ const THEME_SET := {
 }
 const BUTTERFLIES := ["garden", "candy"]
 ## Library models that fit the Storybook set, with their height in world units (Squirmling = 6).
-const LIBRARY := [
-	["polyhaven/Barrel_01/Barrel_01.gltf", 3.2],
-	["polyhaven/wooden_crate_01/wooden_crate_01.gltf", 2.4],
-	["polyhaven/wooden_bucket_01/wooden_bucket_01.gltf", 2.2],
-	["polyhaven/painted_wooden_bench/painted_wooden_bench.gltf", 3.4],
-	["polyhaven/street_lamp_01/street_lamp_01.gltf", 14.0],
-	["polyhaven/planter_pot_clay/planter_pot_clay.gltf", 3.0],
-	["polyhaven/Lantern_01/Lantern_01.gltf", 2.6],
-]
+const LIBRARY := {
+	"garden": [
+		["Barrel_01", 3.2], ["wooden_bucket_01", 2.2], ["painted_wooden_bench", 3.4],
+		["street_lamp_01", 14.0], ["planter_pot_clay", 3.0], ["Lantern_01", 2.6],
+		["shrub_03", 4.2], ["shrub_02", 4.6], ["shrub_sorrel_01", 2.4], ["fern_02", 3.2],
+		["tree_stump_01", 3.4], ["rock_09", 3.6], ["rock_07", 4.2], ["planter_box_01", 2.6],
+		["weed_plant_02", 2.6], ["potted_plant_04", 2.4],
+	],
+	"toy": [
+		["wooden_crate_01", 2.4], ["Barrel_01", 3.2], ["wooden_barrels_01", 3.6],
+		["wooden_bucket_01", 2.2], ["ocean_buoy", 4.4], ["Lantern_01", 2.6],
+		["painted_wooden_bench", 3.4], ["street_lamp_01", 14.0], ["planter_box_01", 2.6],
+	],
+	"bath": [
+		["ocean_buoy", 4.4], ["lambis_shell", 1.8], ["wooden_bucket_01", 2.2],
+		["potted_plant_04", 2.4], ["anthurium_botany_01", 3.4], ["fern_02", 3.2],
+	],
+	"candy": [
+		["Lantern_01", 2.6], ["planter_pot_clay", 3.0], ["potted_plant_04", 2.4],
+		["painted_wooden_bench", 3.4],
+	],
+	"brass": [
+		["Barrel_01", 3.2], ["wooden_barrels_01", 3.6], ["wooden_crate_01", 2.4],
+		["street_lamp_01", 14.0], ["Lantern_01", 2.6], ["wooden_bucket_01", 2.2],
+		["rock_09", 3.6], ["rock_07", 4.2], ["tree_stump_01", 3.4],
+	],
+}
 const BUCKET := 16.0
 
 var sea_y := 0.0
@@ -60,6 +78,7 @@ var _mm: Array[MultiMesh] = []
 var _props: Array = []
 var _buckets := {}  # Vector2i -> Array of prop indices
 var _life: Node3D
+var _set := "garden"
 
 
 ## Props stay out of this radius around each spot in `keep_clear` (Squirmling start positions), and
@@ -77,6 +96,7 @@ func setup(theme: String, size_x: float, size_z: float, sea: float, ground_y: Ca
 	_rng.seed = seed_value
 	_build_meshes()
 	var set_id: String = THEME_SET.get(theme, "garden")
+	_set = set_id
 	var area := size_x * size_z / 65536.0
 	var kinds: Dictionary = SETS[set_id]
 	var flower_spots: Array[Vector3] = []
@@ -195,8 +215,11 @@ func _add_parts(at: Vector3, parts: Array) -> void:
 
 
 func _add_library(at: Vector3) -> void:
-	var pick: Array = LIBRARY[_rng.randi() % LIBRARY.size()]
-	var node := Style.instance("res://assets/thirdparty/" + str(pick[0]), {"height": float(pick[1])})
+	var list: Array = LIBRARY.get(_set, LIBRARY["garden"])
+	var pick: Array = list[_rng.randi() % list.size()]
+	var id := str(pick[0])
+	var path := "res://assets/thirdparty/polyhaven/%s/%s.gltf" % [id, id]
+	var node := Style.instance(path, {"height": float(pick[1])})
 	if node == null:
 		return
 	var box := Style.bounds(node)

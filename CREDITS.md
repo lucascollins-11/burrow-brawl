@@ -8,8 +8,22 @@ under the licenses below and restyled to the game's Storybook look. This file is
 | - | - | - | - | - |
 | [Barrel_01](https://polyhaven.com/a/Barrel_01) | polyhaven | Jorge Camacho | CC0-1.0 | `godot/assets/thirdparty/polyhaven/Barrel_01/` |
 | [Lantern 01](https://polyhaven.com/a/Lantern_01) | polyhaven | Rajil Jose Macatangay | CC0-1.0 | `godot/assets/thirdparty/polyhaven/Lantern_01/` |
+| [Anthurium Botany 01](https://polyhaven.com/a/anthurium_botany_01) | polyhaven | Rob Tuytel, Rico Cilliers | CC0-1.0 | `godot/assets/thirdparty/polyhaven/anthurium_botany_01/` |
+| [Fern 02](https://polyhaven.com/a/fern_02) | polyhaven | Rob Tuytel, Rico Cilliers | CC0-1.0 | `godot/assets/thirdparty/polyhaven/fern_02/` |
+| [Lambis Shell](https://polyhaven.com/a/lambis_shell) | polyhaven | Kuutti Siitonen | CC0-1.0 | `godot/assets/thirdparty/polyhaven/lambis_shell/` |
+| [Ocean Buoy](https://polyhaven.com/a/ocean_buoy) | polyhaven | Mateusz Sadek | CC0-1.0 | `godot/assets/thirdparty/polyhaven/ocean_buoy/` |
 | [Painted Wooden Bench](https://polyhaven.com/a/painted_wooden_bench) | polyhaven | Kirill Sannikov | CC0-1.0 | `godot/assets/thirdparty/polyhaven/painted_wooden_bench/` |
+| [Planter Box 01](https://polyhaven.com/a/planter_box_01) | polyhaven | James Ray Cock | CC0-1.0 | `godot/assets/thirdparty/polyhaven/planter_box_01/` |
 | [Planter Pot Clay](https://polyhaven.com/a/planter_pot_clay) | polyhaven | Amal Kumar | CC0-1.0 | `godot/assets/thirdparty/polyhaven/planter_pot_clay/` |
+| [Potted Plant 04](https://polyhaven.com/a/potted_plant_04) | polyhaven | James Ray Cock | CC0-1.0 | `godot/assets/thirdparty/polyhaven/potted_plant_04/` |
+| [Rock 07](https://polyhaven.com/a/rock_07) | polyhaven | Jenelle van Heerden | CC0-1.0 | `godot/assets/thirdparty/polyhaven/rock_07/` |
+| [Rock 09](https://polyhaven.com/a/rock_09) | polyhaven | Jenelle van Heerden | CC0-1.0 | `godot/assets/thirdparty/polyhaven/rock_09/` |
+| [Shrub 02](https://polyhaven.com/a/shrub_02) | polyhaven | Rico Cilliers | CC0-1.0 | `godot/assets/thirdparty/polyhaven/shrub_02/` |
+| [Shrub 03](https://polyhaven.com/a/shrub_03) | polyhaven | Rico Cilliers | CC0-1.0 | `godot/assets/thirdparty/polyhaven/shrub_03/` |
+| [Shrub Sorrel 01](https://polyhaven.com/a/shrub_sorrel_01) | polyhaven | Rico Cilliers | CC0-1.0 | `godot/assets/thirdparty/polyhaven/shrub_sorrel_01/` |
 | [Street Lamp 01](https://polyhaven.com/a/street_lamp_01) | polyhaven | Josh Dean | CC0-1.0 | `godot/assets/thirdparty/polyhaven/street_lamp_01/` |
+| [Tree Stump 01](https://polyhaven.com/a/tree_stump_01) | polyhaven | Rob Tuytel | CC0-1.0 | `godot/assets/thirdparty/polyhaven/tree_stump_01/` |
+| [Weed Plant 02](https://polyhaven.com/a/weed_plant_02) | polyhaven | Rob Tuytel, Rico Cilliers | CC0-1.0 | `godot/assets/thirdparty/polyhaven/weed_plant_02/` |
+| [Wooden Barrels 01](https://polyhaven.com/a/wooden_barrels_01) | polyhaven | James Ray Cock | CC0-1.0 | `godot/assets/thirdparty/polyhaven/wooden_barrels_01/` |
 | [Wooden Bucket 01](https://polyhaven.com/a/wooden_bucket_01) | polyhaven | James Ray Cock | CC0-1.0 | `godot/assets/thirdparty/polyhaven/wooden_bucket_01/` |
 | [Wooden Crate 01](https://polyhaven.com/a/wooden_crate_01) | polyhaven | James Ray Cock | CC0-1.0 | `godot/assets/thirdparty/polyhaven/wooden_crate_01/` |
