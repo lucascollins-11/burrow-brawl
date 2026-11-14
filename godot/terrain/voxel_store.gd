@@ -18,6 +18,9 @@ var chunks_x := 0
 var chunks_y := 0
 var chunks_z := 0
 var density := PackedByteArray()
+## Material id per voxel (shared/src/terrain3d/materials.ts), same layout as density. Empty when the
+## map has no built structures: then every voxel is natural terrain.
+var material := PackedByteArray()
 ## Bumped when any voxel of the chunk changes.
 var chunk_version := PackedInt32Array()
 
@@ -42,6 +45,11 @@ func load_full(t: Dictionary) -> bool:
 	chunks_y = sy / CHUNK
 	chunks_z = sz / CHUNK
 	density = bytes
+	material = PackedByteArray()
+	if t.has("material"):
+		material = Codec.decode(str(t["material"]), sx * sy * sz)
+		if material.is_empty():
+			push_error("voxel_store: bad material grid, drawing all terrain")
 	chunk_version = PackedInt32Array()
 	chunk_version.resize(chunks_x * chunks_y * chunks_z)
 	return true
@@ -124,6 +132,7 @@ func apply_patch(msg: Dictionary) -> PackedInt32Array:
 	if bytes.is_empty():
 		return result
 	var touched := {}
+	var has_mat := not material.is_empty()
 	var k := 0
 	for y in range(y0, y0 + sy):
 		for z in range(z0, z0 + sz):
@@ -133,8 +142,12 @@ func apply_patch(msg: Dictionary) -> PackedInt32Array:
 			for x in range(sx):
 				var v: int = bytes[k]
 				k += 1
-				if density[row + x] != v:
+				var old: int = density[row + x]
+				if old != v:
 					density[row + x] = v
+					# Shared rule: a voxel whose solidity flips becomes plain terrain.
+					if has_mat and (old >= SOLID) != (v >= SOLID):
+						material[row + x] = 0
 					touched[chunk_index((x0 + x) / CHUNK, cy, cz)] = true
 	for ci in touched:
 		chunk_version[ci] += 1
@@ -159,8 +172,9 @@ func copy_chunk_padded(ci: int) -> PackedByteArray:
 
 ## Same, from a density snapshot. Static and thread-safe: a worker can call it with a reference to
 ## `density` (arrays are copy-on-write, so later patches never change what the worker sees).
+## `below` is what voxels under the grid read as: 255 for density (bedrock), 0 for materials.
 static func extract_padded(
-	src_density: PackedByteArray, sx: int, sy: int, sz: int, ci: int
+	src_density: PackedByteArray, sx: int, sy: int, sz: int, ci: int, below := 255
 ) -> PackedByteArray:
 	var chunks_x_n := sx / CHUNK
 	var chunks_z_n := sz / CHUNK
@@ -179,7 +193,7 @@ static func extract_padded(
 			if wy < 0 or wy >= sy or wz < 0 or wz >= sz:
 				var fill := PackedByteArray()
 				fill.resize(PADDED)
-				fill.fill(255 if wy < 0 else 0)
+				fill.fill(below if wy < 0 else 0)
 				out.append_array(fill)
 			elif row_in_x:
 				var src := (wy * sz + wz) * sx + ox
