@@ -186,6 +186,14 @@ func _run() -> bool:
 	if scene._guide == null or scene._guide_label == null or scene._guide_label.text == "":
 		return _fail("the practice guide shows no prompt")
 	await _shot("5-practice", 1)
+	# The new steps, one picture each: a utility, then a crate.
+	for pair in [[7, "5b-practice-utility"], [8, "5c-practice-crate"]]:
+		scene._guide.step = pair[0]
+		for i in 3:
+			await get_tree().process_frame
+		if not scene._guide_label.text.begins_with("Practice %d of" % (pair[0] + 1)):
+			return _fail("practice step %d shows the wrong prompt: %s" % [pair[0] + 1, scene._guide_label.text])
+		await _shot(pair[1], 1)
 	scene._setup_guide(false)
 	# The close look comes last: under the software renderer it can outlast a turn.
 	await _closeup(_snap())
