@@ -9,6 +9,7 @@ const Mesher := preload("res://terrain/surface_mesher.gd")
 const View := preload("res://terrain/terrain_view.gd")
 const TerrainMaterial := preload("res://terrain/terrain_material.gd")
 const SeaMaterial := preload("res://terrain/sea_material.gd")
+const DecorView := preload("res://terrain/decor_view.gd")
 
 var failures := 0
 var checks := 0
@@ -23,6 +24,7 @@ func _init() -> void:
 	test_ground_height()
 	test_materials()
 	test_structure_materials()
+	test_decor()
 	test_mesher_empty_and_full()
 	test_mesher_sphere()
 	test_mesher_seams()
@@ -237,6 +239,34 @@ func test_materials() -> void:
 		var code: String = load(path).code
 		check(code.begins_with("//") or code.begins_with("shader_type"), path + " has source")
 		check(not code.contains(" patch "), path + " avoids the reserved word patch")
+
+
+func test_decor() -> void:
+	# Ground below y 10 on a 32^3 grid; three rail posts on top and a flag, all on y 9.
+	var n := 32
+	var dens := PackedByteArray()
+	dens.resize(n * n * n)
+	for i in n * n * 10:
+		dens[i] = 255
+	var st := Store.new()
+	st.load_full({"sizeX": n, "sizeY": n, "sizeZ": n, "seaY": 5, "bedrockY": 1, "density": Codec.encode(dens)})
+	var posts := []
+	for x in [4, 6, 8]:
+		posts.append({"kind": "railing", "x": x, "y": 9, "z": 4, "face": 4, "v": 0})
+	check(DecorView.rail_bars(posts).size() == 2, "rail posts in a row get one bar per gap")
+	posts.append({"kind": "railing", "x": 6, "y": 9, "z": 6, "face": 4, "v": 0})
+	check(DecorView.rail_bars(posts).size() == 3, "a corner post links to its neighbour too")
+	var decor := posts.duplicate()
+	decor.append({"kind": "flagpole", "x": 20, "y": 9, "z": 20, "face": 4, "v": 3})
+	var dv := DecorView.new()
+	dv.build(decor, st)
+	check(dv.anchors == 5, "decor counts its anchors")
+	# Blow away the voxel under the first post: it and the bar it starts break off, nothing else.
+	var patch := {"x0": 4, "y0": 9, "z0": 4, "sx": 1, "sy": 1, "sz": 1, "density": Codec.encode(PackedByteArray([0]))}
+	st.apply_patch(patch)
+	check(dv.on_patch(patch) == 2, "post and its bar break off")
+	check(dv.on_patch(patch) == 0, "already broken detail does not break twice")
+	dv.free()
 
 
 func test_structure_materials() -> void:

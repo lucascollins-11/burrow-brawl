@@ -81,6 +81,33 @@
       "name": "lighthouse-interior"
     },
     {
+      "do": "view",
+      "pos": [322, 44, 470],
+      "at": [300, 33, 440],
+      "fov": 60,
+      "name": "pier-closeup"
+    },
+    {
+      "do": "view",
+      "pos": [280, 64, 214],
+      "at": [284, 56, 188],
+      "fov": 60,
+      "name": "facade-closeup"
+    },
+    {
+      "do": "carve",
+      "at": [284, 56, 188],
+      "r": 7
+    },
+    {
+      "do": "view",
+      "pos": [280, 64, 214],
+      "at": [284, 56, 188],
+      "fov": 60,
+      "frames": 12,
+      "name": "facade-blast"
+    },
+    {
       "do": "quit"
     }
   ]

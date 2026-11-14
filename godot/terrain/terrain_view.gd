@@ -8,6 +8,7 @@ signal all_meshed
 const Store := preload("res://terrain/voxel_store.gd")
 const Mesher := preload("res://terrain/surface_mesher.gd")
 const TerrainMaterial := preload("res://terrain/terrain_material.gd")
+const DecorView := preload("res://terrain/decor_view.gd")
 
 ## Max meshing tasks running at once.
 @export var max_in_flight := 4
@@ -16,6 +17,8 @@ const TerrainMaterial := preload("res://terrain/terrain_material.gd")
 
 var store: Store
 var material: Material
+## Detail meshes on structures (null on maps without decor).
+var decor: Node3D = null
 
 var _nodes := {}  # chunk index -> MeshInstance3D
 var _dirty := {}  # chunk index -> true, waiting for a free worker slot
@@ -46,6 +49,15 @@ func load_terrain(match_start_terrain: Dictionary) -> bool:
 	if not new_store.load_full(match_start_terrain):
 		return false
 	set_store(new_store)
+	if decor != null:
+		decor.queue_free()
+		decor = null
+	var list: Array = match_start_terrain.get("decor", [])
+	if not list.is_empty():
+		decor = DecorView.new()
+		decor.name = "Decor"
+		add_child(decor)
+		decor.build(list, new_store)
 	return true
 
 
@@ -63,6 +75,8 @@ func apply_patch(msg: Dictionary) -> void:
 	for ci in store.apply_patch(msg):
 		_dirty[ci] = true
 		_busy = true
+	if decor != null:
+		decor.on_patch(msg)
 
 
 ## Chunks still waiting for or running a mesh job.
