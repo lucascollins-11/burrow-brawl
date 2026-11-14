@@ -18,7 +18,7 @@ func _make(theme := "garden-patch", seed_value := 5) -> Scenery:
 func test_scatters_dense_props_and_life_for_every_theme() -> void:
 	for theme in Scenery.THEME_SET:
 		var s := _make(theme)
-		check(s.prop_count > 300, "%s: a dense scatter (%d props on 128 x 128)" % [theme, s.prop_count])
+		check(s.prop_count > 200, "%s: a dense scatter (%d props on 128 x 128)" % [theme, s.prop_count])
 		check(not s.find_children("*", "MultiMeshInstance3D", true, false).is_empty(), "%s: drawn with MultiMeshes" % theme)
 		s.free()
 
@@ -70,3 +70,24 @@ func test_start_positions_stay_clear() -> void:
 			near += 1
 	check_eq(near, 0, "nothing within %.0f of a Squirmling's start" % Scenery.CLEAR_RADIUS)
 	s.free()
+
+
+func test_landmarks_ring_the_island_with_villages_and_ships() -> void:
+	for theme in Scenery.THEME_SET:
+		var l := Landmarks.new()
+		(Engine.get_main_loop() as SceneTree).root.add_child(l)
+		l.setup(theme, 128.0, 128.0, 26.0, 3, 1.0)
+		check(l.islets.size() >= 3, "%s: village islets on the horizon (%d)" % [theme, l.islets.size()])
+		check(not l.ships.is_empty(), "%s: ships on the sea" % theme)
+		var buildings := 0
+		for c in l.find_children("*", "MeshInstance3D", true, false):
+			if str(c.get_path()).contains("building"):
+				buildings += 1
+		check(buildings >= l.islets.size() * 3, "%s: library buildings loaded (%d meshes)" % [theme, buildings])
+		var centre := Vector2(64, 64)
+		for islet: Dictionary in l.islets:
+			var p: Vector3 = islet["pos"]
+			check(Vector2(p.x, p.z).distance_to(centre) - float(islet["radius"]) > 91.0, "%s: islets stay off the map" % theme)
+		for s in l.ships:
+			check(absf(s.position.y - 26.0) < 30.0, "%s: ships float at sea level" % theme)
+		l.free()

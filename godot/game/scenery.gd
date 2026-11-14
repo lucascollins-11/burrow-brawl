@@ -18,16 +18,17 @@ const Bird := preload("res://game/scenery_life.gd")
 
 enum Shape { SPHERE, CYL, CONE, CAP, BOX }
 
-## Props per 256 x 256 voxels of map at density 1.0, by kind. Each theme picks a set.
+## Props per 256 x 256 voxels of map at density 1.0, by kind. Each theme picks a set. The small
+## props were cut by 30% after a playtest; big set pieces carry the detail instead.
 const SETS := {
 	"garden": {
-		"tuft": 3600, "flowers": 1500, "mushroom": 110, "bush": 260, "stone": 180, "fence": 70,
+		"tuft": 2520, "flowers": 1050, "mushroom": 75, "bush": 180, "stone": 125, "fence": 50,
 		"library": 90,
 	},
-	"toy": {"block": 700, "cone": 260, "ball": 300, "flag": 90, "stone": 120, "library": 70},
-	"bath": {"bubbles": 900, "soap": 260, "duck": 70, "sponge": 120, "tuft": 600, "library": 45},
-	"candy": {"sprinkle": 2600, "gumdrop": 380, "candle": 120, "cherry": 200, "flowers": 600, "library": 24},
-	"brass": {"gear": 420, "bolt": 900, "pipe": 140, "tuft": 1400, "stone": 260, "library": 70},
+	"toy": {"block": 490, "cone": 180, "ball": 210, "flag": 65, "stone": 85, "library": 70},
+	"bath": {"bubbles": 630, "soap": 180, "duck": 50, "sponge": 85, "tuft": 420, "library": 45},
+	"candy": {"sprinkle": 1820, "gumdrop": 265, "candle": 85, "cherry": 140, "flowers": 420, "library": 24},
+	"brass": {"gear": 295, "bolt": 630, "pipe": 100, "tuft": 980, "stone": 180, "library": 70},
 }
 const THEME_SET := {
 	"garden-patch": "garden", "picnic-atoll": "garden", "toybox-harbor": "toy",

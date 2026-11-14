@@ -47,6 +47,7 @@ var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
 var scenery: Scenery = null
+var landmarks: Landmarks = null
 
 var _critters: Dictionary = {}  # id -> Node3D
 var _rig := CameraMath.RigState.new()
@@ -194,6 +195,11 @@ func handle_match_start(msg: Dictionary) -> void:
 	for c: Dictionary in vm.snapshot().get("critters", []):
 		starts.append(c["pos"])
 	scenery.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), str(t.get("density", "")).hash(), density, starts)
+	if landmarks == null:
+		landmarks = Landmarks.new()
+		landmarks.name = "Landmarks"
+		add_child(landmarks)
+	landmarks.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, str(t.get("density", "")).hash(), density)
 	var world_env := env.get("_world_env") as WorldEnvironment
 	if world_env != null and world_env.environment != null:
 		world_env.environment.glow_enabled = GameSettings.glow_enabled()
