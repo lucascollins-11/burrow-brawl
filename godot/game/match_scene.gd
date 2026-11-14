@@ -20,6 +20,8 @@ signal left_match
 ## (HEIGHT, create(team, hat_style, color), animate(root, t, active, moving), set_tag(root, text, color)).
 const CRITTER_MODEL := preload("res://game/squirmling.gd")
 const TERRAIN_SCRIPT := "res://terrain/terrain_view.gd"
+const DecorLife := preload("res://terrain/decor_life.gd")
+const DecorKit := preload("res://terrain/decor_kit.gd")
 const LOBBY_SCENE := "res://ui/lobby.tscn"
 const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
@@ -47,6 +49,10 @@ var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
 var scenery: Scenery = null
+var weather: Weather = null
+## The resolved weather and time of day of this match ({weather, time}), for tests and the HUD.
+var sky: Dictionary = {"weather": "clear", "time": "day"}
+var _theme := MapLook.DEFAULT
 var landmarks: Landmarks = null
 
 var _critters: Dictionary = {}  # id -> Node3D
@@ -178,12 +184,14 @@ func handle_match_start(msg: Dictionary) -> void:
 		node.set_script(script)
 		set_terrain_view(node)
 	_setup_guide(bool((msg.get("config", {}) as Dictionary).get("practice", false)))
-	var look := MapLook.for_theme(MapLook.theme_of(msg))
+	sky = MapLook.sky_of(msg)
+	_theme = MapLook.theme_of(msg)
+	var look := MapLook.with_sky(MapLook.for_theme(_theme), sky["weather"], sky["time"])
+	DecorLife.beam_boost = float(look.get("beam", 1.0))
+	DecorKit.set_window_glow(float(look.get("window_glow", 0.0)))
 	if terrain_view != null and terrain_view.has_method("load_terrain"):
 		terrain_view.call("load_terrain", t)
-		var ground_mat := terrain_view.get("material") as ShaderMaterial
-		if ground_mat != null:
-			MapLook.paint_terrain(ground_mat, look)
+	_paint_ground(look)
 	fx.debris_color = MapLook.color(look, "debris")
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
 	if scenery == null:
@@ -200,9 +208,12 @@ func handle_match_start(msg: Dictionary) -> void:
 		landmarks.name = "Landmarks"
 		add_child(landmarks)
 	landmarks.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, str(t.get("density", "")).hash(), density)
-	var world_env := env.get("_world_env") as WorldEnvironment
-	if world_env != null and world_env.environment != null:
-		world_env.environment.glow_enabled = GameSettings.glow_enabled()
+	if weather == null:
+		weather = Weather.new()
+		weather.name = "Weather"
+		add_child(weather)
+	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density)
+	_apply_glow_setting()
 	_rig.target = Vector3(_world.x * 0.5, vm.sea_y + 25.0, _world.y * 0.5)
 	_rig.dist = 90.0
 	_built = true
@@ -449,6 +460,9 @@ func _process(dt: float) -> void:
 
 	env.set_sea_y(vm.sea_y)
 	env.update(dt, v["wind"])
+	if weather != null:
+		var cam := get_viewport().get_camera_3d()
+		weather.update(dt, (cam if cam != null else camera).global_position, v["wind"])
 	var hint := HINT_WATCH
 	if _following and not _follow_skipped:
 		hint = GameSettings.hint_for([["skip_follow", "skip the camera follow"]])
@@ -831,6 +845,38 @@ func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState)
 	if _marker.visible:
 		var p: Vector3 = active["pos"]
 		_marker.position = p + Vector3(0, CRITTER_MODEL.HEIGHT + 3.5 + sin(_time * 4.0) * 0.4, 0)
+
+
+## Change the weather and time of day of the running match (looks only: the playtest harness uses
+## it to shoot every combination from one match). The sim's wind is not touched.
+func set_sky(weather_id: String, time_id: String) -> void:
+	sky = {"weather": weather_id, "time": time_id}
+	var look := MapLook.with_sky(MapLook.for_theme(_theme), weather_id, time_id)
+	DecorLife.beam_boost = float(look.get("beam", 1.0))
+	DecorKit.set_window_glow(float(look.get("window_glow", 0.0)))
+	var decor: Variant = terrain_view.get("decor") if terrain_view != null else null
+	if decor is Node and (decor as Node).get("life") != null:
+		(decor as Node).get("life").call("set_beam_boost", DecorLife.beam_boost)
+	_paint_ground(look)
+	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
+	var density := float(GameSettings.quality_profile(GameSettings.quality).get("props", 1.0))
+	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density)
+	_apply_glow_setting()
+
+
+func _paint_ground(look: Dictionary) -> void:
+	var ground_mat := terrain_view.get("material") as ShaderMaterial if terrain_view != null else null
+	if ground_mat == null:
+		return
+	MapLook.paint_terrain(ground_mat, look)
+	ground_mat.set_shader_parameter("wetness", float(look.get("wetness", 0.0)))
+	ground_mat.set_shader_parameter("window_glow", float(look.get("window_glow", 0.0)))
+
+
+func _apply_glow_setting() -> void:
+	var world_env := env.get("_world_env") as WorldEnvironment
+	if world_env != null and world_env.environment != null:
+		world_env.environment.glow_enabled = GameSettings.glow_enabled()
 
 
 func _look(team: int) -> Dictionary:

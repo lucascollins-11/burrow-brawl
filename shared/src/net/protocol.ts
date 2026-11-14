@@ -123,19 +123,34 @@ export interface MatchSettings {
   windMax: number; // 0..100
   crateChance: number; // 0..1
   arsenalPreset: string;
+  /** "random" or one of WEATHERS. Looks only, except that a storm makes the wind gusty. */
+  weather: string;
+  /** "random" or one of TIMES_OF_DAY. Looks only. */
+  timeOfDay: string;
 }
+
+/** Weather the lobby can pick (besides "random"). */
+export const WEATHERS = ["clear", "rain", "storm", "fog"] as const;
+/** Times of day the lobby can pick (besides "random"). "day" is each theme's own light. */
+export const TIMES_OF_DAY = ["day", "dusk", "night"] as const;
 
 /** What the lobby can pick for the map. Clients show these and never hardcode them. */
 export interface MapOptions {
   themes: { id: string; name: string; minSize: number }[];
   /** Grid edges in voxels: small, medium, large. */
   sizes: number[];
+  /** Weather ids; the lobby adds "random". */
+  weathers: string[];
+  /** Time of day ids; the lobby adds "random". */
+  times: string[];
 }
 
 export function mapOptions(): MapOptions {
   return {
     themes: THEMES.map((t) => ({ id: t.id, name: t.name, minSize: t.minSize })),
     sizes: [...MAP_SIZES],
+    weathers: [...WEATHERS],
+    times: [...TIMES_OF_DAY],
   };
 }
 
@@ -163,6 +178,8 @@ export const DEFAULT_SETTINGS: MatchSettings = {
   windMax: 50,
   crateChance: 0.5,
   arsenalPreset: "standard",
+  weather: "clear",
+  timeOfDay: "day",
 };
 
 // ---------------------------------------------------------------- messages
@@ -361,6 +378,8 @@ const SETTINGS_RULES: { [K in keyof MatchSettings]: (v: unknown) => boolean } = 
   windMax: (v) => isInt(v, 0, 100),
   crateChance: (v) => isNum(v, 0, 1),
   arsenalPreset: (v) => isStr(v, 32) && /^[a-z0-9-]+$/.test(v),
+  weather: (v) => v === "random" || (WEATHERS as readonly unknown[]).includes(v),
+  timeOfDay: (v) => v === "random" || (TIMES_OF_DAY as readonly unknown[]).includes(v),
 };
 
 export function validateSettingsPatch(p: unknown): Parsed<Partial<MatchSettings>> {

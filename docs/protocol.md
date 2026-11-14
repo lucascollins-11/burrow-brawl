@@ -118,8 +118,13 @@ interface MatchSettings {
   windMax: number;
   crateChance: number;         // 0..1
   arsenalPreset: string;
+  weather: string;             // "random" | "clear" | "rain" | "storm" | "fog"; default "clear"
+  timeOfDay: string;           // "random" | "day" | "dusk" | "night"; default "day"
 }
 ```
+
+The server resolves "random" when the match starts and sends the result in `MatchConfig.sky`
+(`{ weather, time }`). Weather and time are looks only, except that a storm makes the wind gusty.
 
 ### 4.3 Lobby messages
 

@@ -21,6 +21,7 @@ import {
   type MatchState,
 } from "@burrow-brawl/shared";
 import type { ServerMessage, ViewServerMessage } from "@burrow-brawl/shared/src/net";
+import { TIMES_OF_DAY, WEATHERS } from "@burrow-brawl/shared/src/net";
 import { THEMES } from "@burrow-brawl/shared/src/terrain3d";
 import { ViewStream } from "./view";
 
@@ -51,6 +52,11 @@ export interface MatchRunnerOptions {
   ticker: "realtime" | "manual";
   /** The step function. Tests swap in a throwing one; production always uses stepMatch. */
   step?: typeof stepMatch;
+}
+
+/** A lobby choice resolved for one match: "random" picks one of `options`, anything else stays. */
+function pick(choice: string, options: readonly string[]): string {
+  return choice === "random" ? (options[randomInt(0, options.length)] ?? options[0]!) : choice;
 }
 
 export class MatchRunner {
@@ -91,6 +97,10 @@ export class MatchRunner {
       /** "random" or a theme id; absent means the older unthemed island. */
       mapTheme?: string;
       mapSize?: number;
+      /** "random" or a weather id; absent means clear. */
+      weather?: string;
+      /** "random" or a time of day id; absent means day. */
+      timeOfDay?: string;
     },
     teams: number,
   ): MatchConfig {
@@ -115,6 +125,10 @@ export class MatchRunner {
       startHealth: settings.startHealth,
       windMax: settings.windMax,
       map,
+      sky: {
+        weather: pick(settings.weather ?? "clear", WEATHERS),
+        time: pick(settings.timeOfDay ?? "day", TIMES_OF_DAY),
+      },
     };
   }
 
