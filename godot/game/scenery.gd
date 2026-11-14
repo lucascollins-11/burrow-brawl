@@ -19,19 +19,20 @@ const Bird := preload("res://game/scenery_life.gd")
 enum Shape { SPHERE, CYL, CONE, CAP, BOX }
 
 ## Props per 256 x 256 voxels of map at density 1.0, by kind. Each theme picks a set. The small
-## props were cut by 30% after a playtest; big set pieces carry the detail instead.
+## props were cut twice after playtests (by 30%, then to a tenth of that) and library models to
+## about a third: big set pieces (landmarks, the Lighthouse detail layer) carry the detail now.
 const SETS := {
 	"garden": {
-		"tuft": 2520, "flowers": 1050, "mushroom": 75, "bush": 180, "stone": 125, "fence": 50,
-		"library": 90,
+		"tuft": 252, "flowers": 105, "mushroom": 8, "bush": 18, "stone": 12, "fence": 5,
+		"library": 31,
 	},
-	"toy": {"block": 490, "cone": 180, "ball": 210, "flag": 65, "stone": 85, "library": 70},
-	"bath": {"bubbles": 630, "soap": 180, "duck": 50, "sponge": 85, "tuft": 420, "library": 45},
-	"candy": {"sprinkle": 1820, "gumdrop": 265, "candle": 85, "cherry": 140, "flowers": 420, "library": 24},
-	"brass": {"gear": 295, "bolt": 630, "pipe": 100, "tuft": 980, "stone": 180, "library": 70},
+	"toy": {"block": 49, "cone": 18, "ball": 21, "flag": 6, "stone": 8, "library": 24},
+	"bath": {"bubbles": 63, "soap": 18, "duck": 5, "sponge": 8, "tuft": 42, "library": 16},
+	"candy": {"sprinkle": 182, "gumdrop": 26, "candle": 8, "cherry": 14, "flowers": 42, "library": 8},
+	"brass": {"gear": 30, "bolt": 63, "pipe": 10, "tuft": 98, "stone": 18, "library": 24},
 	# Lighthouse Village carries its own detail (decor anchors), and props would land on its
 	# roofs and quays: just a little grass and flowers.
-	"village": {"tuft": 700, "flowers": 300, "bush": 40},
+	"village": {"tuft": 70, "flowers": 30, "bush": 4},
 }
 const THEME_SET := {
 	"garden-patch": "garden", "picnic-atoll": "garden", "toybox-harbor": "toy",

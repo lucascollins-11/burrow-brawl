@@ -15,10 +15,10 @@ func _make(theme := "garden-patch", seed_value := 5) -> Scenery:
 	return s
 
 
-func test_scatters_dense_props_and_life_for_every_theme() -> void:
+func test_scatters_light_props_and_life_for_every_theme() -> void:
 	for theme in Scenery.THEME_SET:
 		var s := _make(theme)
-		check(s.prop_count > 200, "%s: a dense scatter (%d props on 128 x 128)" % [theme, s.prop_count])
+		check(s.prop_count > 8 and s.prop_count < 200, "%s: a light scatter (%d props on 128 x 128)" % [theme, s.prop_count])
 		check(not s.find_children("*", "MultiMeshInstance3D", true, false).is_empty(), "%s: drawn with MultiMeshes" % theme)
 		s.free()
 
