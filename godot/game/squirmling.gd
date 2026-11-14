@@ -7,6 +7,7 @@ extends RefCounted
 ## tall with its tail at the node origin, facing +z. This file builds the parts; the node it returns
 ## is a SquirmlingRig, which owns the motion (walk, jump, hurt, fire, knock-out).
 
+const Toon := preload("res://game/toon.gd")
 const HEIGHT := 6.0
 const LOCAL_TOP := 2.62
 const SCALE := HEIGHT / LOCAL_TOP
@@ -31,6 +32,7 @@ static func _mat(color: Color, roughness := 0.9) -> StandardMaterial3D:
 	if _mats.has(key):
 		return _mats[key]
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = roughness
 	_mats[key] = m
@@ -56,6 +58,7 @@ static func _clay(color: Color) -> StandardMaterial3D:
 		_clay_normal.bump_strength = 5.0
 		_clay_normal.noise = noise
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = 0.92
 	m.normal_enabled = true

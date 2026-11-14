@@ -7,6 +7,7 @@ extends RefCounted
 ##
 ## API: Hats.IDS, Hats.make(id, accent) -> Node3D, Hats.canonical(id) -> String, Hats.default_for_team(i).
 
+const Toon := preload("res://game/toon.gd")
 const IDS: Array[String] = ["miner", "chef", "cone", "propeller", "crown", "pirate", "flowerpot", "bucket"]
 ## Names older data used, mapped to the new ids.
 const ALIASES := {"pot": "flowerpot", "party": "bucket", "tricorn": "pirate", "helmet": "miner"}
@@ -171,6 +172,7 @@ static func _mat(color: Color, roughness: float, glow: Color) -> StandardMateria
 	if _mats.has(key):
 		return _mats[key]
 	var m := StandardMaterial3D.new()
+	Toon.shade(m)
 	m.albedo_color = color
 	m.roughness = roughness
 	if glow.a > 0.0:
