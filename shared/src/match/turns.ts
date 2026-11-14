@@ -46,6 +46,12 @@ export interface TurnState {
    */
   windX: number;
   windZ: number;
+  /**
+   * Storms only: the gust blowing on top of windX/windZ this tick (see gusts.ts). The sim feels
+   * the sum. Absent outside storms, so calm matches hash exactly as before.
+   */
+  gustX?: number;
+  gustZ?: number;
 }
 
 export interface TurnRules {

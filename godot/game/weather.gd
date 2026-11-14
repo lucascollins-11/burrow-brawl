@@ -2,9 +2,11 @@ class_name Weather
 extends Node3D
 ## Rain and storms around the camera: falling streaks slanted by the wind, a rain hiss, and in a
 ## storm lightning bolts out over the sea with a flash of the whole scene and thunder a moment
-## later. Looks and sound only; the sim knows nothing of it (a storm's gusts are server-driven).
+## later. Fog is banks of low cloud drifting over the ground with clear air between them, so the
+## island stays playable. Looks and sound only; the sim knows nothing of it (a storm's gusts are
+## server-driven).
 ##
-##   weather.setup(look, env, size_x, size_z, sea_y, density)   # look from MapLook.with_sky
+##   weather.setup(look, env, size_x, size_z, sea_y, density, ground_y)   # look from MapLook.with_sky
 ##   weather.update(dt, camera_position, wind)                  # every frame
 
 ## Drops per unit of `rain` (1 rain, 2 storm) at density 1.
@@ -16,6 +18,11 @@ const FALL_SPEED := 70.0
 ## Seconds between lightning strikes in a storm.
 const STRIKE_MIN := 5.0
 const STRIKE_MAX := 13.0
+## Fog banks at density 1, and puffs per bank.
+const FOG_BANKS := 14
+const FOG_PUFFS := 9
+## Drift in world units a second with no wind; wind adds to it.
+const FOG_DRIFT := 2.5
 
 var rain_amount := 0.0
 var lightning := false
@@ -31,14 +38,25 @@ var _bolt: MeshInstance3D = null
 var _bolt_life := 0.0
 var _size := Vector2(256, 256)
 var _sea_y := 0.0
+var _ground := Callable()
+var _fog: MultiMeshInstance3D = null
+## Per bank: {centre: Vector3, puffs: [[offset: Vector3, size: float]]}
+var _banks: Array = []
+var _drift := Vector2(1, 0.35).normalized()
+## Where each fog puff is now (the MultiMesh keeps its copy on the render server).
+var fog_puffs := PackedVector3Array()
 
 
-func setup(look: Dictionary, env: MatchEnvironment, size_x: float, size_z: float, sea_y: float, density := 1.0) -> void:
+func setup(look: Dictionary, env: MatchEnvironment, size_x: float, size_z: float, sea_y: float, density := 1.0, ground_y := Callable()) -> void:
 	for c in get_children():
 		c.queue_free()
 	_rain = null
 	_hiss = null
 	_bolt = null
+	_fog = null
+	_banks.clear()
+	fog_puffs.clear()
+	_ground = ground_y
 	_env = env
 	_size = Vector2(size_x, size_z)
 	_sea_y = sea_y
@@ -50,6 +68,8 @@ func setup(look: Dictionary, env: MatchEnvironment, size_x: float, size_z: float
 	if rain_amount > 0.0:
 		_build_rain(look, density)
 		_build_hiss()
+	if float(look.get("fog_banks", 0.0)) > 0.0:
+		_build_fog(look, density)
 	set_process(false)
 
 
@@ -84,6 +104,108 @@ func _build_rain(look: Dictionary, density: float) -> void:
 	_rain.mesh = streak
 	_rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_rain)
+
+
+## Fog banks: clusters of soft billboard puffs a few units over the ground, one MultiMesh for all.
+func _build_fog(look: Dictionary, density: float) -> void:
+	var tex := GradientTexture2D.new()
+	tex.width = 64
+	tex.height = 64
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	g.add_point(0.45, Color(1, 1, 1, 0.55))
+	tex.gradient = g
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.billboard_keep_scale = true
+	mat.albedo_texture = tex
+	# Light the banks a little brighter than the haze so they read as clouds; moonlit at night.
+	var night := bool(look.get("night", false))
+	var tint := MapLook.color(look, "fog").lerp(Color(0.5, 0.56, 0.72) if night else Color.WHITE, 0.6 if night else 0.4)
+	mat.albedo_color = Color(tint.r, tint.g, tint.b, 0.6 if night else 0.55)
+	mat.disable_receive_shadows = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# A puff right on the lens would white the screen out: fade it as the camera gets close.
+	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+	mat.distance_fade_min_distance = 6.0
+	mat.distance_fade_max_distance = 40.0
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	quad.material = mat
+	var banks := maxi(5, int(round(FOG_BANKS * clampf(density, 0.4, 1.0) * clampf(_size.length() / 362.0, 0.7, 1.8))))
+	for i in banks:
+		var puffs: Array = []
+		var spread := _rng.randf_range(16.0, 30.0)
+		for j in FOG_PUFFS:
+			var a := _rng.randf() * TAU
+			var r := sqrt(_rng.randf()) * spread
+			puffs.append([Vector3(cos(a) * r * 1.4, _rng.randf_range(0.0, 5.0), sin(a) * r), _rng.randf_range(14.0, 30.0)])
+		var centre := Vector3(_rng.randf_range(-40.0, _size.x + 40.0), 0.0, _rng.randf_range(-40.0, _size.y + 40.0))
+		_banks.append({"centre": centre, "puffs": puffs})
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = quad
+	mm.instance_count = banks * FOG_PUFFS
+	_fog = MultiMeshInstance3D.new()
+	_fog.name = "FogBanks"
+	_fog.multimesh = mm
+	_fog.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_fog)
+	_place_fog()
+
+
+func fog_bank_count() -> int:
+	return _banks.size()
+
+
+func _ground_at(x: float, z: float) -> float:
+	var y := _sea_y
+	if _ground.is_valid():
+		y = maxf(y, float(_ground.call(x, z)))
+	return y
+
+
+## Every puff sits a little over the ground under it, so the banks roll up and over the hills.
+func _place_fog() -> void:
+	var mm := _fog.multimesh
+	fog_puffs.resize(mm.instance_count)
+	var k := 0
+	for b: Dictionary in _banks:
+		var c: Vector3 = b["centre"]
+		for p: Array in b["puffs"]:
+			var off: Vector3 = p[0]
+			var size: float = p[1]
+			var x := c.x + off.x
+			var z := c.z + off.z
+			var y := _ground_at(x, z) + size * 0.22 + off.y
+			fog_puffs[k] = Vector3(x, y, z)
+			mm.set_instance_transform(k, Transform3D(Basis.from_scale(Vector3(size * 1.6, size, 1.0)), fog_puffs[k]))
+			k += 1
+
+
+## Banks drift downwind (a gentle breeze when there is none) and wrap round the island.
+func _drift_fog(dt: float, wind: Vector2) -> void:
+	if wind.length() > 2.0:
+		_drift = _drift.lerp(wind.normalized(), clampf(dt * 0.2, 0.0, 1.0)).normalized()
+	var speed := FOG_DRIFT + wind.length() * 0.06
+	var lo := Vector2(-70.0, -70.0)
+	var hi := _size + Vector2(70.0, 70.0)
+	for b: Dictionary in _banks:
+		var c: Vector3 = b["centre"]
+		c.x += _drift.x * speed * dt
+		c.z += _drift.y * speed * dt
+		if c.x > hi.x: c.x = lo.x
+		elif c.x < lo.x: c.x = hi.x
+		if c.z > hi.y: c.z = lo.y
+		elif c.z < lo.y: c.z = hi.y
+		b["centre"] = c
+	_place_fog()
 
 
 ## A soft looped hiss under everything (generated, like every other sound in the game).
@@ -121,6 +243,8 @@ func update(dt: float, camera_pos: Vector3, wind: Vector2) -> void:
 		_rain.direction = (Vector3(0, -1, 0) + lean).normalized()
 		if _hiss != null and not _hiss.playing and not _is_muted():
 			_hiss.play()
+	if _fog != null:
+		_drift_fog(dt, wind)
 	if lightning:
 		_next_strike -= dt
 		if _next_strike <= 0.0:
