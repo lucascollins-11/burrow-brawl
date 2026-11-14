@@ -75,8 +75,18 @@ export function createGameServer(config: ServerConfig, opts: GameServerOptions =
     });
   });
 
+  // When the beat itself fires late, the server was stalled (for example a big map generating on
+  // a slow host), not the clients: their pongs are still queued. Forgive the gap instead of
+  // dropping everyone at once. Measured in real time, apart from the (fakeable) clock.
+  let lastBeat = performance.now();
   const heartbeat = setInterval(() => {
-    for (const c of all) c.heartbeat();
+    const t = performance.now();
+    const gap = t - lastBeat;
+    const stalled = gap > config.heartbeatMs * 1.5;
+    lastBeat = t;
+    if (stalled)
+      console.warn(`[server] heartbeat ran ${Math.round(gap)} ms apart; not dropping anyone`);
+    for (const c of all) c.heartbeat(stalled);
   }, config.heartbeatMs);
   const sweep = () => {
     registry.sweep();
