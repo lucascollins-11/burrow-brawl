@@ -40,6 +40,7 @@ var fx: MatchEffects
 var shots: ShotViews
 var crates: CrateViews
 var gear: GearFx
+var aim_guide: AimGuide
 ## critter id -> the weapon it last fired, so a melee `punch` knows which swing it was.
 var _swing: Dictionary = {}
 var zones: ZoneViews
@@ -96,6 +97,8 @@ func _ready() -> void:
 	shots.lost.connect(_on_shot_lost)
 	add_child(shots)
 	crates = CrateViews.new()
+	aim_guide = AimGuide.new()
+	add_child(aim_guide)
 	gear = GearFx.new()
 	gear.name = "Gear"
 	add_child(gear)
@@ -422,6 +425,7 @@ func _process(dt: float) -> void:
 	zones.sync(v["zones"], dt)
 	crates.sync(v["crates"], dt, _crates_seen)
 	_crates_seen = true
+	aim_guide.update_guide(aim, active, controls.weapon_id(), Callable(self, "ground_y"))
 	_update_marker(v, active, aim)
 	_update_camera(v, active, aim, mouse, dt)
 

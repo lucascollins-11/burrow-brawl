@@ -1,0 +1,9 @@
+{
+  "about": "Aim mode at a half and a full charge (dotted launch guide), in the practice match.",
+  "steps": [
+    { "do": "start", "mode": "practice" },
+    { "do": "aim", "weapon": "acorn-mortar", "pitch": 35, "power": 55, "name": "half-charge" },
+    { "do": "aim", "pitch": 35, "power": 100, "name": "full-charge" },
+    { "do": "quit" }
+  ]
+}
