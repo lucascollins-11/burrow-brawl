@@ -390,10 +390,14 @@ func _gear_row(me: Dictionary, rig: SquirmlingRig) -> void:
 			}
 		)
 	var steered: Array = []
-	var weapons := ["wind-up-robot", "marble-roller", "rc-racer", "kite-bomber"]
-	for i in 4:
-		var sat: Vector3 = (me["pos"] as Vector3) + right * (-10.0 + 7.0 * float(i)) + forward * 20.0
+	var weapons := ["wind-up-robot", "marble-roller", "rc-racer", "kite-bomber", "paper-lantern", "giant-block", "meteor-marble", "pinata", "candy-bomb"]
+	for i in weapons.size():
+		var back_row := i >= 4
+		var col := i - 4 if back_row else i
+		var sat: Vector3 = (me["pos"] as Vector3) + right * (-10.0 + (8.0 if back_row else 7.0) * float(col)) + forward * (32.0 if back_row else 20.0)
 		sat.y = scene.ground_y(sat.x, sat.z) + (4.0 if weapons[i] == "kite-bomber" else 0.0)
+		if back_row and weapons[i] != "giant-block" and weapons[i] != "pinata":
+			sat.y += 5.0
 		steered.append({"id": 50 + i, "weapon": weapons[i], "pos": sat, "heading_deg": rad_to_deg(rig.rotation.y) + 40.0})
 	var mines: Array = []
 	for i in 2:

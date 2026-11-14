@@ -492,6 +492,10 @@ func _handle_events(events: Array, v: Dictionary) -> void:
 			var shooter: SquirmlingRig = _critters.get(int(e.get("critterId", -1)), null)
 			if shooter != null:
 				shooter.fire()
+			if str(e.get("weaponId", "")) == "tabletop-quake":
+				var thumper := _find(v["critters"], int(e.get("critterId", -1)))
+				if not thumper.is_empty():
+					fx.quake(thumper["pos"])
 
 
 func _sync_critters(v: Dictionary, active: Dictionary, aim: CameraMath.AimState, dt: float) -> void:
