@@ -5,6 +5,7 @@
 extends Node3D
 
 const Kit := preload("res://terrain/decor_kit.gd")
+const Life := preload("res://terrain/decor_life.gd")
 
 ## Most broken-off pieces animated per patch (the rest just vanish).
 const MAX_DEBRIS := 24
@@ -19,6 +20,8 @@ const RAIL_SPAN2 := 13
 var _store: RefCounted = null
 var _kinds := {}  # kind -> {mm: MultiMesh, node: MultiMeshInstance3D, xf: Array[Transform3D]}
 var _by_voxel := {}  # voxel index -> Array of [kind, instance]
+var _broken := {}  # "kind:instance" -> true
+var life: Node3D = null
 var anchors := 0
 var shown := 0
 var broken := 0
@@ -69,6 +72,19 @@ func build(decor: Array, store: RefCounted) -> void:
 		add_child(node)
 		_kinds[kind] = {"mm": mm, "node": node, "xf": xfs}
 		shown += list.size()
+	life = Life.new()
+	life.name = "Life"
+	add_child(life)
+	life.setup(self)
+
+
+## kind -> {mm, node, xf} for the kinds this view draws (DecorLife animates some of them).
+func kind_table() -> Dictionary:
+	return _kinds
+
+
+func is_broken(kind: String, i: int) -> bool:
+	return _broken.has(kind + ":" + str(i))
 
 
 ## Bars between neighbouring rail posts on top faces, as anchors with a ready transform: each post
@@ -166,6 +182,8 @@ func on_patch(msg: Dictionary) -> int:
 				_by_voxel.erase(vi)
 	broken += n
 	shown -= n
+	if n > 0 and life != null:
+		life.refresh()
 	return n
 
 
@@ -173,6 +191,7 @@ func _break(kind: String, i: int, animate: bool) -> void:
 	var k: Dictionary = _kinds[kind]
 	var mm: MultiMesh = k["mm"]
 	var xf: Transform3D = (k["xf"] as Array)[i]
+	_broken[kind + ":" + str(i)] = true
 	mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ZERO), xf.origin))
 	if not animate or not is_inside_tree():
 		return
@@ -203,6 +222,8 @@ func _clear() -> void:
 		c.queue_free()
 	_kinds.clear()
 	_by_voxel.clear()
+	_broken.clear()
+	life = null
 	anchors = 0
 	shown = 0
 	broken = 0

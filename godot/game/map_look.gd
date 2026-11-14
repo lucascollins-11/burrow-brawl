@@ -57,6 +57,16 @@ const LOOKS := {
 		"cloud": "ffffff", "debris": "f4e4f0",
 		"saturation": 1.08,
 	},
+	# A fishing village at dusk: low golden sun, deep harbour blue, slate and stone, lush terraces.
+	"lighthouse-village": {
+		"grass": "7fd04a", "grass_dark": "3f9a40", "grass_lip": "2f7a3a", "soil": "b8774a",
+		"rock": "8a7f8f", "rock_band": "e8b878", "sand": "f5d9a0", "bedrock": "3a3f4f",
+		"sea_shallow": "5fd0c8", "sea_deep": "0f4f7a", "sea_horizon": "ffb88a",
+		"sky_top": "3f6fc8", "sky_horizon": "ffa870", "sky_bottom": "b8607a",
+		"sun": "ffc890", "sun_energy": 1.35, "sun_pitch": -22.0, "sun_yaw": 230.0, "fog": "f2b896",
+		"cloud": "ffe2d0", "debris": "7a5a46",
+		"saturation": 1.15,
+	},
 	# Icing on sponge cake in strawberry soda.
 	"frosted-bakery": {
 		"grass": "fff6f0", "grass_dark": "ffd6e3", "soil": "e8b56b", "rock": "b5763f",

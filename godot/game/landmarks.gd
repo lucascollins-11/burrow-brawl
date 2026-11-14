@@ -50,6 +50,8 @@ func setup(theme: String, size_x: float, size_z: float, sea: float, seed_value: 
 	_rng.seed = seed_value ^ 0x51ab
 	_look = MapLook.for_theme(theme)
 	var set_id: String = Scenery.THEME_SET.get(theme, "garden")
+	if not HEROES.has(set_id):
+		set_id = "garden"  # sets without islet heroes of their own (the village) borrow the garden's
 	var centre := Vector3(size_x * 0.5, sea, size_z * 0.5)
 	var reach := Vector2(size_x, size_z).length() * 0.5
 	var count := clampi(int(round(6.0 * density)), 3, 8)

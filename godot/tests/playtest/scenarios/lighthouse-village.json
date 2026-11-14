@@ -108,6 +108,50 @@
       "name": "facade-blast"
     },
     {
+      "do": "view",
+      "pos": [200, 66, 72],
+      "at": [245, 66, 100],
+      "fov": 60,
+      "name": "tavern-tower"
+    },
+    {
+      "do": "view",
+      "pos": [455, 80, 180],
+      "at": [418, 75, 146],
+      "fov": 60,
+      "name": "windmill"
+    },
+    {
+      "do": "view",
+      "pos": [440, 60, 195],
+      "at": [448, 60, 226],
+      "fov": 65,
+      "name": "church"
+    },
+    {
+      "do": "view",
+      "pos": [140, 48, 195],
+      "at": [140, 45, 232],
+      "fov": 65,
+      "name": "watermill"
+    },
+    {
+      "do": "view",
+      "pos": [470, 95, 250],
+      "at": [420, 140, 72],
+      "fov": 60,
+      "frames": 30,
+      "name": "beam-from-town"
+    },
+    {
+      "do": "view",
+      "pos": [250, 70, 470],
+      "at": [300, 40, 400],
+      "fov": 60,
+      "frames": 30,
+      "name": "harbour-life"
+    },
+    {
       "do": "quit"
     }
   ]
