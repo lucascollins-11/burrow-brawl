@@ -1,0 +1,23 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "toy-block-drop",
+  "name": "Toy Block Drop",
+  "description": "Drop one giant toy block straight down on a spot: it crushes what's under it and stays as terrain.",
+  "category": "strike",
+  "behavior": "crusher",
+  "targeting": "click-point",
+  "ammo": 1,
+  "crateOnly": false,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "bombCount": 1,
+    "spreadWidth": 0,
+    "dropHeight": 300,
+    "bomb": "giant-block",
+    "damageFalloff": "linear"
+  }
+}

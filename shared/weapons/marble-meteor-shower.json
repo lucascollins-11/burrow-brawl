@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "marble-meteor-shower",
+  "name": "Marble Meteor Shower",
+  "description": "Twenty marbles rain down all over the map over four seconds.",
+  "category": "super",
+  "behavior": "map-strike",
+  "targeting": "none",
+  "ammo": 1,
+  "crateOnly": true,
+  "endsTurn": true,
+  "windAffected": false,
+  "damage": 0,
+  "blastRadius": 0,
+  "knockback": 0,
+  "params": {
+    "bombCount": 20,
+    "bomb": "meteor-marble",
+    "spreadSeconds": 4,
+    "damageFalloff": "linear"
+  }
+}

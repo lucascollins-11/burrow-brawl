@@ -10,14 +10,16 @@ import type { Critter, FireCommand, SimEvent } from "./api";
 import { CRITTER_HEIGHT } from "./api";
 import { LENGTH_DEN, LENGTH_NUM, MAX_HEALTH } from "./constants";
 import { FOOTPRINT, cell } from "./critter";
+import { speedPerTick } from "./gear";
 import { applyEdit } from "./terrainOps";
-import { length } from "./vec3";
+import { length, mulQ, withLength, yawDir } from "./vec3";
 
 export const UTILITY_WEAPONS = [
   "build-block",
   "bubble-shield",
   "cookie-snack",
   "feather-charm",
+  "tabletop-quake",
 ] as const;
 export type UtilityWeapon = (typeof UTILITY_WEAPONS)[number];
 
@@ -96,6 +98,7 @@ export function fireUtility(
     applyEdit(t, { op: "box", ...b });
     return [...critters];
   }
+  if (cmd.weaponId === "tabletop-quake") return quake(t, critters, events);
   if (cmd.weaponId === "feather-charm") {
     if (c.feather) return null;
     return critters.map((o) => (o.id === c.id ? { ...o, feather: true as const } : o));
@@ -118,6 +121,38 @@ export function fireUtility(
   const amount = Math.max(0, Math.min(heal, MAX_HEALTH - who.hp));
   events.push({ type: "healed", critterId: who.id, amount });
   return critters.map((o) => (o.id === who.id ? { ...o, hp: o.hp + amount } : o));
+}
+
+/**
+ * Tabletop Quake: every living critter (the thrower too) takes `damage` and is thrown up and out,
+ * away from the middle of the map, at `knockback` sideways plus `upwardSpeed`. A Bubble Shield
+ * soaks the whole thing. A critter dead in the middle is thrown along its facing.
+ */
+function quake(t: VoxelTerrain, critters: readonly Critter[], events: SimEvent[]): Critter[] {
+  const w = loadWeapons()["tabletop-quake"];
+  const out = speedPerTick(w.knockback);
+  const up = speedPerTick(param(w, "upwardSpeed", 120));
+  const mid = { x: (t.sizeX * FIXED_ONE) >> 1, z: (t.sizeZ * FIXED_ONE) >> 1 };
+  return critters.map((o) => {
+    if (o.status !== "alive") return o;
+    if (popShield(o, events)) return dropShield(o);
+    const away = { x: o.pos.x - mid.x, y: 0, z: o.pos.z - mid.z };
+    const f = yawDir(o.yaw);
+    const push =
+      length(away) > 0 ? withLength(away, out) : { x: mulQ(f.x, out), z: mulQ(f.z, out) };
+    const dealt = Math.min(o.hp, w.damage);
+    const hp = o.hp - dealt;
+    if (dealt > 0) events.push({ type: "damage", critterId: o.id, amount: dealt, cause: "hit" });
+    if (hp <= 0) events.push({ type: "died", critterId: o.id, cause: "hit" });
+    return {
+      ...o,
+      hp,
+      status: hp <= 0 ? "dead" : o.status,
+      vel: { x: push.x, y: up, z: push.z },
+      grounded: false,
+      peakY: cell(o.pos.y),
+    };
+  });
 }
 
 /** If `c` wears a Bubble Shield, pop it (pushing `shieldPopped`) and say so. */

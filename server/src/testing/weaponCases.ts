@@ -62,6 +62,16 @@ export const WEAPON_CASES: WeaponCase[] = [
     target: "center",
     expect: ["fired", "explosion"],
   },
+  { weapon: "lantern-drift", pitch: 0, power: 0, target: "center", expect: ["fired", "explosion"] },
+  {
+    weapon: "toy-block-drop",
+    pitch: 0,
+    power: 0,
+    target: "center",
+    expect: ["fired", "explosion"],
+  },
+  // The supers (Boulder of Doom, Marble Meteor Shower, Party Pinata, Tabletop Quake) are crate-only:
+  // a team starts with none, so they have no row here; the sim tests cover them.
   { weapon: "jelly-mine", pitch: 0, power: 0, expect: ["fired"] },
   // Does not end the turn: the turn timer runs out after the tunnel.
   { weapon: "drill-hat", pitch: 0, power: 0, expect: ["fired"], label: "sideways" },

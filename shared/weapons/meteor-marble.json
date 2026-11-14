@@ -1,0 +1,21 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "meteor-marble",
+  "name": "Meteor Marble",
+  "description": "One marble of a Marble Meteor Shower.",
+  "category": "projectile",
+  "behavior": "bomblet",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 25,
+  "blastRadius": 25,
+  "knockback": 220,
+  "params": {
+    "gravity": 600,
+    "damageFalloff": "linear"
+  }
+}

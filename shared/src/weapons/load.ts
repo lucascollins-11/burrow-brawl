@@ -39,6 +39,16 @@ import waterPistol from "../../weapons/water-pistol.json";
 import spatulaSwat from "../../weapons/spatula-swat.json";
 import pillowBash from "../../weapons/pillow-bash.json";
 import mousetrapSnapper from "../../weapons/mousetrap-snapper.json";
+import lanternDrift from "../../weapons/lantern-drift.json";
+import paperLantern from "../../weapons/paper-lantern.json";
+import toyBlockDrop from "../../weapons/toy-block-drop.json";
+import giantBlock from "../../weapons/giant-block.json";
+import marbleMeteorShower from "../../weapons/marble-meteor-shower.json";
+import meteorMarble from "../../weapons/meteor-marble.json";
+import partyPinata from "../../weapons/party-pinata.json";
+import pinata from "../../weapons/pinata.json";
+import candyBomb from "../../weapons/candy-bomb.json";
+import tabletopQuake from "../../weapons/tabletop-quake.json";
 import type { WeaponData } from "./types";
 
 /** Every weapon id, sub-munitions included. The keys of the registry are exactly these. */
@@ -83,7 +93,17 @@ export type WeaponId =
   | "water-pistol"
   | "spatula-swat"
   | "pillow-bash"
-  | "mousetrap-snapper";
+  | "mousetrap-snapper"
+  | "lantern-drift"
+  | "paper-lantern"
+  | "toy-block-drop"
+  | "giant-block"
+  | "marble-meteor-shower"
+  | "meteor-marble"
+  | "party-pinata"
+  | "pinata"
+  | "candy-bomb"
+  | "tabletop-quake";
 
 export type WeaponRegistry = Readonly<Record<WeaponId, WeaponData>>;
 
@@ -134,6 +154,16 @@ const registry: WeaponRegistry = Object.freeze({
   "spatula-swat": toWeaponData(spatulaSwat),
   "pillow-bash": toWeaponData(pillowBash),
   "mousetrap-snapper": toWeaponData(mousetrapSnapper),
+  "lantern-drift": toWeaponData(lanternDrift),
+  "paper-lantern": toWeaponData(paperLantern),
+  "toy-block-drop": toWeaponData(toyBlockDrop),
+  "giant-block": toWeaponData(giantBlock),
+  "marble-meteor-shower": toWeaponData(marbleMeteorShower),
+  "meteor-marble": toWeaponData(meteorMarble),
+  "party-pinata": toWeaponData(partyPinata),
+  pinata: toWeaponData(pinata),
+  "candy-bomb": toWeaponData(candyBomb),
+  "tabletop-quake": toWeaponData(tabletopQuake),
 });
 
 /** Returns the weapon registry, keyed by weapon id. The same frozen object every time. */

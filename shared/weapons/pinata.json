@@ -1,0 +1,25 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "pinata",
+  "name": "Pi\u00f1ata",
+  "description": "The pi\u00f1ata of a Party Pi\u00f1ata.",
+  "category": "projectile",
+  "behavior": "cluster-burst",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": false,
+  "damage": 30,
+  "blastRadius": 30,
+  "knockback": 260,
+  "params": {
+    "gravity": 600,
+    "subMunition": "candy-bomb",
+    "subCount": 8,
+    "subSpeed": 260,
+    "subPitch": 45,
+    "damageFalloff": "linear"
+  }
+}

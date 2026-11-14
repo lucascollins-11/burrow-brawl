@@ -1,0 +1,22 @@
+{
+  "$schema": "./weapon.schema.json",
+  "id": "paper-lantern",
+  "name": "Paper Lantern",
+  "description": "A paper lantern from a Lantern Drift.",
+  "category": "projectile",
+  "behavior": "bomblet",
+  "targeting": "none",
+  "ammo": null,
+  "crateOnly": false,
+  "fireable": false,
+  "endsTurn": false,
+  "windAffected": true,
+  "damage": 30,
+  "blastRadius": 30,
+  "knockback": 240,
+  "params": {
+    "gravity": 40,
+    "windScale": 2,
+    "damageFalloff": "linear"
+  }
+}

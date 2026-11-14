@@ -79,7 +79,8 @@ export function viewMine(p: Projectile): ViewMine {
 /** Projectiles and placed mines, split for the wire. */
 function flyingAndMines(ps: readonly Projectile[]): Pick<ViewState, "projectiles" | "mines"> {
   return {
-    projectiles: ps.filter((p) => !isMineProjectile(p)).map(viewProjectile),
+    // Meteor marbles still waiting their turn to fall (age < 0) are not drawn yet.
+    projectiles: ps.filter((p) => !isMineProjectile(p) && p.age >= 0).map(viewProjectile),
     mines: ps.filter(isMineProjectile).map(viewMine),
   };
 }
