@@ -23,7 +23,11 @@ const SMOOTH_PULL := 0.6
 ## Returns { positions: PackedVector3Array, normals: PackedVector3Array,
 ## indices: PackedInt32Array }, positions relative to the
 ## chunk origin. Empty arrays when the chunk has no surface. `smooth` rounds of smoothing.
-static func mesh_block(block: PackedByteArray, smooth := SMOOTH) -> Dictionary:
+## `crisp` (optional, same padded S^3 layout as `block`): a non-zero byte marks a voxel whose
+## surface must keep its hard edges, e.g. a voxel with a structure material id. Any vertex touching
+## such a voxel is left where surface nets put it. This is the hook for per-material smoothing:
+## hills stay soft, walls stay crisp.
+static func mesh_block(block: PackedByteArray, smooth := SMOOTH, crisp := PackedByteArray()) -> Dictionary:
 	var result := {
 		"positions": PackedVector3Array(),
 		"normals": PackedVector3Array(),
@@ -56,6 +60,7 @@ static func mesh_block(block: PackedByteArray, smooth := SMOOTH) -> Dictionary:
 
 	var positions := PackedVector3Array()
 	var pinned := PackedByteArray()
+	var has_crisp := crisp.size() == block.size()
 	var normals := PackedVector3Array()
 	var cell_index := PackedInt32Array()
 	cell_index.resize(CELLS * CELLS * CELLS)
@@ -117,8 +122,13 @@ static func mesh_block(block: PackedByteArray, smooth := SMOOTH) -> Dictionary:
 				cell_index[(cy * CELLS + cz) * CELLS + cx] = positions.size()
 				positions.append(sum / float(n) + Vector3(cx - PAD, cy - PAD, cz - PAD))
 				normals.append(nrm)
-				var outer := cx == 0 or cy == 0 or cz == 0 or cx == CELLS - 1 or cy == CELLS - 1 or cz == CELLS - 1
-				pinned.append(1 if outer else 0)
+				var keep := cx == 0 or cy == 0 or cz == 0 or cx == CELLS - 1 or cy == CELLS - 1 or cz == CELLS - 1
+				if not keep and has_crisp:
+					for k in 8:
+						if crisp[b + offs[k]] != 0:
+							keep = true
+							break
+				pinned.append(1 if keep else 0)
 
 	if positions.is_empty():
 		return result
@@ -169,9 +179,9 @@ static func mesh_block(block: PackedByteArray, smooth := SMOOTH) -> Dictionary:
 	return result
 
 
-## Laplacian smoothing, then area-weighted normals. Vertices of the outer cells (`pinned`) also
-## belong to the neighbouring chunk's mesh, so they keep their place and their gradient normal:
-## both chunks then draw the seam identically.
+## Laplacian smoothing, then area-weighted normals. `pinned` vertices keep their place and their
+## gradient normal: those of the outer cells also belong to the neighbouring chunk's mesh (so both
+## chunks draw the seam identically), and the rest touch a `crisp` voxel.
 static func _smooth(
 	pos: PackedVector3Array, nrm: PackedVector3Array, idx: PackedInt32Array, pinned: PackedByteArray, rounds: int
 ) -> void:

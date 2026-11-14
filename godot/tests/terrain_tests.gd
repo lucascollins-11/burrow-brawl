@@ -305,6 +305,13 @@ func test_mesher_smoothing_rounds_off_steps() -> void:
 			total += 1.0 - v.dot(want)
 		spread.append(total / float(nor.size()))
 	check(spread[1] < spread[0] * 0.7, "smoothing evens out stair-step normals (%.3f -> %.3f)" % spread)
+	# Marking every voxel crisp turns smoothing off: same mesh as zero rounds.
+	var crisp := PackedByteArray()
+	crisp.resize(b.size())
+	crisp.fill(1)
+	var raw: PackedVector3Array = Mesher.mesh_block(b, 0)["positions"]
+	var kept: PackedVector3Array = Mesher.mesh_block(b, Mesher.SMOOTH, crisp)["positions"]
+	check(kept == raw, "crisp voxels keep their hard edges")
 
 
 func test_mesher_seams() -> void:
