@@ -452,4 +452,19 @@ describe("disconnect and reconnect", () => {
     h.advance(1_000);
     expect(await c.closed).toBe(1006);
   });
+
+  it("keeps everyone connected when the server itself stalls (a big map generating)", async () => {
+    h = await startHarness({ heartbeatMs: 50 });
+    const c = await h.player();
+    // The clock jumps as far as above, but because the event loop was blocked, not the client.
+    h.advance(1_000);
+    const until = performance.now() + 200;
+    while (performance.now() < until) {
+      // busy: no timers, no socket reads
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    expect(c.ws.readyState).toBe(c.ws.OPEN);
+    c.send({ t: "ping", clientTime: 1 });
+    expect(await c.next("pong")).toMatchObject({ t: "pong" });
+  });
 });

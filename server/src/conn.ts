@@ -86,10 +86,14 @@ export class Connection implements Peer {
 
   // ------------------------------------------------------------ heartbeat
 
-  /** Called on the server's heartbeat interval. */
-  heartbeat(): void {
+  /**
+   * Called on the server's heartbeat interval. `stalled` means the server itself was blocked since
+   * the last beat, so silence from the peer proves nothing: start the count again.
+   */
+  heartbeat(stalled = false): void {
     const t = this.ctx.now();
-    if (t - this.lastSeen > this.ctx.config.heartbeatMs * 1.5) {
+    if (stalled) this.lastSeen = t;
+    else if (t - this.lastSeen > this.ctx.config.heartbeatMs * 1.5) {
       this.ws.terminate();
       return;
     }
