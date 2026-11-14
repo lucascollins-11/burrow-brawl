@@ -175,6 +175,11 @@ export interface MatchConfig {
   dummyTeam?: number;
   /** Sudden death: from the round after this one the soda rises every turn. 0 or absent = off. */
   suddenDeathRound?: number;
+  /**
+   * Weather and time of day, already resolved (never "random"). Clients draw them; the sim only
+   * reads `weather` for storm gusts. Absent means clear weather in the theme's own light.
+   */
+  sky?: { weather: string; time: string };
   /** Voxels the soda rises per turn once sudden death starts. Default 2. */
   seaRisePerTurn?: number;
 }

@@ -186,6 +186,20 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _view(s)
 		"carve":
 			return await _carve(s)
+		"sky":
+			# Change weather and time of day in the running match (looks only).
+			if scene == null:
+				return _fail("no match")
+			scene.set_sky(str(s.get("weather", "clear")), str(s.get("time", "day")))
+			await _frames(int(s.get("frames", 8)))
+			return _ok("sky %s" % [scene.sky])
+		"strike":
+			# A lightning strike now (storm screenshots), then wait `frames` for the flash.
+			if scene == null or scene.weather == null:
+				return _fail("no match")
+			scene.weather.strike()
+			await _frames(int(s.get("frames", 2)))
+			return _ok("lightning strike %d, sky %s" % [scene.weather.strikes, scene.sky])
 		"menu":
 			return await _menu(str(s.get("open", "none")))
 		"opponent":
@@ -240,6 +254,10 @@ func _start(s: Dictionary) -> Dictionary:
 		}
 		if s.has("theme"):
 			patch["mapTheme"] = str(s["theme"])
+		if s.has("weather"):
+			patch["weather"] = str(s["weather"])
+		if s.has("time"):
+			patch["timeOfDay"] = str(s["time"])
 		a.set_settings(patch)
 		# Settings un-ready everyone, so wait for them to land before readying (else a race).
 		if not await _until(func() -> bool: return int(a.lobby.settings().get("mapSeed", -1)) == patch["mapSeed"] and int(b.lobby.settings().get("mapSeed", -1)) == patch["mapSeed"]):

@@ -115,3 +115,99 @@ static func paint_terrain(mat: ShaderMaterial, look: Dictionary) -> void:
 ## loud themes less, so nothing turns neon.
 static func saturation(look: Dictionary) -> float:
 	return float(look.get("saturation", 1.25))
+
+
+# ------------------------------------------------------------------ weather and time of day
+
+const WEATHERS := ["clear", "rain", "storm", "fog"]
+const TIMES := ["day", "dusk", "night"]
+
+## Dusk and night skies. "day" is each theme's own light (some themes are already golden hour).
+const TIME_LOOKS := {
+	"dusk": {
+		"sky_top": "4a5cb0", "sky_horizon": "ff9a5c", "sky_bottom": "c0687a",
+		"sun": "ffb27a", "sun_energy": 1.15, "sun_pitch": -13.0, "fog": "f0a88a",
+		"cloud": "ffc8a8", "ambient": 0.85, "sea_horizon": "ffa878",
+	},
+	"night": {
+		"sky_top": "0a1430", "sky_horizon": "2c3a6e", "sky_bottom": "141b38",
+		"sun": "b4c6ff", "sun_energy": 0.75, "sun_pitch": -42.0, "fog": "1c2648",
+		"cloud": "6a76a0", "ambient": 0.6, "sea_horizon": "26386a", "cloud_glow": 0.12,
+	},
+}
+## How bright each time is overall: weather greys are scaled by it so a rainy night stays dark.
+const TIME_BRIGHTNESS := {"day": 1.0, "dusk": 0.78, "night": 0.3}
+
+
+## The sky (weather, time) from a view match.start, or clear day when the server sent none.
+static func sky_of(msg: Dictionary) -> Dictionary:
+	var config: Dictionary = msg.get("config", {})
+	var sky: Dictionary = config.get("sky", {})
+	var weather := str(sky.get("weather", "clear"))
+	var time := str(sky.get("time", "day"))
+	return {
+		"weather": weather if weather in WEATHERS else "clear",
+		"time": time if time in TIMES else "day",
+	}
+
+
+## A theme's look under some weather at some time of day. Pure: the same inputs give the same
+## look. Adds keys the environment reads: ambient, fog_near, fog_far, fog_density, fog_sky,
+## night, wetness, window_glow, beam, rain, lightning, cloud_glow, cloud_count.
+static func with_sky(look: Dictionary, weather: String, time: String) -> Dictionary:
+	var out := look.duplicate()
+	out["weather"] = weather
+	out["time"] = time
+	if TIME_LOOKS.has(time):
+		var t: Dictionary = TIME_LOOKS[time]
+		for k: String in t:
+			out[k] = t[k]
+		# The sea and ground keep their colours; only the light changes. The sea fades darker.
+		if time == "night":
+			out["sea_shallow"] = _hex(color(look, "sea_shallow").darkened(0.45))
+			out["sea_deep"] = _hex(color(look, "sea_deep").darkened(0.55))
+	out["night"] = time == "night"
+	out["window_glow"] = {"day": 0.0, "dusk": 0.45, "night": 1.0}.get(time, 0.0)
+	out["beam"] = {"day": 1.0, "dusk": 1.8, "night": 3.2}.get(time, 1.0)
+	var lum: float = TIME_BRIGHTNESS.get(time, 1.0)
+	var grey := {"rain": Color("98a4b8"), "storm": Color("5c6680"), "fog": Color("c8ced6")}
+	var amount := {"rain": 0.6, "storm": 0.8, "fog": 0.55}
+	if grey.has(weather):
+		var g: Color = grey[weather] * lum
+		g.a = 1.0
+		var k: float = amount[weather]
+		for key in ["sky_top", "sky_horizon", "sky_bottom", "cloud", "sea_horizon"]:
+			out[key] = _hex(color(out, key).lerp(g, k))
+		out["fog"] = _hex(color(out, "fog").lerp(g.lightened(0.1), 0.85))
+		out["sun"] = _hex(color(out, "sun").lerp(Color("dde3ee"), k * 0.6))
+		var dim := {"rain": 0.55, "storm": 0.38, "fog": 0.7}
+		out["sun_energy"] = float(out.get("sun_energy", 1.5)) * float(dim[weather])
+		out["saturation"] = float(out.get("saturation", 1.25)) * (0.82 if weather != "fog" else 0.88)
+		out["cloud_count"] = {"rain": 28, "storm": 40, "fog": 10}[weather]
+		# Rain clouds stay soft grey, never black blobs, even at night.
+		var cloud := color(out, "cloud")
+		if cloud.get_luminance() < 0.32:
+			out["cloud"] = _hex(cloud.lerp(Color("8a94b0"), 0.6))
+		out["cloud_glow"] = 0.1
+	out["wetness"] = {"rain": 0.7, "storm": 1.0}.get(weather, 0.0)
+	out["rain"] = {"rain": 1.0, "storm": 2.0}.get(weather, 0.0)
+	out["lightning"] = weather == "storm"
+	if weather == "fog":
+		out["fog_near"] = 40.0
+		out["fog_far"] = 380.0
+		out["fog_density"] = 0.85
+		out["fog_sky"] = 0.85
+	elif weather in ["rain", "storm"]:
+		out["fog_near"] = 120.0
+		out["fog_far"] = 900.0
+		out["fog_density"] = 0.7
+		out["fog_sky"] = 0.3
+	if not out.has("ambient"):
+		out["ambient"] = 1.0
+	if weather in ["rain", "storm"]:
+		out["ambient"] = float(out["ambient"]) * (0.85 if weather == "rain" else 0.72)
+	return out
+
+
+static func _hex(c: Color) -> String:
+	return c.to_html(false)

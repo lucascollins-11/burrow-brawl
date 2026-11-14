@@ -24,6 +24,10 @@ uniform float top_start = 0.60;
 uniform float foam_amount = 1.0;
 // Light steps across a lit face. 0 turns the banding off (smooth light).
 uniform float bands = 3.0;
+// Weather: 0 dry .. 1 soaked (darker ground, a glossy sheen); windows lit from inside at night.
+uniform float wetness = 0.0;
+uniform float window_glow = 0.0;
+uniform vec3 window_color : source_color = vec3(1.0, 0.74, 0.40);
 
 varying vec3 w_pos;
 varying vec3 w_nrm;
@@ -176,6 +180,10 @@ void fragment() {
 		ROUGHNESS = rough;
 		SPECULAR = spec;
 		EMISSION = c * emit;
+		if (mid == 9) {
+			EMISSION += window_color * window_glow * 2.2;
+		}
+		ALBEDO *= 1.0 - wetness * 0.18;
 		RIM = 0.2;
 		RIM_TINT = 0.5;
 	} else {
@@ -226,6 +234,8 @@ void fragment() {
 	base *= mix(1.0, 0.68, 1.0 - smoothstep(-0.85, -0.1, n.y));
 
 	ALBEDO = base * (1.0 - grain_amount * 0.5 + grain_amount * g);
+	// Rain darkens the ground, most on the open tops where it soaks in.
+	ALBEDO *= 1.0 - wetness * (0.12 + 0.12 * top);
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 	}
@@ -241,4 +251,11 @@ void light() {
 	// Shadows lean toward the tint instead of going grey.
 	vec3 shade = mix(shadow_tint * 0.25, vec3(1.0), lit);
 	DIFFUSE_LIGHT += shade * LIGHT_COLOR / PI;
+	if (wetness > 0.0) {
+		// Wet sheen: a hard-edged toon highlight, stronger on faces that look up (puddles).
+		vec3 h = normalize(LIGHT + VIEW);
+		float s = pow(clamp(dot(NORMAL, h), 0.0, 1.0), 48.0);
+		s = smoothstep(0.25, 0.35, s) * 0.7 + s * 0.3;
+		SPECULAR_LIGHT += s * wetness * 0.55 * LIGHT_COLOR * ATTENUATION;
+	}
 }
