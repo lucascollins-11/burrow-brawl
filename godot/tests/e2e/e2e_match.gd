@@ -155,9 +155,17 @@ func _run() -> bool:
 	# The software renderer takes seconds per frame and effects run on the engine clock, so a
 	# blast is over before the first picture. Slow the clock, let about a quarter of a second of
 	# effect time pass, then freeze it for the capture.
-	# On the ground under the camera's target, so the ball is not buried in the island.
-	var blast_at: Vector3 = rig.target
+	# On dry land next to the active Squirmling. The mortar shell above landed out in the soda, and
+	# the camera follows that crater, so it sat under the sea surface (blue tint, no fireball).
+	var ahead := Vector3.RIGHT.rotated(Vector3.UP, deg_to_rad(float(me["heading_deg"])))
+	var blast_at: Vector3 = (me["pos"] as Vector3) + ahead * 8.0
 	blast_at.y = scene.ground_y(blast_at.x, blast_at.z) + 1.0
+	if blast_at.y <= scene.vm.sea_y + 2.0:
+		blast_at = (me["pos"] as Vector3) + Vector3(0, 1.0, 0)
+	# Point the camera at it too, and hold it there for the capture.
+	scene.set("_blast_at", blast_at)
+	scene.set("_blast_left", 5.0)
+	rig.target = blast_at
 	scene.fx.explode(blast_at, 12.0)
 	print("E2E blast: %d effect nodes, camera %s looking at %s" % [scene.fx.get_child_count(), scene.camera.global_position, rig.target])
 	await _freeze_after(0.25)
