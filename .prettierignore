@@ -7,3 +7,6 @@ shared/weapons
 # Third-party files and the credits generated from their manifest (tools/assets/fetch.py)
 godot/assets/thirdparty
 CREDITS.md
+
+# Baked prefabs are generated compact JSON (tools/assets/bake_prefab.py).
+shared/src/terrain3d/prefabs
