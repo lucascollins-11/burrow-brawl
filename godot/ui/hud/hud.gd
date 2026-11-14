@@ -391,7 +391,7 @@ static func sample_results(winner: int = 0, team_count: int = 4) -> Dictionary:
 				{
 					"id": id,
 					"team": t,
-					"name": "Squirmling %d" % id,
+					"name": CritterNames.name_of(int(id)),
 					"pos": Vector3.ZERO,
 					"heading_deg": 0.0,
 					"hp": (100 - t * 15) if alive else 0,

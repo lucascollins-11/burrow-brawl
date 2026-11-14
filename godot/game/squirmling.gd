@@ -205,22 +205,7 @@ static func create(_team: int, hat_style: String, team_color: Color) -> Squirmli
 
 	root.add_child(_marker(team_color))
 
-	var tag := Label3D.new()
-	tag.name = "Tag"
-	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.no_depth_test = true
-	# Same size on screen at any distance, so names stay readable across a large map and do not
-	# fill the view up close.
-	tag.fixed_size = true
-	tag.pixel_size = 0.0011
-	tag.font_size = 48
-	tag.outline_size = 14
-	tag.modulate = Color.WHITE
-	# Drawn after the see-through sea, so a name is never washed out by water behind it.
-	tag.render_priority = 10
-	tag.outline_render_priority = 9
-	tag.position = Vector3(0, HEIGHT + 1.6, 0)
-	root.add_child(tag)
+	root.add_child(_make_tag())
 	root.bind()
 	return root
 
@@ -232,9 +217,82 @@ static func animate(root: Node3D, _t: float, active: bool, moving := false) -> v
 		rig.drive(1.0 / 60.0, active, Vector3(0, 0, 6.0) if moving else Vector3.ZERO, true)
 
 
-## Set the floating tag (name and health) above a critter.
-static func set_tag(root: Node3D, text: String, color: Color) -> void:
-	var tag := root.get_node_or_null("Tag") as Label3D
-	if tag != null:
-		tag.text = text
-		tag.modulate = color
+## The floating tag above a critter: a small name and a health bar, both facing the camera. The
+## match scene scales, fades and hides it each frame (see SquirmlingRig.update_tag).
+static func _make_tag() -> Node3D:
+	var tag := Node3D.new()
+	tag.name = "Tag"
+	tag.position = Vector3(0, HEIGHT + 2.7, 0)
+	var label := Label3D.new()
+	label.name = "Name"
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.pixel_size = 0.034
+	label.font_size = 48
+	label.outline_size = 14
+	label.outline_modulate = Color(0.13, 0.09, 0.05, 0.95)
+	label.position = Vector3(0, 1.1, 0)
+	# Drawn after the see-through sea, so a name is never washed out by water behind it.
+	label.render_priority = 10
+	label.outline_render_priority = 9
+	tag.add_child(label)
+	var bar := MeshInstance3D.new()
+	bar.name = "Bar"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(6.0, 0.95)
+	bar.mesh = quad
+	var mat := ShaderMaterial.new()
+	mat.shader = _bar_shader()
+	mat.render_priority = 11
+	bar.material_override = mat
+	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	tag.add_child(bar)
+	return tag
+
+
+static var _bar_shader_cache: Shader
+
+
+## Health bar: a dark frame with a coloured fill that fills `frac` of the width. Billboarded in the
+## shader (the node's scale is kept, so the tag can be scaled by distance) and never hidden by depth.
+static func _bar_shader() -> Shader:
+	if _bar_shader_cache == null:
+		_bar_shader_cache = Shader.new()
+		_bar_shader_cache.code = """
+shader_type spatial;
+render_mode unshaded, depth_test_disabled, cull_disabled, shadows_disabled;
+uniform vec4 fill_color : source_color = vec4(0.9, 0.35, 0.3, 1.0);
+uniform float frac = 1.0;
+uniform float fade = 1.0;
+void vertex() {
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+	MODELVIEW_MATRIX = MODELVIEW_MATRIX * mat4(vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0), vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0), vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+}
+void fragment() {
+	vec2 uv = UV;
+	float fx = 0.035;
+	float fy = 0.22;
+	bool frame = uv.x < fx || uv.x > 1.0 - fx || uv.y < fy || uv.y > 1.0 - fy;
+	float inner = (uv.x - fx) / (1.0 - 2.0 * fx);
+	vec3 col = frame ? vec3(0.13, 0.09, 0.05) : (inner <= frac ? fill_color.rgb : vec3(0.35, 0.3, 0.27));
+	ALBEDO = col;
+	ALPHA = fade * 0.95;
+}
+"""
+	return _bar_shader_cache
+
+
+## Set the floating tag above a critter: its name, team colour and health (0..1).
+static func set_tag(root: Node3D, text: String, color: Color, hp_frac := 1.0) -> void:
+	var tag := root.get_node_or_null("Tag")
+	if tag == null:
+		return
+	var label := tag.get_node_or_null("Name") as Label3D
+	if label != null:
+		label.text = text
+		label.modulate = Color(color, label.modulate.a)
+	var bar := tag.get_node_or_null("Bar") as MeshInstance3D
+	if bar != null:
+		var mat := bar.material_override as ShaderMaterial
+		mat.set_shader_parameter("fill_color", color.darkened(0.1))
+		mat.set_shader_parameter("frac", clampf(hp_frac, 0.0, 1.0))

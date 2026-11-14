@@ -21,6 +21,7 @@ var pop_time := -1.0
 var _model: Node3D
 var _marker: Node3D
 var _tag: Node3D
+var _first_person := false
 var _rings: Array[Node3D] = []
 var _eyes: Array[Node3D] = []
 var _brows: Array[Node3D] = []
@@ -161,6 +162,36 @@ func fire() -> void:
 	_stretch_v -= 1.8
 	for i in range(N):
 		_vel[i] += Vector2(0.0, -4.0) * pow(float(i) / float(N - 1), 1.2)
+
+
+## First-person aim: the camera sits at the head, so hide the body and the tag.
+func set_first_person(on: bool) -> void:
+	if on == _first_person:
+		return
+	_first_person = on
+	if alive and pop_time < 0.0:
+		_model.visible = not on
+		if _tag != null:
+			_tag.visible = not on
+
+
+## Scale, fade and hide the tag for a camera at `cam`. Its screen size stays about the same from
+## 60 voxels out, grows a little when close (capped), fades from 180 voxels and is gone by 260.
+## `blocked` is true when terrain is between the camera and the critter's head.
+func update_tag(cam: Vector3, blocked: bool) -> void:
+	if _tag == null:
+		return
+	var dist := cam.distance_to(_tag.global_position)
+	var fade := 1.0 - smoothstep(180.0, 260.0, dist)
+	_tag.scale = Vector3.ONE * clampf(dist / 60.0, 0.45, 2.4)
+	_tag.visible = alive and pop_time < 0.0 and not _first_person and not blocked and fade > 0.03
+	var label := _tag.get_node_or_null("Name") as Label3D
+	if label != null:
+		label.modulate.a = fade
+		label.outline_modulate.a = 0.95 * fade
+	var bar := _tag.get_node_or_null("Bar") as MeshInstance3D
+	if bar != null:
+		(bar.material_override as ShaderMaterial).set_shader_parameter("fade", fade)
 
 
 ## Alive or knocked out. Going from alive to knocked out pops the rings apart, then leaves the
