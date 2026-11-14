@@ -46,6 +46,7 @@ var _swing: Dictionary = {}
 var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
+var scenery: Scenery = null
 
 var _critters: Dictionary = {}  # id -> Node3D
 var _rig := CameraMath.RigState.new()
@@ -184,6 +185,12 @@ func handle_match_start(msg: Dictionary) -> void:
 			MapLook.paint_terrain(ground_mat, look)
 	fx.debris_color = MapLook.color(look, "debris")
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
+	if scenery == null:
+		scenery = Scenery.new()
+		scenery.name = "Scenery"
+		add_child(scenery)
+	var density := float(GameSettings.quality_profile(GameSettings.quality).get("props", 1.0))
+	scenery.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), str(t.get("density", "")).hash(), density)
 	var world_env := env.get("_world_env") as WorldEnvironment
 	if world_env != null and world_env.environment != null:
 		world_env.environment.glow_enabled = GameSettings.glow_enabled()
@@ -207,6 +214,8 @@ func handle_events(msg: Dictionary) -> void:
 func handle_terrain_patch(msg: Dictionary) -> void:
 	if terrain_view != null and terrain_view.has_method("apply_patch"):
 		terrain_view.call("apply_patch", msg)
+	if scenery != null:
+		scenery.on_patch(msg)
 
 
 func handle_match_end(_msg: Dictionary) -> void:
