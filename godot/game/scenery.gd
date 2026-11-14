@@ -26,7 +26,7 @@ const SETS := {
 	},
 	"toy": {"block": 700, "cone": 260, "ball": 300, "flag": 90, "stone": 120, "library": 40},
 	"bath": {"bubbles": 900, "soap": 260, "duck": 70, "sponge": 120, "tuft": 600, "library": 20},
-	"candy": {"sprinkle": 2600, "gumdrop": 520, "candle": 120, "cherry": 200, "flowers": 600},
+	"candy": {"sprinkle": 2600, "gumdrop": 380, "candle": 120, "cherry": 200, "flowers": 600},
 	"brass": {"gear": 420, "bolt": 900, "pipe": 140, "tuft": 1400, "stone": 260, "library": 50},
 }
 const THEME_SET := {
@@ -62,7 +62,15 @@ var _buckets := {}  # Vector2i -> Array of prop indices
 var _life: Node3D
 
 
-func setup(theme: String, size_x: float, size_z: float, sea: float, ground_y: Callable, seed_value: int, density := 1.0) -> void:
+## Props stay out of this radius around each spot in `keep_clear` (Squirmling start positions), and
+## thin out to a third up to CLEAR_FADE, so players stay readable and have room to walk.
+const CLEAR_RADIUS := 9.0
+const CLEAR_FADE := 20.0
+## Fillers taller than this would hide a Squirmling (6 tall); only library props and flags may be.
+const MAX_FILLER_HEIGHT := 4.5
+
+
+func setup(theme: String, size_x: float, size_z: float, sea: float, ground_y: Callable, seed_value: int, density := 1.0, keep_clear: Array = []) -> void:
 	clear()
 	sea_y = sea
 	_ground = ground_y
@@ -80,6 +88,8 @@ func setup(theme: String, size_x: float, size_z: float, sea: float, ground_y: Ca
 			tries -= 1
 			var x := _rng.randf_range(3.0, size_x - 3.0)
 			var z := _rng.randf_range(3.0, size_z - 3.0)
+			if _crowded(x, z, keep_clear):
+				continue
 			var y := float(_ground.call(x, z))
 			if y < sea_y + 1.8 or not _gentle(x, z, y, 2.0 if kind == "library" else 3.0):
 				continue
@@ -141,6 +151,16 @@ func on_patch(msg: Dictionary) -> int:
 				gone += 1
 	prop_count -= gone
 	return gone
+
+
+func _crowded(x: float, z: float, keep_clear: Array) -> bool:
+	for spot: Vector3 in keep_clear:
+		var d := Vector2(x - spot.x, z - spot.z).length()
+		if d < CLEAR_RADIUS:
+			return true
+		if d < CLEAR_FADE and _rng.randf() < 0.66:
+			return true
+	return false
 
 
 func _gentle(x: float, z: float, y: float, limit: float) -> bool:
@@ -312,22 +332,23 @@ func _parts(kind: String) -> Array:
 			out.append(_p(Shape.BOX, Vector3(float(n - 1) * 0.9, 1.45, 0), Vector3(float(n - 1) * 1.8 + 0.4, 0.28, 0.22), "c48a5a"))
 			out.append(_p(Shape.BOX, Vector3(float(n - 1) * 0.9, 0.75, 0), Vector3(float(n - 1) * 1.8 + 0.4, 0.28, 0.22), "c48a5a"))
 		"block":
-			var s := r.randf_range(1.2, 2.6)
-			out.append(_p(Shape.BOX, Vector3(0, s * 0.5, 0), Vector3.ONE * s, _pick(["ef5a4a", "f2c33d", "4f86d9", "5cc46a", "ffffff"])))
-			if r.randf() < 0.5:
-				var t := s * r.randf_range(0.5, 0.8)
-				out.append(_p(Shape.BOX, Vector3(0, s + t * 0.5, 0), Vector3.ONE * t, _pick(["ef5a4a", "f2c33d", "4f86d9", "5cc46a"]), 0.0, Vector3(0, r.randf(), 0)))
+			var calm := ["e8a59c", "efd99a", "a9bfdf", "afd6b2", "f4efe6"]
+			var s := r.randf_range(0.8, 1.7)
+			out.append(_p(Shape.BOX, Vector3(0, s * 0.5, 0), Vector3.ONE * s, _pick(calm)))
+			if r.randf() < 0.35:
+				var t := s * r.randf_range(0.5, 0.7)
+				out.append(_p(Shape.BOX, Vector3(0, s + t * 0.5, 0), Vector3.ONE * t, _pick(calm), 0.0, Vector3(0, r.randf(), 0)))
 		"cone":
-			out.append(_p(Shape.CONE, Vector3(0, 1.3, 0), Vector3(1.6, 2.6, 1.6), "f28a2e"))
-			out.append(_p(Shape.CYL, Vector3(0, 1.2, 0), Vector3(1.05, 0.35, 1.05), "ffffff"))
-			out.append(_p(Shape.BOX, Vector3(0, 0.1, 0), Vector3(2.0, 0.2, 2.0), "f28a2e"))
+			out.append(_p(Shape.CONE, Vector3(0, 1.0, 0), Vector3(1.3, 2.0, 1.3), "eba67a"))
+			out.append(_p(Shape.CYL, Vector3(0, 0.95, 0), Vector3(0.85, 0.3, 0.85), "fbf6ee"))
+			out.append(_p(Shape.BOX, Vector3(0, 0.1, 0), Vector3(1.7, 0.2, 1.7), "eba67a"))
 		"ball":
-			var s := r.randf_range(1.0, 2.2)
-			out.append(_p(Shape.SPHERE, Vector3(0, s * 0.5, 0), Vector3.ONE * s, _pick(["ef5a4a", "f2c33d", "4f86d9", "5cc46a"])))
+			var s := r.randf_range(0.8, 1.6)
+			out.append(_p(Shape.SPHERE, Vector3(0, s * 0.5, 0), Vector3.ONE * s, _pick(["e8a59c", "efd99a", "a9bfdf", "afd6b2"])))
 			out.append(_p(Shape.CYL, Vector3(0, s * 0.5, 0), Vector3(s * 1.02, s * 0.2, s * 1.02), "ffffff"))
 		"flag":
 			out.append(_p(Shape.CYL, Vector3(0, 2.5, 0), Vector3(0.15, 5.0, 0.15), "ffffff"))
-			out.append(_p(Shape.BOX, Vector3(0.9, 4.3, 0), Vector3(1.8, 1.1, 0.08), _pick(["ef5a4a", "f2c33d", "4f86d9", "5cc46a"]), 0.8))
+			out.append(_p(Shape.BOX, Vector3(0.9, 4.3, 0), Vector3(1.8, 1.1, 0.08), _pick(["e8a59c", "efd99a", "a9bfdf", "afd6b2"]), 0.8))
 		"bubbles":
 			for i in r.randi_range(2, 6):
 				var s := r.randf_range(0.4, 1.6)
@@ -347,15 +368,15 @@ func _parts(kind: String) -> Array:
 				out.append(_p(Shape.SPHERE, Vector3(r.randf_range(-1.2, 1.2), 1.62, r.randf_range(-0.8, 0.8)), Vector3(0.4, 0.12, 0.4), "d9a640"))
 		"sprinkle":
 			for i in r.randi_range(2, 5):
-				out.append(_p(Shape.CYL, Vector3(r.randf_range(-1.2, 1.2), 0.18, r.randf_range(-1.2, 1.2)), Vector3(0.3, 1.0, 0.3), _pick(["ff5c8a", "5cc9ff", "ffd23f", "8be04e", "c98bff", "ffffff"]), 0.0, Vector3(PI / 2, r.randf() * TAU, 0)))
+				out.append(_p(Shape.CYL, Vector3(r.randf_range(-1.2, 1.2), 0.18, r.randf_range(-1.2, 1.2)), Vector3(0.3, 1.0, 0.3), _pick(["f7b3c8", "b3dcf2", "f5e3a6", "c4e6b0", "d9c4f0", "ffffff"]), 0.0, Vector3(PI / 2, r.randf() * TAU, 0)))
 		"gumdrop":
-			var s := r.randf_range(0.9, 1.8)
-			out.append(_p(Shape.CAP, Vector3(0, 0, 0), Vector3(2.0, 3.2, 2.0) * s, _pick(["ff5c8a", "5cc9ff", "ffd23f", "8be04e", "c98bff"])))
+			var s := r.randf_range(0.55, 1.05)
+			out.append(_p(Shape.CAP, Vector3(0, 0, 0), Vector3(2.0, 3.0, 2.0) * s, _pick(["f2a7bf", "a9d3ee", "efd99a", "bfe0a8", "d4bdf0"])))
 		"candle":
 			var c := _pick(["ff8fb0", "8fd6ff", "fff1b0", "c9a3ea"])
-			out.append(_p(Shape.CYL, Vector3(0, 2.0, 0), Vector3(0.7, 4.0, 0.7), c))
-			out.append(_p(Shape.CYL, Vector3(0, 2.0, 0), Vector3(0.74, 0.5, 0.74), "ffffff"))
-			out.append(_p(Shape.SPHERE, Vector3(0, 4.45, 0), Vector3(0.35, 0.7, 0.35), "ffcf4a", 0.6))
+			out.append(_p(Shape.CYL, Vector3(0, 1.5, 0), Vector3(0.6, 3.0, 0.6), c))
+			out.append(_p(Shape.CYL, Vector3(0, 1.5, 0), Vector3(0.64, 0.4, 0.64), "ffffff"))
+			out.append(_p(Shape.SPHERE, Vector3(0, 3.35, 0), Vector3(0.3, 0.6, 0.3), "ffcf4a", 0.6))
 		"cherry":
 			out.append(_p(Shape.SPHERE, Vector3(0, 0.8, 0), Vector3.ONE * 1.6, "d9233f"))
 			out.append(_p(Shape.CYL, Vector3(0.3, 2.0, 0), Vector3(0.12, 1.4, 0.12), "4f8a2e", 0.5, Vector3(0, 0, -0.4)))

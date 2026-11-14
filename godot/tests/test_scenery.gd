@@ -42,3 +42,31 @@ func test_props_fall_away_with_blasted_ground() -> void:
 	check_eq(s.on_patch({"x0": 60, "y0": 0, "z0": 0, "sx": 40, "sy": 64, "sz": 128}), 0, "untouched ground keeps its props")
 	pit_open = false
 	s.free()
+
+
+func test_fillers_stay_below_a_squirmlings_head() -> void:
+	var s := Scenery.new()
+	for set_id: String in Scenery.SETS:
+		for kind: String in Scenery.SETS[set_id]:
+			if kind in ["library", "flag", "pipe"]:
+				continue
+			var top := 0.0
+			for i in 30:
+				for part: Array in s._parts(kind):
+					var xf: Transform3D = part[1]
+					top = maxf(top, xf.origin.y + xf.basis.get_scale().y * 0.5)
+			check(top < Scenery.MAX_FILLER_HEIGHT, "%s stays under %.1f (tallest %.1f)" % [kind, Scenery.MAX_FILLER_HEIGHT, top])
+	s.free()
+
+
+func test_start_positions_stay_clear() -> void:
+	var s := Scenery.new()
+	(Engine.get_main_loop() as SceneTree).root.add_child(s)
+	var spot := Vector3(64, 40, 64)
+	s.setup("frosted-bakery", 128.0, 128.0, 26.0, Callable(self, "_ground"), 3, 1.0, [spot])
+	var near := 0
+	for p: Dictionary in s._props:
+		if not p.is_empty() and Vector2(p["pos"].x - spot.x, p["pos"].z - spot.z).length() < Scenery.CLEAR_RADIUS:
+			near += 1
+	check_eq(near, 0, "nothing within %.0f of a Squirmling's start" % Scenery.CLEAR_RADIUS)
+	s.free()
