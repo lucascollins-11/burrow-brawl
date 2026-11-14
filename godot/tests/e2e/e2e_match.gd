@@ -76,6 +76,13 @@ func _run() -> bool:
 
 	# Short turns and a fixed map, as in the server's own two-player tests.
 	a.call("_send", "lobby.setSettings", {"patch": {"turnSeconds": 90, "crittersPerTeam": 2, "mapSeed": 99, "mapTheme": theme, "mapSize": 256}})
+	# A settings change un-readies everyone. Over a real network B's ready can reach the server
+	# before A's settings, so wait for both clients to see the settings before readying.
+	if not await _until(
+		func() -> bool: return int(a.lobby.settings().get("mapSeed", -1)) == 99 and int(b.lobby.settings().get("mapSeed", -1)) == 99,
+		"the settings on both clients"
+	):
+		return false
 	a.set_ready(true)
 	b.set_ready(true)
 	if not await _until(func() -> bool: return a.lobby.can_start(), "the room to be startable"):
