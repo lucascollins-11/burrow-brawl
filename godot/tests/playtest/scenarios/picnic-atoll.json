@@ -1,0 +1,21 @@
+{
+  "about": "Picnic Atoll shots: overview, boardwalk market, Hamper Hall over the lagoon mouth, an islet bridge (seed 4 keeps the atoll unturned)",
+  "steps": [
+    {
+      "do": "start",
+      "mode": "match",
+      "theme": "picnic-atoll",
+      "size": 384,
+      "critters": 2,
+      "seed": 4,
+      "turn_seconds": 60,
+      "opponent": "skip"
+    },
+    { "do": "wait", "seconds": 3 },
+    { "do": "view", "pos": [192, 290, 480], "at": [192, 20, 196], "name": "overview" },
+    { "do": "view", "pos": [300, 52, 150], "at": [272, 36, 196], "fov": 65, "name": "street" },
+    { "do": "view", "pos": [192, 52, 212], "at": [192, 44, 266], "fov": 60, "name": "set-piece" },
+    { "do": "view", "pos": [92, 62, 236], "at": [56, 34, 188], "fov": 70, "name": "islet-bridge" },
+    { "do": "quit" }
+  ]
+}
