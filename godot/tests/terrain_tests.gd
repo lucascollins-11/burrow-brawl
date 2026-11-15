@@ -9,6 +9,7 @@ const Mesher := preload("res://terrain/surface_mesher.gd")
 const View := preload("res://terrain/terrain_view.gd")
 const TerrainMaterial := preload("res://terrain/terrain_material.gd")
 const SeaMaterial := preload("res://terrain/sea_material.gd")
+const DecorView := preload("res://terrain/decor_view.gd")
 
 var failures := 0
 var checks := 0
@@ -22,6 +23,8 @@ func _init() -> void:
 	test_patch()
 	test_ground_height()
 	test_materials()
+	test_structure_materials()
+	test_decor()
 	test_mesher_empty_and_full()
 	test_mesher_sphere()
 	test_mesher_seams()
@@ -236,6 +239,92 @@ func test_materials() -> void:
 		var code: String = load(path).code
 		check(code.begins_with("//") or code.begins_with("shader_type"), path + " has source")
 		check(not code.contains(" patch "), path + " avoids the reserved word patch")
+
+
+func test_decor() -> void:
+	# Ground below y 10 on a 32^3 grid; three rail posts on top and a flag, all on y 9.
+	var n := 32
+	var dens := PackedByteArray()
+	dens.resize(n * n * n)
+	for i in n * n * 10:
+		dens[i] = 255
+	var st := Store.new()
+	st.load_full({"sizeX": n, "sizeY": n, "sizeZ": n, "seaY": 5, "bedrockY": 1, "density": Codec.encode(dens)})
+	var posts := []
+	for x in [4, 6, 8]:
+		posts.append({"kind": "railing", "x": x, "y": 9, "z": 4, "face": 4, "v": 0})
+	check(DecorView.rail_bars(posts).size() == 2, "rail posts in a row get one bar per gap")
+	posts.append({"kind": "railing", "x": 6, "y": 9, "z": 6, "face": 4, "v": 0})
+	check(DecorView.rail_bars(posts).size() == 3, "a corner post links to its neighbour too")
+	var decor := posts.duplicate()
+	decor.append({"kind": "flagpole", "x": 20, "y": 9, "z": 20, "face": 4, "v": 3})
+	decor.append({"kind": "chimney-pot", "x": 12, "y": 9, "z": 12, "face": 4, "v": 0})
+	var dv := DecorView.new()
+	dv.build(decor, st)
+	check(dv.anchors == 6, "decor counts its anchors")
+	check(dv.life.smoking() == 2, "a chimney pot smokes from both flues")
+	var hit := {"x0": 12, "y0": 9, "z0": 12, "sx": 1, "sy": 1, "sz": 1, "density": Codec.encode(PackedByteArray([0]))}
+	st.apply_patch(hit)
+	dv.on_patch(hit)
+	check(dv.life.smoking() == 0, "a broken chimney stops smoking")
+	# Blow away the voxel under the first post: it and the bar it starts break off, nothing else.
+	var patch := {"x0": 4, "y0": 9, "z0": 4, "sx": 1, "sy": 1, "sz": 1, "density": Codec.encode(PackedByteArray([0]))}
+	st.apply_patch(patch)
+	check(dv.on_patch(patch) == 2, "post and its bar break off")
+	check(dv.on_patch(patch) == 0, "already broken detail does not break twice")
+	dv.free()
+
+
+func test_structure_materials() -> void:
+	# A 32^3 grid: ground below y 10, a plaster wall (material 1) at x 10..11 up to y 20.
+	var n := 32
+	var dens := PackedByteArray()
+	var mats := PackedByteArray()
+	dens.resize(n * n * n)
+	mats.resize(n * n * n)
+	for y in n:
+		for z in n:
+			for x in n:
+				var i := (y * n + z) * n + x
+				if y < 10:
+					dens[i] = 255
+				elif x >= 10 and x <= 11 and y <= 20:
+					dens[i] = 255
+					mats[i] = 1
+	var st := Store.new()
+	check(
+		st.load_full(
+			{
+				"sizeX": n,
+				"sizeY": n,
+				"sizeZ": n,
+				"seaY": 5,
+				"bedrockY": 1,
+				"density": Codec.encode(dens),
+				"material": Codec.encode(mats),
+			}
+		),
+		"store loads with materials"
+	)
+	check(st.material.size() == n * n * n and st.material[(15 * n + 5) * n + 10] == 1, "materials decoded")
+	# Blast a hole in the wall: those voxels go back to plain terrain.
+	var box := PackedByteArray()
+	box.resize(2 * 2 * 2)
+	st.apply_patch({"x0": 10, "y0": 15, "z0": 5, "sx": 2, "sy": 2, "sz": 2, "density": Codec.encode(box)})
+	check(st.material[(15 * n + 5) * n + 10] == 0, "a carved voxel loses its material")
+	check(st.material[(18 * n + 5) * n + 10] == 1, "the rest of the wall keeps it")
+	var block := Store.extract_padded(st.density, n, n, n, 0)
+	var mblock := Store.extract_padded(st.material, n, n, n, 0, 0)
+	check(mblock[0] == 0, "material padding below the grid is terrain")
+	var m := Mesher.mesh_block(block, Mesher.SMOOTH, mblock, mblock)
+	var colors: PackedColorArray = m["colors"]
+	check(colors.size() == (m["positions"] as PackedVector3Array).size(), "one material per vertex")
+	var wall := 0
+	for c in colors:
+		if int(round(c.r * 255.0)) == 1:
+			wall += 1
+	check(wall > 50, "wall vertices carry the plaster id")
+	check(not Mesher.mesh_block(block).has("colors"), "no colours without materials")
 
 
 func test_mesher_empty_and_full() -> void:

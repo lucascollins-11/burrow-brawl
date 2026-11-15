@@ -5,7 +5,11 @@ const TMP := "user://test_settings.cfg"
 
 func _reset() -> void:
 	GameSettings.keys = GameSettings.default_keys()
+	GameSettings.pad_codes = GameSettings.default_pad_codes()
+	GameSettings.active_device = "keyboard"
+	GameSettings.active_family = PadMap.XBOX
 	GameSettings.sensitivity = 1.0
+	GameSettings.stick_sensitivity = 1.0
 	GameSettings.invert_y = false
 	GameSettings.apply_bindings()
 
@@ -73,12 +77,72 @@ func test_settings_round_trip_through_the_file() -> void:
 	_reset()
 
 
+func test_practice_choices_round_trip_and_stay_in_range() -> void:
+	_reset()
+	GameSettings.practice_theme = "lighthouse-village"
+	GameSettings.practice_size = 512
+	GameSettings.practice_turn = 60
+	GameSettings.save_file(TMP)
+	GameSettings.practice_theme = "random"
+	GameSettings.practice_size = 0
+	GameSettings.practice_turn = 90
+	GameSettings.load_file(TMP)
+	check_eq(GameSettings.practice_theme, "lighthouse-village", "theme")
+	check_eq(GameSettings.practice_size, 512, "size")
+	check_eq(GameSettings.practice_turn, 60, "turn")
+	var cfg := ConfigFile.new()
+	cfg.set_value("practice", "turn", 5)
+	cfg.set_value("practice", "size", -4)
+	cfg.save(TMP)
+	GameSettings.load_file(TMP)
+	check_eq(GameSettings.practice_turn, 15, "turn is clamped")
+	check_eq(GameSettings.practice_size, 0, "size is clamped")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+	GameSettings.practice_theme = "random"
+	GameSettings.practice_size = 0
+	GameSettings.practice_turn = 90
+	_reset()
+
+
 func test_mouse_scaling_follows_sensitivity_and_invert() -> void:
 	_reset()
 	GameSettings.sensitivity = 2.0
 	check_eq(GameSettings.scale_mouse(3.0, 4.0), Vector2(6.0, 8.0), "scaled")
 	GameSettings.invert_y = true
 	check_eq(GameSettings.scale_mouse(3.0, 4.0), Vector2(6.0, -8.0), "inverted y")
+	_reset()
+
+
+func test_stick_aim_has_a_dead_zone_and_follows_its_own_sensitivity() -> void:
+	_reset()
+	check_eq(GameSettings.stick_look(Vector2(0.1, -0.1), 0.1), Vector2.ZERO, "inside the dead zone")
+	var full := GameSettings.stick_look(Vector2(1, 0), 0.1)
+	check(absf(full.x - GameSettings.STICK_PIXELS_PER_SECOND * 0.1) < 0.01, "full stick for 0.1 s")
+	check_eq(full.y, 0.0, "no vertical movement")
+	GameSettings.stick_sensitivity = 2.0
+	check(absf(GameSettings.stick_look(Vector2(1, 0), 0.1).x - full.x * 2.0) < 0.01, "stick sensitivity doubles it")
+	GameSettings.sensitivity = 3.0
+	check(absf(GameSettings.stick_look(Vector2(1, 0), 0.1).x - full.x * 2.0) < 0.01, "mouse sensitivity does not change it")
+	GameSettings.invert_y = true
+	check(GameSettings.stick_look(Vector2(0, 1), 0.1).y < 0.0, "invert flips the vertical axis")
+	var gentle := GameSettings.stick_look(Vector2(0.5, 0), 0.1).x
+	check(gentle < full.x * 0.5 * GameSettings.stick_sensitivity, "small pushes are finer than linear")
+	_reset()
+
+
+func test_stick_sensitivity_round_trips_and_clamps() -> void:
+	_reset()
+	GameSettings.stick_sensitivity = 1.75
+	GameSettings.save_file(TMP)
+	GameSettings.stick_sensitivity = 1.0
+	GameSettings.load_file(TMP)
+	check_eq(GameSettings.stick_sensitivity, 1.75, "stick sensitivity")
+	var cfg := ConfigFile.new()
+	cfg.set_value("input", "stick_sensitivity", 99.0)
+	cfg.save(TMP)
+	GameSettings.load_file(TMP)
+	check_eq(GameSettings.stick_sensitivity, GameSettings.SENSITIVITY_MAX, "clamped")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
 	_reset()
 
 

@@ -103,3 +103,16 @@ describe("MatchRunner realtime ticker", () => {
     }
   });
 });
+
+describe("MatchRunner.configFor sky", () => {
+  it("passes picked weather and time through, defaults to clear day, and resolves random", () => {
+    expect(MatchRunner.configFor(settings, 2).sky).toEqual({ weather: "clear", time: "day" });
+    const picked = MatchRunner.configFor({ ...settings, weather: "storm", timeOfDay: "night" }, 2);
+    expect(picked.sky).toEqual({ weather: "storm", time: "night" });
+    for (let i = 0; i < 20; i++) {
+      const r = MatchRunner.configFor({ ...settings, weather: "random", timeOfDay: "random" }, 2);
+      expect(["clear", "rain", "storm", "fog"]).toContain(r.sky?.weather);
+      expect(["day", "dusk", "night"]).toContain(r.sky?.time);
+    }
+  });
+});

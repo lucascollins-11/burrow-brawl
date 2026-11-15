@@ -16,6 +16,7 @@
 extends Node
 
 const NetScript := preload("res://net/net.gd")
+const Codec := preload("res://terrain/voxel_codec.gd")
 const MATCH_SCENE := "res://game/match_scene.tscn"
 const SCREENS := {
 	"title": "res://ui/title.tscn",
@@ -156,6 +157,14 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _start(s)
 		"screen":
 			return await _screen(s)
+		"camera_trace":
+			return await _camera_trace(s)
+		"camera_sim":
+			return await _camera_sim(s)
+		"device":
+			return await _device(s)
+		"practice_setup":
+			return await _practice_setup(s)
 		"wait":
 			await _seconds(float(s.get("seconds", 1.0)))
 			return _ok()
@@ -179,6 +188,24 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _key("skip", 0.1)
 		"camera":
 			return await _camera(s)
+		"view":
+			return await _view(s)
+		"carve":
+			return await _carve(s)
+		"sky":
+			# Change weather and time of day in the running match (looks only).
+			if scene == null:
+				return _fail("no match")
+			scene.set_sky(str(s.get("weather", "clear")), str(s.get("time", "day")))
+			await _frames(int(s.get("frames", 8)))
+			return _ok("sky %s" % [scene.sky])
+		"strike":
+			# A lightning strike now (storm screenshots), then wait `frames` for the flash.
+			if scene == null or scene.weather == null:
+				return _fail("no match")
+			scene.weather.strike()
+			await _frames(int(s.get("frames", 2)))
+			return _ok("lightning strike %d, sky %s" % [scene.weather.strikes, scene.sky])
 		"menu":
 			return await _menu(str(s.get("open", "none")))
 		"opponent":
@@ -209,11 +236,19 @@ func _start(s: Dictionary) -> Dictionary:
 	_close_screen()
 	mode = str(s.get("mode", "match"))
 	opponent = str(s.get("opponent", opponent))
-	a.enter_room("create", str(s.get("name", "Tester")))
+	if not (mode == "practice" and a.lobby.is_active() and a.lobby.code() != ""):
+		a.enter_room("create", str(s.get("name", "Tester")))
 	if not await _until(func() -> bool: return a.lobby.code() != "", 40.0):
 		return _fail("no room was created (server down or asleep?)")
 	if mode == "practice":
-		a.start_practice()
+		if s.has("seed"):
+			# A fixed map, so two runs (say before and after a change) walk the same streets.
+			var seed_value := int(s["seed"])
+			a.set_settings({"mapSeed": seed_value})
+			if not await _until(func() -> bool: return int(a.lobby.settings().get("mapSeed", -1)) == seed_value):
+				return _fail("the map seed did not apply")
+		# After a practice_setup step the room already holds the chosen map; else use the saved choices.
+		a.start_practice(int(s.get("turn_seconds", GameSettings.practice_turn)))
 	else:
 		b = NetScript.new()
 		b.name = "Rival"
@@ -231,6 +266,10 @@ func _start(s: Dictionary) -> Dictionary:
 		}
 		if s.has("theme"):
 			patch["mapTheme"] = str(s["theme"])
+		if s.has("weather"):
+			patch["weather"] = str(s["weather"])
+		if s.has("time"):
+			patch["timeOfDay"] = str(s["time"])
 		a.set_settings(patch)
 		# Settings un-ready everyone, so wait for them to land before readying (else a race).
 		if not await _until(func() -> bool: return int(a.lobby.settings().get("mapSeed", -1)) == patch["mapSeed"] and int(b.lobby.settings().get("mapSeed", -1)) == patch["mapSeed"]):
@@ -280,7 +319,7 @@ func _wait_for(until: String, timeout: float) -> Dictionary:
 	return _ok("%s after %.1f s" % [until, (Time.get_ticks_msec() - t) / 1000.0])
 
 
-## {do:screen, scene: title|howto|lobby|settings, page}
+## {do:screen, scene: title|howto|lobby|settings, page (howto), tab (settings)}
 func _screen(s: Dictionary) -> Dictionary:
 	var which := str(s.get("scene", "title"))
 	_close_screen()
@@ -294,10 +333,163 @@ func _screen(s: Dictionary) -> Dictionary:
 		scene.visible = false
 	add_child(screen)
 	await _frames(5)
+	if which == "settings" and s.has("tab"):
+		screen._tabs.current_tab = int(s["tab"])
+		await _frames(2)
 	if which == "howto" and s.has("page") and screen.has_method("_show"):
 		screen.call("_show", int(s["page"]))
 		await _frames(2)
 	return _ok("showing " + which + ("" if not s.get("keep", false) else " (kept)"))
+
+
+## {do:practice_setup, theme, size, turn_seconds}: open the real practice setup screen (a room is
+## created for it), optionally pick values on it, and leave it showing for a screenshot. A later
+## `start` with mode practice reuses the room.
+func _practice_setup(s: Dictionary) -> Dictionary:
+	_close_screen()
+	if not (a.lobby.is_active() and a.lobby.code() != ""):
+		a.enter_room("create", str(s.get("name", "Tester")))
+		if not await _until(func() -> bool: return a.lobby.code() != "", 40.0):
+			return _fail("no room was created (server down or asleep?)")
+	a.practice_pending = true
+	screen = (load(SCREENS["lobby"]) as PackedScene).instantiate()
+	add_child(screen)
+	await _frames(5)
+	for pair in [["theme", "_theme_pick"], ["size", "_size_pick"], ["turn_seconds", "_turn_pick"]]:
+		if not s.has(pair[0]):
+			continue
+		var pick: OptionButton = screen.get(pair[1])
+		var found := false
+		for i in range(pick.item_count):
+			var have: Variant = pick.get_item_metadata(i)
+			var same: bool = str(have) == str(s[pair[0]]) if have is String else int(have) == int(s[pair[0]])
+			if same:
+				pick.select(i)
+				pick.item_selected.emit(i)
+				found = true
+		if not found:
+			return _fail("no %s choice '%s' on the setup screen" % [pair[0], s[pair[0]]])
+	await _seconds(0.6)
+	return _ok("practice setup showing")
+
+
+## {do:camera_trace, dir, seconds}: hold a walk key and record the camera every frame: its
+## distance from its target and its height. The note gives the range of the distance, how much it
+## moved in total, how many times it changed direction (pumping) and the biggest one-frame jump.
+func _camera_trace(s: Dictionary) -> Dictionary:
+	if scene == null:
+		return _fail("no match")
+	var dir := str(s.get("dir", "forward"))
+	if not WALK.has(dir):
+		return _fail("dir must be one of %s" % [WALK.keys()])
+	_close_screen()
+	var code := int(GameSettings.keys[WALK[dir]])
+	var secs := float(s.get("seconds", 5.0))
+	var dists: Array[float] = []
+	var start := Time.get_ticks_msec()
+	_send_key(code, true)
+	while (Time.get_ticks_msec() - start) / 1000.0 < secs:
+		await get_tree().process_frame
+		dists.append(scene.camera.global_position.distance_to(scene._rig.target))
+	_send_key(code, false)
+	await _frames(2)
+	if dists.size() < 3:
+		return _fail("too few frames (%d) to measure" % dists.size())
+	var lo := dists[0]
+	var hi := dists[0]
+	var travel := 0.0
+	var flips := 0
+	var biggest := 0.0
+	var last_sign := 0
+	for i in range(1, dists.size()):
+		lo = minf(lo, dists[i])
+		hi = maxf(hi, dists[i])
+		var d := dists[i] - dists[i - 1]
+		travel += absf(d)
+		biggest = maxf(biggest, absf(d))
+		if absf(d) > 0.05:
+			var sgn := 1 if d > 0.0 else -1
+			if last_sign != 0 and sgn != last_sign:
+				flips += 1
+			last_sign = sgn
+	return _ok("walk %s %.0f s, %d frames: camera distance %.1f to %.1f (range %.1f), total movement %.1f, direction changes %d, biggest one-frame jump %.2f" % [dir, secs, dists.size(), lo, hi, hi - lo, travel, flips, biggest])
+
+
+## {do:camera_sim, speed, seconds}: replay the camera at a steady 60 frames a second while the
+## active critter's position walks a straight line over the terrain in each of four directions.
+## The software renderer is too slow to measure the camera in real time, so this drives the
+## camera update directly with a fixed step. The note gives, per direction, the camera distance
+## range, total movement, direction changes and the biggest one-frame jump; the last line is the
+## sum. Run it on two builds to compare.
+func _camera_sim(s: Dictionary) -> Dictionary:
+	if scene == null:
+		return _fail("no match")
+	_close_screen()
+	var v := _snap()
+	var me := _active(v)
+	if me.is_empty():
+		return _fail("no active critter")
+	var speed := float(s.get("speed", 8.0))
+	var secs := float(s.get("seconds", 6.0))
+	var dt := 1.0 / 60.0
+	var start: Vector3 = me["pos"]
+	var parts: PackedStringArray = []
+	var all_travel := 0.0
+	var all_flips := 0
+	var worst_jump := 0.0
+	var worst_range := 0.0
+	scene.set_process(false)
+	for dir_deg in [0.0, 90.0, 180.0, 270.0]:
+		var dir := Vector2(sin(deg_to_rad(dir_deg)), cos(deg_to_rad(dir_deg)))
+		scene.set("_cam_pull", 1.0e9)
+		scene.set("_cam_lift", 0.0)
+		var dists: Array[float] = []
+		var steps := int(secs / dt)
+		for i in range(60 + steps):
+			var walked := maxf(0.0, float(i - 60)) * dt * speed
+			var x := clampf(start.x + dir.x * walked, 2.0, float(scene._world.x) - 2.0)
+			var z := clampf(start.z + dir.y * walked, 2.0, float(scene._world.y) - 2.0)
+			var critter := me.duplicate()
+			critter["pos"] = Vector3(x, scene.ground_y(x, z) + 1.0, z)
+			scene._update_camera(v, critter, null, {"dx": 0.0, "dy": 0.0, "wheel": 0.0}, dt)
+			if i >= 60:
+				dists.append(scene.camera.position.distance_to(scene._rig.target))
+		var lo: float = dists.min()
+		var hi: float = dists.max()
+		var travel := 0.0
+		var flips := 0
+		var biggest := 0.0
+		var last_sign := 0
+		for i in range(1, dists.size()):
+			var d := dists[i] - dists[i - 1]
+			travel += absf(d)
+			biggest = maxf(biggest, absf(d))
+			if absf(d) > 0.1:
+				var sgn := 1 if d > 0.0 else -1
+				if last_sign != 0 and sgn != last_sign:
+					flips += 1
+				last_sign = sgn
+		parts.append("%d deg: %.1f..%.1f (range %.1f), movement %.1f, changes %d, jump %.2f" % [int(dir_deg), lo, hi, hi - lo, travel, flips, biggest])
+		all_travel += travel
+		all_flips += flips
+		worst_jump = maxf(worst_jump, biggest)
+		worst_range = maxf(worst_range, hi - lo)
+	scene.set_process(true)
+	return _ok("%s | TOTAL movement %.1f, direction changes %d, biggest one-frame jump %.2f, widest range %.1f" % [" | ".join(parts), all_travel, all_flips, worst_jump, worst_range])
+
+
+## {do:device, kind: keyboard|pad, family: xbox|playstation|switch}: pretend the player just used
+## that device, so the HUD and tutorial prompts switch to its names and glyphs.
+func _device(s: Dictionary) -> Dictionary:
+	var kind := str(s.get("kind", "keyboard"))
+	var family := str(s.get("family", "xbox"))
+	if kind != "keyboard" and kind != "pad":
+		return _fail("kind must be keyboard or pad")
+	if kind == "pad" and not PadMap.FAMILIES.has(family):
+		return _fail("family must be one of %s" % [PadMap.FAMILIES])
+	get_node("/root/PadInput").use(kind, family)
+	await _seconds(0.4)
+	return _ok("prompts now follow %s" % [kind if kind == "keyboard" else family])
 
 
 func _close_screen() -> void:
@@ -484,6 +676,69 @@ func _camera(s: Dictionary) -> Dictionary:
 		rig.yaw_deg = float(s["yaw"])
 	await _frames(int(s.get("frames", 6)))
 	return _ok("camera dist %.0f pitch %.0f yaw %.0f" % [rig.dist, rig.pitch_deg, rig.yaw_deg])
+
+
+## {do:view, pos:[x,y,z], at:[x,y,z], fov} puts a free camera at pos looking at `at` (map
+## screenshots); {do:view, off:true} hands the view back to the game camera.
+func _view(s: Dictionary) -> Dictionary:
+	if scene == null:
+		return _fail("no match")
+	var cam := scene.get_node_or_null("PlaytestViewCam") as Camera3D
+	if bool(s.get("off", false)):
+		if cam != null:
+			cam.queue_free()
+		scene.hud.set("visible", true)
+		await _frames(2)
+		return _ok("game camera")
+	if cam == null:
+		cam = Camera3D.new()
+		cam.name = "PlaytestViewCam"
+		cam.far = 4000.0
+		scene.add_child(cam)
+	cam.fov = float(s.get("fov", 55.0))
+	cam.current = true
+	# Clean map shots: hide the HUD unless asked to keep it.
+	scene.hud.set("visible", bool(s.get("hud", false)))
+	var pos: Array = s.get("pos", [256, 200, 600])
+	var at: Array = s.get("at", [256, 40, 256])
+	cam.position = Vector3(pos[0], pos[1], pos[2])
+	cam.look_at(Vector3(at[0], at[1], at[2]))
+	await _frames(int(s.get("frames", 6)))
+	return _ok("view from %s at %s" % [pos, at])
+
+
+## {do:carve, at:[x,y,z], r} - client-only crater for looking at blast damage: carves a ball out
+## of the local terrain copy and feeds it to the view as a terrain.patch (the sim never sees it).
+func _carve(s: Dictionary) -> Dictionary:
+	if scene == null or scene.terrain_view == null:
+		return _fail("no terrain")
+	var tv: Node3D = scene.terrain_view
+	var store: RefCounted = tv.get("store")
+	if store == null:
+		return _fail("no terrain")
+	var at: Array = s.get("at", [256, 40, 256])
+	var r := int(s.get("r", 6))
+	var c := Vector3i(int(at[0]), int(at[1]), int(at[2]))
+	var lo := (c - Vector3i(r + 1, r + 1, r + 1)).max(Vector3i.ZERO)
+	var hi := (c + Vector3i(r + 2, r + 2, r + 2)).min(Vector3i(int(store.get("size_x")), int(store.get("size_y")), int(store.get("size_z"))))
+	var size := hi - lo
+	var bytes := PackedByteArray()
+	bytes.resize(size.x * size.y * size.z)
+	var dens: PackedByteArray = store.get("density")
+	var sx := int(store.get("size_x"))
+	var sz := int(store.get("size_z"))
+	var k := 0
+	for y in range(lo.y, hi.y):
+		for z in range(lo.z, hi.z):
+			for x in range(lo.x, hi.x):
+				var d := Vector3(x - c.x, y - c.y, z - c.z).length()
+				var v: int = dens[(y * sz + z) * sx + x]
+				bytes[k] = 0 if d <= r else v
+				k += 1
+	tv.call("apply_patch", {"x0": lo.x, "y0": lo.y, "z0": lo.z, "sx": size.x, "sy": size.y, "sz": size.z,
+		"density": Codec.encode(bytes)})
+	await _frames(int(s.get("frames", 20)))
+	return _ok("carved r=%d at %s, decor broken %s" % [r, at, tv.get("decor").get("broken") if tv.get("decor") != null else 0])
 
 
 ## {do:menu, open: pause|settings|weapons|none}

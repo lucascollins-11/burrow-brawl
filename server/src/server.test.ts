@@ -287,6 +287,19 @@ describe("lobby", () => {
     expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ code: "match_in_progress" });
   });
 
+  it("a new map seed keeps ready, so the host's start goes through", async () => {
+    h = await startHarness();
+    const { host, others } = await lobby(2);
+    const [b] = others as [TestClient];
+    host.send({ t: "lobby.ready", ready: true });
+    b.send({ t: "lobby.ready", ready: true });
+    await host.room((s) => s.members.every((m) => m.ready));
+    // What the Godot lobby sends on Start: a fresh seed, then lobby.start.
+    host.send({ t: "lobby.setSettings", patch: { mapSeed: 12345 } });
+    expect(await host.request({ t: "lobby.start" })).toMatchObject({ t: "ok" });
+    expect((await b.room((s) => s.phase === "match")).phase).toBe("match");
+  });
+
   it("relays chat with cleaning and a rate limit", async () => {
     h = await startHarness();
     const { host, others } = await lobby(2);
@@ -451,5 +464,20 @@ describe("disconnect and reconnect", () => {
     // Nothing heard from the client for longer than 1.5 heartbeats.
     h.advance(1_000);
     expect(await c.closed).toBe(1006);
+  });
+
+  it("keeps everyone connected when the server itself stalls (a big map generating)", async () => {
+    h = await startHarness({ heartbeatMs: 50 });
+    const c = await h.player();
+    // The clock jumps as far as above, but because the event loop was blocked, not the client.
+    h.advance(1_000);
+    const until = performance.now() + 200;
+    while (performance.now() < until) {
+      // busy: no timers, no socket reads
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    expect(c.ws.readyState).toBe(c.ws.OPEN);
+    c.send({ t: "ping", clientTime: 1 });
+    expect(await c.next("pong")).toMatchObject({ t: "pong" });
   });
 });

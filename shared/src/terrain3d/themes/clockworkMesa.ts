@@ -1,277 +1,560 @@
-import { cosDeg, isqrt, sinDeg } from "../../fixed.js";
+import { isqrt } from "../../fixed.js";
+import { PrefabBuilder, NX, NZ, PX, PZ, UP } from "../build/builder.js";
+import { house, type HouseSpec } from "../build/house.js";
+import { stairFlight } from "../build/pieces.js";
 import {
-  ease,
+  MAT_BRICK,
+  MAT_COBBLE,
+  MAT_METAL,
+  MAT_PAINT_RED,
+  MAT_PAINT_WHITE,
+  MAT_PAINT_YELLOW,
+  MAT_PLANKS,
+  MAT_PLASTER,
+  MAT_SLATE,
+  MAT_STONE,
+  MAT_TIMBER,
+} from "../materials.js";
+import { octave, sample } from "../mapgen.js";
+import { rotatedSize, type Prefab } from "../prefab.js";
+import {
   fillFromHeightField,
   pseudoAngle,
   scatterObjects,
-  type Rect,
   type Theme,
   type ThemeCtx,
 } from "./kit.js";
 
-// Clockwork Mesa: one great terraced mesa with a gear-tooth rim, ringed by smaller gear plateaus
-// and joined to them by belt bridges. Cogwheels, a pendulum clock tower, piston columns and brass
-// springs stand on the tiers; tunnels run through the middle tier. All of it is voxels.
+// Clockwork Mesa (v2, the layout Lucas approved on 2026-11-14): one tall mesa in three tiers
+// (terraces at 46 and 62 cut into the cliffs, a gear-toothed top at 78) over a beach.
+//  - The Clock Foundry is dug into the south cliff: its hall runs back into the rock and its clock
+//    tower faces the sea.
+//  - Stairs are cut into the cliffs on the east and west, one flight per tier.
+//  - Two brass pipe shafts climb the north cliff with a stair inside. Each has a door on every
+//    tier it passes, a catwalk across to the top, and a pipe bridge joins them high up. Nothing
+//    leads nowhere.
+//  - Brick workshops stand round a cobbled square on the top with the Great Gear in the middle.
+// Every number is laid out for a 256 grid and scaled with the grid (heights stay fixed).
+// Integer maths only: generation must match voxel for voxel everywhere.
 
-const SEABED = 9;
+const SEABED = 14;
+/** Walk heights are one above these: beach, low terrace, mid terrace, top. */
+const BEACH = 34;
+const LOW = 46;
+const MID = 62;
+const TOP = 78;
+/** Tier edges at the 256 layout: the top's rim (before its teeth), the mid and low terraces, shore. */
+const R_TOP = 64;
+const R_MID = 80;
+const R_LOW = 98;
+const R_SHORE = 118;
+const TEETH = 24;
+const TOOTH = 4;
 
-interface Gear {
-  cx: number;
-  cz: number;
-  r: number;
-  top: number;
-  teeth: number;
-  /** The big one gets two more tiers on top. */
-  main: boolean;
+// ------------------------------------------------------------------------------------ helpers
+
+/** A disc standing in the x-y plane (a clock face, a gear), z0..z1 thick. */
+function faceDisc(
+  b: PrefabBuilder,
+  op: "solid" | "air" | "paint",
+  mat: number,
+  cx: number,
+  cy: number,
+  r: number,
+  z0: number,
+  z1: number,
+): void {
+  const rr = r * r + r;
+  for (let dy = -r; dy <= r; dy++) {
+    const half = isqrt(rr - dy * dy);
+    if (op === "solid") b.solid(mat, cx - half, cy + dy, z0, cx + half, cy + dy, z1);
+    else if (op === "air") b.air(cx - half, cy + dy, z0, cx + half, cy + dy, z1);
+    else b.paint(mat, cx - half, cy + dy, z0, cx + half, cy + dy, z1);
+  }
 }
 
-function placeGears(ctx: ThemeCtx): Gear[] {
-  const { w, d, rnd } = ctx;
-  const edge = Math.min(w, d);
-  const count = 3 + ((w * d) >> 15);
-  const out: Gear[] = [];
-  const gap = 20;
-  for (let i = 0; i < count; i++) {
-    let r = i === 0 ? Math.floor((edge * 3) / 10) : (edge >> 4) + 10 + rnd(200, i, edge >> 5);
-    for (let shrink = 0; shrink < 4; shrink++) {
-      const m = r + (r >> 3) + 18;
-      let best: { cx: number; cz: number } | undefined;
-      let bestD = Infinity;
-      for (let tryN = 0; tryN < 40 && w - 2 * m > 0 && d - 2 * m > 0; tryN++) {
-        const cx =
-          i === 0
-            ? (w >> 1) + rnd(201, 0, (w >> 3) + 1) - (w >> 4)
-            : m + rnd(202, i * 64 + tryN, w - 2 * m);
-        const cz =
-          i === 0
-            ? (d >> 1) + rnd(203, 0, (d >> 3) + 1) - (d >> 4)
-            : m + rnd(204, i * 64 + tryN, d - 2 * m);
-        let nearest = Infinity;
-        let ok = true;
-        for (const o of out) {
-          const dd = (o.cx - cx) ** 2 + (o.cz - cz) ** 2;
-          const need = o.r + (o.r >> 3) + r + (r >> 3) + gap;
-          if (dd < need * need) ok = false;
-          if (dd < nearest) nearest = dd;
-        }
-        if (!ok) continue;
-        // Prefer a spot about one belt-length from its nearest neighbour.
-        const score = out.length === 0 ? 0 : Math.abs(isqrt(nearest) - (r * 3 + 40));
-        if (score < bestD) {
-          bestD = score;
-          best = { cx, cz };
-        }
+/** Gear teeth round a face disc: eight lumps at the compass and diagonal points. */
+const TOOTH_DIRS = [
+  [1, 0],
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+] as const;
+
+function gearFace(
+  b: PrefabBuilder,
+  cx: number,
+  cy: number,
+  r: number,
+  z0: number,
+  z1: number,
+  hub = MAT_PAINT_YELLOW,
+): void {
+  faceDisc(b, "solid", MAT_METAL, cx, cy, r, z0, z1);
+  faceDisc(b, "paint", hub, cx, cy, r - 2, z0, z1);
+  faceDisc(b, "solid", MAT_METAL, cx, cy, 1, z0 - 1, z1);
+  // Spokes: the hub colour shows between four metal arms.
+  b.paint(MAT_METAL, cx - r + 2, cy, z0, cx + r - 2, cy, z1);
+  b.paint(MAT_METAL, cx, cy - r + 2, z0, cx, cy + r - 2, z1);
+  for (const [dx, dy] of TOOTH_DIRS) {
+    // Diagonals sit a little further in so the ring reads round.
+    const k = dx !== 0 && dy !== 0 ? (r * 3) >> 2 : r + 1;
+    const tx = cx + dx * k + (dx !== 0 && dy !== 0 ? dx : 0);
+    const ty = cy + dy * k + (dx !== 0 && dy !== 0 ? dy : 0);
+    b.solid(MAT_METAL, tx - 1, ty - 1, z0, tx + 1, ty + 1, z1);
+  }
+}
+
+/** Clear a box to open air (generation only: writes the grid directly, like the heightfield). */
+function clearBox(
+  ctx: ThemeCtx,
+  x0: number,
+  y0: number,
+  z0: number,
+  x1: number,
+  y1: number,
+  z1: number,
+): void {
+  const { t, w, d, h } = ctx;
+  for (let y = Math.max(y0, t.bedrockY); y <= Math.min(y1, h - 1); y++)
+    for (let z = Math.max(0, z0); z <= Math.min(d - 1, z1); z++)
+      for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x++) {
+        const k = (y * d + z) * w + x;
+        t.density[k] = 0;
+        if (t.material) t.material[k] = 0;
       }
-      if (best) {
-        out.push({
-          cx: best.cx,
-          cz: best.cz,
-          r,
-          top: i === 0 ? 33 : 35 + rnd(205, i, 8),
-          teeth: i === 0 ? 20 : 10 + 2 * rnd(206, i, 3),
-          main: i === 0,
-        });
-        break;
-      }
-      r = (r * 3) >> 2;
-      if (r < 16) break;
+}
+
+/** Stamp a prefab with its rotated footprint centred on (cx, cz), its local y 0 at world y. */
+export function put(
+  ctx: ThemeCtx,
+  p: Prefab,
+  cx: number,
+  cz: number,
+  rot: number,
+  salt: number,
+  y: number,
+) {
+  const [sx, sz] = rotatedSize(p, rot);
+  ctx.stamp(p, cx - (sx >> 1), y, cz - (sz >> 1), rot, salt);
+}
+
+// ------------------------------------------------------------------------------------- prefabs
+
+/**
+ * The Clock Foundry: a two-storey workshop hall (front on local -z) with gears on its wall, and
+ * beside it a 64-tall clock tower with a clock face on three sides, a climb inside and a belfry.
+ */
+export function clockFoundry(): Prefab {
+  const b = new PrefabBuilder("clock-foundry", 48, 80, 48);
+  b.footing(MAT_STONE, 2, 2, 45, 45);
+  // Workshop hall: 40 x 22, two storeys, slate roof steps, big gears on the long wall.
+  const h0 = 4;
+  const h1 = 43;
+  const z0 = 22;
+  const z1 = 43;
+  b.solid(MAT_BRICK, h0, 0, z0, h1, 22, z1);
+  b.air(h0 + 2, 1, z0 + 2, h1 - 2, 20, z1 - 2);
+  b.solid(MAT_PLANKS, h0 + 2, 11, z0 + 2, h1 - 2, 11, z1 - 2);
+  // Stairs to the upper floor along the back wall, and the hole they climb through.
+  for (let j = 0; j < 11; j++)
+    b.solid(MAT_TIMBER, h1 - 4 - j, 1, z1 - 4, h1 - 4 - j, 1 + j, z1 - 2);
+  b.air(h1 - 15, 11, z1 - 4, h1 - 4, 11, z1 - 2);
+  for (let k = 0; k < 8; k++)
+    b.solid(MAT_SLATE, h0 - 1 + k, 23 + k, z0 - 1 + k, h1 + 1 - k, 23 + k, z1 + 1 - k);
+  for (const y of [4, 14])
+    for (let x = h0 + 4; x < h1 - 3; x += 7) {
+      b.air(x, y, z1 - 1, x + 2, y + 4, z1).anchor("window", x + 1, y - 1, z1, PZ);
     }
+  // Gears on the front (-z) wall of the hall.
+  gearFace(b, 31, 13, 7, z0 - 2, z0 - 1);
+  gearFace(b, 40, 6, 4, z0 - 2, z0 - 1, MAT_PAINT_RED);
+  // Workbenches and furnaces inside.
+  b.anchor("sawhorse", 12, 1, z0 + 5, UP).anchor("crates", 18, 1, z0 + 8, UP);
+  b.anchor("oil-barrels", 34, 1, z1 - 6, UP).anchor("barrels", 22, 12, z0 + 6, UP);
+  b.anchor("ceiling-lamp", 20, 10, z0 + 10, 5).anchor("ceiling-lamp", 30, 20, z0 + 10, 5);
+  // Clock tower: 14 x 14, 64 tall, brick with brass bands, a clock face on three sides.
+  const t0 = 6;
+  const t1 = 19;
+  const tc = 12;
+  b.solid(MAT_BRICK, t0, 0, t0, t1, 62, t1);
+  for (let y = 10; y < 62; y += 12) b.paint(MAT_METAL, t0, y, t0, t1, y + 1, t1);
+  b.air(t0 + 2, 1, t0 + 2, t1 - 2, 60, t1 - 2);
+  // A switchback climb: a one-wide step every voxel up, turning at each wall.
+  for (let y = 1; y < 58; y++) {
+    const k = (y - 1) % 16;
+    const [x, z] =
+      k < 4
+        ? [t0 + 2 + k * 2, t0 + 2]
+        : k < 8
+          ? [t1 - 3, t0 + 2 + (k - 4) * 2]
+          : k < 12
+            ? [t1 - 3 - (k - 8) * 2, t1 - 3]
+            : [t0 + 2, t1 - 3 - (k - 12) * 2];
+    b.solid(MAT_TIMBER, x, y - 1, z, x + 1, y - 1, z + 1);
   }
-  return out;
+  faceDisc(b, "solid", MAT_PAINT_WHITE, tc, 50, 5, t0 - 1, t0 - 1);
+  faceDisc(b, "solid", MAT_METAL, tc, 50, 0, t0 - 2, t0 - 2);
+  b.solid(MAT_METAL, tc, 50, t0 - 2, tc, 54, t0 - 2);
+  b.solid(MAT_METAL, tc, 50, t0 - 2, tc + 3, 50, t0 - 2);
+  b.solid(MAT_PAINT_WHITE, t1 + 1, 45, tc - 5, t1 + 1, 55, tc + 5);
+  b.solid(MAT_PAINT_WHITE, t0 - 1, 45, tc - 5, t0 - 1, 55, tc + 5);
+  b.anchor("clock-face", tc, 50, t0 - 2, NZ);
+  // Belfry: open arches, a slate cap stepping in to a spire.
+  b.air(t0, 57, t0 + 4, t1, 61, t1 - 4);
+  b.air(t0 + 4, 57, t0, t1 - 4, 61, t1);
+  for (let k = 0; k < 7; k++)
+    b.solid(MAT_SLATE, t0 - 1 + k, 63 + k * 2, t0 - 1 + k, t1 + 1 - k, 64 + k * 2, t1 + 1 - k);
+  b.anchor("weathervane", tc, 76, tc, UP).anchor("bell", tc, 57, tc, UP);
+  b.air(tc - 2, 1, t0, tc + 2, 8, t0 + 1).anchor("door", tc, 1, t0, NZ);
+  for (let y = 16; y < 44; y += 11) {
+    b.air(tc - 1, y, t1 - 1, tc + 1, y + 4, t1).anchor("window-arched", tc, y - 1, t1, PZ);
+    b.air(t1 - 1, y, tc - 1, t1, y + 4, tc + 1).anchor("window-arched", t1, y - 1, tc, PX);
+  }
+  // Chimneys with smoke, a steam pipe along the roof.
+  b.solid(MAT_BRICK, 36, 23, 30, 39, 40, 33).anchor("chimney-pot", 37, 40, 31, UP);
+  b.solid(MAT_BRICK, 26, 23, 36, 28, 36, 38).anchor("chimney-pot", 27, 36, 37, UP);
+  b.solid(MAT_METAL, 20, 26, 33, 36, 27, 34);
+  b.air(22, 1, z0, 26, 8, z0 + 1)
+    .anchor("door", 24, 1, z0, NZ)
+    .anchor("sign-warehouse", 28, 10, z0, NZ);
+  return b.build();
 }
 
-function heightField(ctx: ThemeCtx, gears: readonly Gear[]): Int32Array {
-  const { w, d } = ctx;
-  // Dead flat sea floor: rows of identical columns run-length encode to almost nothing.
-  const out = new Int32Array(w * d).fill(SEABED * 256);
-  for (const g of gears) {
-    const tooth = Math.max(3, g.r >> 4);
-    const reach = g.r + tooth + 2;
-    const z0 = Math.max(0, g.cz - reach);
-    const z1 = Math.min(d - 1, g.cz + reach);
-    const x0 = Math.max(0, g.cx - reach);
-    const x1 = Math.min(w - 1, g.cx + reach);
-    for (let z = z0; z <= z1; z++)
-      for (let x = x0; x <= x1; x++) {
-        const dx = x - g.cx;
-        const dz = z - g.cz;
-        const dist = isqrt(dx * dx + dz * dz);
-        const ti = Math.floor((pseudoAngle(dx, dz) * g.teeth) / 4096);
-        const rEff = g.r + ((ti & 1) === 1 ? tooth : 0);
-        const e = rEff - dist;
-        if (e < 0) continue;
-        const p = ease(Math.min(256, Math.floor((e * 256) / 10)));
-        let h = SEABED * 256 + p * (g.top - SEABED);
-        if (g.main) {
-          // Two inner tiers, each eased over ten voxels so they can be walked up.
-          const r2 = Math.floor((g.r * 7) / 10);
-          const r3 = Math.floor((g.r * 4) / 10);
-          if (dist < r2) h += ease(Math.min(256, Math.floor(((r2 - dist) * 256) / 10))) * 6;
-          if (dist < r3) h += ease(Math.min(256, Math.floor(((r3 - dist) * 256) / 10))) * 6;
-        }
-        if (h > out[z * w + x]!) out[z * w + x] = h;
+/** Inner storey height of the pipe shafts: matches the gap between the tiers. */
+export const STOREY = 16;
+export const SHAFT_R = 13;
+
+/**
+ * A brass pipe shaft: a round tower SHAFT_R in radius, `storeys` storeys of STOREY, a switchback
+ * stair inside (one flight per storey, through a gap in the floor above) and a door wherever
+ * `doors` says: [storey, face] pairs (faces in local terms). Local y 0 is the plinth; storey k is
+ * walked at local 1 + k * STOREY.
+ */
+export interface PipeMats {
+  readonly body: number;
+  /** The stripe near the top of every storey. */
+  readonly stripe: number;
+  /** The band at the foot of every storey. */
+  readonly band: number;
+  /** The little cap on the dome. */
+  readonly cap: number;
+}
+
+const BRASS: PipeMats = {
+  body: MAT_METAL,
+  stripe: MAT_PAINT_YELLOW,
+  band: MAT_BRICK,
+  cap: MAT_PAINT_RED,
+};
+
+export function pipeShaft(
+  storeys: number,
+  doors: readonly (readonly [number, number])[],
+  mats: PipeMats = BRASS,
+): Prefab {
+  const R = SHAFT_R;
+  const c = R;
+  const top = storeys * STOREY;
+  const b = new PrefabBuilder("pipe-shaft", 2 * R + 1, top + 10, 2 * R + 1);
+  b.footing(MAT_STONE, 1, 1, 2 * R - 1, 2 * R - 1);
+  b.disc("solid", MAT_STONE, c, c, R, 0, 0);
+  b.disc("solid", mats.body, c, c, R, 1, top + 1);
+  for (let k = 0; k < storeys; k++)
+    b.disc("air", 0, c, c, R - 2, 1 + k * STOREY, (k + 1) * STOREY - 2);
+  // Riveted bands and a yellow stripe every storey.
+  for (let k = 0; k < storeys; k++) {
+    b.ring("paint", mats.stripe, c, c, R, 2, k * STOREY + 12, k * STOREY + 13);
+    b.ring("paint", mats.band, c, c, R, 2, k * STOREY + 1, k * STOREY + 2);
+  }
+  for (let k = 0; k < storeys; k++) {
+    const yb = 1 + k * STOREY;
+    const lane = k & 1 ? c - 6 : c + 4;
+    const dir = k & 1 ? -1 : 1;
+    if (k < storeys - 1) {
+      for (let j = 0; j < STOREY; j++) {
+        const x = c + dir * (j - 8);
+        b.solid(MAT_TIMBER, x, yb, lane, x, yb + j - 1, lane + 2);
       }
+      const xa = c - 8 * dir;
+      const xb = c + 7 * dir;
+      b.air(Math.min(xa, xb), yb + STOREY - 2, lane, Math.max(xa, xb), yb + STOREY - 1, lane + 2);
+      b.anchor("stair-rail", c, yb + 8, lane + (k & 1 ? 2 : 0), k & 1 ? PZ : NZ);
+    }
+    b.anchor("ceiling-lamp", c, yb + STOREY - 3, c, 5);
+    b.anchor("warning-light", c - 4, yb + 2, c - 4, UP);
   }
-  return out;
+  // Doors: 5 wide, 8 tall, cut through the wall at the storey's floor.
+  for (const [k, face] of doors) {
+    const y = 1 + k * STOREY;
+    if (face === NZ) b.air(c - 2, y, 0, c + 2, y + 7, 2).anchor("door", c, y, 0, NZ);
+    if (face === PZ)
+      b.air(c - 2, y, 2 * R - 2, c + 2, y + 7, 2 * R).anchor("door", c, y, 2 * R, PZ);
+    if (face === NX) b.air(0, y, c - 2, 2, y + 7, c + 2).anchor("door", 0, y, c, NX);
+    if (face === PX)
+      b.air(2 * R - 2, y, c - 2, 2 * R, y + 7, c + 2).anchor("door", 2 * R, y, c, PX);
+  }
+  // Portholes between the doors, a domed cap with a valve wheel and a steam vent.
+  for (let k = 0; k < storeys; k++) {
+    const y = k * STOREY + 7;
+    b.anchor("porthole", c + R, y, c + 6, PX).anchor("porthole", c - R, y, c - 6, NX);
+  }
+  for (let i = 0; i < 5; i++) b.disc("solid", mats.body, c, c, R - 2 * i, top + 2 + i, top + 2 + i);
+  b.disc("solid", mats.cap, c, c, 2, top + 7, top + 8);
+  b.anchor("warning-light", c, top + 9, c, UP).anchor("chimney-pot", c + 5, top + 4, c, UP);
+  return b.build();
 }
 
-/** An upright cogwheel: a ring of lumps with spokes, standing in the x-y plane. */
-function cogwheel(ctx: ThemeCtx, cx: number, cz: number, radius: number, salt: number): void {
-  const { fill, surf, h } = ctx;
-  const cy = surf(cx, cz) + radius + 1;
-  if (cy + radius + 3 >= h) return;
-  const spokes = 8;
-  for (let k = 0; k < spokes * 3; k++) {
-    const deg = (k * 360) / (spokes * 3);
-    const rr = k % 3 === 0 ? radius + 2 : radius;
-    fill(
-      cx + ((cosDeg(deg) * rr) >> 16),
-      cy + ((sinDeg(deg) * rr) >> 16),
-      cz,
-      k % 3 === 0 ? 2 : 1 + (salt & 1),
-    );
+/**
+ * A walkable brass pipe along +x, `len` long: 11 x 11 outside, 7 wide and 8 tall inside on a plank
+ * floor at local y 1, open at both ends, with portholes along both sides.
+ */
+export function pipeBridge(len: number, body = MAT_METAL, band = MAT_PAINT_YELLOW): Prefab {
+  const b = new PrefabBuilder("pipe-bridge", len, 11, 11);
+  // An octagon in section: a tall box and a wide box, then the bore.
+  b.solid(body, 0, 0, 2, len - 1, 10, 8).solid(body, 0, 2, 0, len - 1, 8, 10);
+  b.solid(body, 0, 1, 1, len - 1, 9, 9);
+  b.air(0, 2, 2, len - 1, 9, 8);
+  b.solid(MAT_PLANKS, 0, 1, 2, len - 1, 1, 8);
+  for (let x = 3; x < len - 3; x += 9) {
+    b.paint(band, x, 0, 0, x + 1, 10, 10);
+    b.air(x + 4, 5, 0, x + 6, 6, 1).air(x + 4, 5, 9, x + 6, 6, 10);
+    b.anchor("porthole", x + 5, 4, 0, NZ).anchor("porthole", x + 5, 4, 10, PZ);
   }
-  for (let s = 0; s < 4; s++) {
-    const deg = s * 90;
-    for (let rr = 2; rr < radius; rr += 2)
-      fill(cx + ((cosDeg(deg) * rr) >> 16), cy + ((sinDeg(deg) * rr) >> 16), cz, 1);
-  }
-  fill(cx, cy, cz, 3);
+  b.anchor("warning-light", len >> 1, 10, 5, UP);
+  return b.build();
 }
 
-/** A square tower with a pendulum hanging from an arm. */
-function clockTower(ctx: ThemeCtx, cx: number, cz: number): void {
-  const { box, fill, surf, h } = ctx;
-  const y = surf(cx, cz) + 1;
-  if (y + 40 >= h) return;
-  box(cx - 4, y, cz - 4, cx + 4, y + 30, cz + 4);
-  box(cx - 5, y + 31, cz - 5, cx + 5, y + 32, cz + 5); // cornice
-  fill(cx, y + 36, cz, 3); // bell
-  box(cx + 5, y + 24, cz, cx + 12, y + 25, cz); // arm
-  box(cx + 12, y + 12, cz, cx + 12, y + 24, cz); // rod
-  fill(cx + 12, y + 10, cz, 3); // bob
+/** A catwalk along +x: a metal deck at local y 0 on struts to the ground, rails on both sides. */
+export function catwalk(len: number): Prefab {
+  const b = new PrefabBuilder("catwalk", len, 6, 5);
+  b.solid(MAT_METAL, 0, 0, 0, len - 1, 0, 4);
+  for (let x = 2; x < len - 1; x += 8) b.footing(MAT_METAL, x, 2, x, 2);
+  for (let x = 1; x < len - 1; x += 3)
+    b.anchor("railing", x, 0, 0, UP).anchor("railing", x, 0, 4, UP);
+  return b.build();
 }
 
-function pistons(ctx: ThemeCtx, cx: number, cz: number, i: number): void {
-  const { box, fill, surf, h, rnd } = ctx;
-  for (let k = 0; k < 3; k++) {
-    const x = cx + k * 7;
-    const y = surf(x, cz) + 1;
-    const hh = 6 + rnd(210, i * 4 + k, 8);
-    if (y + hh + 4 >= h) continue;
-    box(x - 1, y, cz - 1, x + 1, y + hh, cz + 1);
-    fill(x, y + hh + 2, cz, 2);
-  }
+/** The Great Gear: a big upright cogwheel on a stone plinth in the middle of the square. */
+export function greatGear(): Prefab {
+  const b = new PrefabBuilder("great-gear", 27, 30, 11);
+  b.footing(MAT_STONE, 1, 1, 25, 9);
+  b.solid(MAT_STONE, 1, 0, 1, 25, 2, 9);
+  b.solid(MAT_STONE, 9, 3, 3, 17, 5, 7);
+  gearFace(b, 13, 16, 10, 4, 6);
+  gearFace(b, 21, 7, 4, 7, 7, MAT_PAINT_RED);
+  b.anchor("plaque", 13, 3, 1, NZ)
+    .anchor("lamp-post", 2, 2, 2, UP)
+    .anchor("lamp-post", 24, 2, 8, UP);
+  return b.build();
 }
 
-/** A brass spring: a helix of small lumps around an axis. */
-function spring(ctx: ThemeCtx, cx: number, cz: number): void {
-  const { fill, surf, h } = ctx;
-  const y = surf(cx, cz) + 1;
-  if (y + 24 >= h) return;
-  for (let k = 0; k < 30; k++) {
-    const deg = k * 40;
-    fill(cx + ((cosDeg(deg) * 4) >> 16), y + k, cz + ((sinDeg(deg) * 4) >> 16), 1);
-  }
+/** A paved disc one voxel thick, laid over the ground it is stamped on. */
+function plaza(r: number): Prefab {
+  const b = new PrefabBuilder("square", 2 * r + 1, 1, 2 * r + 1);
+  b.disc("solid", MAT_COBBLE, r, r, r, 0, 0);
+  b.ring("paint", MAT_STONE, r, r, r, 2, 0, 0);
+  return b.build();
 }
 
-function edgePoint(ctx: ThemeCtx, g: Gear, ux: number, uz: number, len: number): [number, number] {
-  const { surf, t } = ctx;
-  let s = g.r >> 1;
-  const limit = g.r + 24;
-  while (s < limit) {
-    const x = g.cx + Math.floor((ux * s) / len);
-    const z = g.cz + Math.floor((uz * s) / len);
-    if (surf(x, z) < t.seaY + 6) break;
-    s++;
-  }
-  s = Math.max(0, s - 2);
-  return [g.cx + Math.floor((ux * s) / len), g.cz + Math.floor((uz * s) / len)];
+const WORKSHOPS: readonly Omit<HouseSpec, "id">[] = [
+  {
+    w: 22,
+    d: 18,
+    storeys: 3,
+    wall: MAT_BRICK,
+    trim: MAT_METAL,
+    base: MAT_STONE,
+    roof: "gable-x",
+    roofMat: MAT_SLATE,
+    chimney: true,
+    frame: "quoins",
+  },
+  {
+    w: 20,
+    d: 18,
+    storeys: 2,
+    wall: MAT_PLASTER,
+    trim: MAT_METAL,
+    base: MAT_STONE,
+    roof: "hip",
+    roofMat: MAT_SLATE,
+    shop: true,
+    sign: "sign-chandler",
+    chimney: true,
+  },
+  {
+    w: 22,
+    d: 18,
+    storeys: 3,
+    wall: MAT_BRICK,
+    trim: MAT_PAINT_YELLOW,
+    base: MAT_STONE,
+    roof: "flat",
+    roofMat: MAT_METAL,
+    garden: true,
+    balcony: 2,
+  },
+  {
+    w: 20,
+    d: 18,
+    storeys: 2,
+    wall: MAT_STONE,
+    trim: MAT_METAL,
+    base: MAT_STONE,
+    roof: "gable-z",
+    roofMat: MAT_SLATE,
+    chimney: true,
+  },
+];
+
+function workshop(i: number): Prefab {
+  return house({ ...WORKSHOPS[i % WORKSHOPS.length]!, id: `clockwork-${i}`, windowStep: 7 });
 }
 
-/** A belt bridge: a five-wide deck with a cog-tooth ridge every few voxels. */
-function belt(ctx: ThemeCtx, a: Gear, b: Gear): void {
-  const { box, surf, w, d } = ctx;
-  const dx = b.cx - a.cx;
-  const dz = b.cz - a.cz;
-  const len = isqrt(dx * dx + dz * dz);
-  if (len === 0) return;
-  const [x0, z0] = edgePoint(ctx, a, dx, dz, len);
-  const [x1, z1] = edgePoint(ctx, b, -dx, -dz, len);
-  const y0 = surf(x0, z0) + 1;
-  const y1 = surf(x1, z1) + 1;
-  const span = isqrt((x1 - x0) ** 2 + (z1 - z0) ** 2);
-  const n = Math.max(1, span >> 1);
-  const lo = (v: number, m: number): number => Math.max(0, v - m);
-  for (let s = 0; s <= n; s++) {
-    const x = x0 + Math.floor(((x1 - x0) * s) / n);
-    const z = z0 + Math.floor(((z1 - z0) * s) / n);
-    const y = y0 + Math.floor(((y1 - y0) * s) / n);
-    box(lo(x, 2), y - 1, lo(z, 2), Math.min(w - 1, x + 2), y, Math.min(d - 1, z + 2));
-    if (s % 3 === 0)
-      box(lo(x, 2), y + 1, lo(z, 2), Math.min(w - 1, x + 2), y + 1, Math.min(d - 1, z + 2));
-  }
-}
+// --------------------------------------------------------------------------------------- build
 
 export const clockworkMesa: Theme = {
   id: "clockwork-mesa",
   name: "Clockwork Mesa",
-  minSize: 192,
+  minSize: 256,
+  sizeY: 128,
   build(ctx) {
-    const { t, rnd, carve } = ctx;
-    const gears = placeGears(ctx);
-    fillFromHeightField(t, heightField(ctx, gears));
+    const { w, d, t } = ctx;
+    const e = Math.min(w, d);
+    /** A 256-layout distance at this grid's scale. */
+    const S = (v: number): number => Math.trunc((v * e) / 256);
+    const cx = w >> 1;
+    const cz = (d >> 1) - S(4);
+    const o = octave(ctx.seed, 4201, w, d, 32);
+    const wob = (x: number, z: number): number =>
+      Math.trunc(((sample(o, x, z) - 32768) * 5) / 32768);
 
-    // Belts first, so set pieces never block a deck: each gear to its nearest earlier neighbour.
-    for (let i = 1; i < gears.length; i++) {
-      let best = 0;
-      let bestD = Infinity;
-      for (let j = 0; j < i; j++) {
-        const dd = (gears[i]!.cx - gears[j]!.cx) ** 2 + (gears[i]!.cz - gears[j]!.cz) ** 2;
-        if (dd < bestD) {
-          bestD = dd;
-          best = j;
-        }
+    // The mesa: a wobbly round shore, three cliffs, and a gear-toothed rim on the top tier.
+    const rTop = S(R_TOP);
+    const rMid = S(R_MID);
+    const rLow = S(R_LOW);
+    const rShore = S(R_SHORE);
+    const hfs = new Int32Array(w * d);
+    for (let z = 0; z < d; z++)
+      for (let x = 0; x < w; x++) {
+        const dx = x - cx;
+        const dz = z - cz;
+        // The tiers are machined true circles; only the shore wobbles.
+        const r = isqrt(dx * dx + dz * dz);
+        const tooth = ((pseudoAngle(dx, dz) * TEETH) >> 12) & 1 ? TOOTH : 0;
+        const level = r < rTop + tooth ? TOP : r < rMid ? MID : r < rLow ? LOW : BEACH;
+        const top = level * 256 + 255;
+        const s = rShore - r - wob(x, z);
+        hfs[z * w + x] = s <= 0 ? SEABED * 256 : Math.min(top, SEABED * 256 + s * 512);
       }
-      belt(ctx, gears[best]!, gears[i]!);
+    fillFromHeightField(t, hfs);
+
+    // The Clock Foundry, dug into the south cliff: hall in the rock, clock tower to the sea.
+    put(ctx, clockFoundry(), cx, cz + S(R_LOW) - 19, 2, 4201, LOW + 1);
+
+    // Cliff stairs on the east and west: one flight per tier, cut tangentially into each cliff,
+    // switching direction from tier to tier.
+    const flights: [edge: number, lo: number, hi: number][] = [
+      [rLow, BEACH, LOW],
+      [rMid, LOW, MID],
+      [rTop, MID, TOP],
+    ];
+    for (const side of [1, -1]) {
+      flights.forEach(([edge, lo, hi], i) => {
+        const up = (i + (side > 0 ? 0 : 1)) & 1 ? 3 : 1; // 1 climbs +z, 3 climbs -z
+        // Open the cut to the sky first, so the flight is a notch in the cliff, not a tunnel.
+        const sx0 = cx + side * (edge - 3);
+        const half = hi - lo + 1;
+        const outer = sx0 + side * 3; // the column on the low terrace side stays open too
+        clearBox(
+          ctx,
+          Math.min(sx0 - 2, outer),
+          lo + 1,
+          cz - half,
+          Math.max(sx0 + 2, outer),
+          hi + 12,
+          cz + half - 1,
+        );
+        put(ctx, stairFlight(hi - lo, 5, MAT_STONE), sx0, cz, up, 4210 + i, lo + 1);
+      });
     }
 
-    gears.forEach((g, k) => {
-      const at = (salt: number, i: number, frac: number): [number, number] => {
-        // A spot within `frac`/10 of the radius, off the centre.
-        const span = Math.max(1, Math.floor((g.r * frac * 2) / 10));
-        return [
-          g.cx + rnd(salt, i, span) - (span >> 1),
-          g.cz + rnd(salt + 1, i, span) - (span >> 1),
-        ];
-      };
-      if (g.main) {
-        clockTower(ctx, ...at(220, k, 2));
-        for (let c = 0; c < 3; c++) cogwheel(ctx, ...at(222, c, 6), 6 + rnd(224, c, 4), c);
-        for (let c = 0; c < 2; c++) spring(ctx, ...at(226, c, 7));
-        for (let c = 0; c < 3; c++) pistons(ctx, ...at(228, c, 7), c);
-        // Tunnels through the tiers: a wobbly chain of carved spheres at plateau height.
-        for (let c = 0; c < 2; c++) {
-          const x = g.cx - (g.r >> 1);
-          const z0 = g.cz + rnd(230, c, g.r >> 1) - (g.r >> 2);
-          const y = g.top + 2 + rnd(231, c, 3);
-          for (let s = 0; s < g.r; s += 2) {
-            carve(x + s, y, z0 + (rnd(232, c * 256 + s, 3) - 1), 3);
-          }
-        }
-      } else {
-        if (rnd(240, k, 2) === 0) cogwheel(ctx, ...at(241, k, 4), 5 + rnd(243, k, 3), k);
-        else spring(ctx, ...at(244, k, 4));
-        pistons(ctx, ...at(246, k, 5), k);
-      }
+    // Two pipe shafts on the low terrace against the north cliff. Each has a door to the low
+    // terrace (north), one onto the mid terrace (south), one to a catwalk across to the top, and
+    // one into the pipe bridge that joins the two high up.
+    const sx = S(40);
+    const rShaft = S(89);
+    const sz = cz - isqrt(rShaft * rShaft - sx * sx);
+    for (const side of [-1, 1]) {
+      const toBridge = side < 0 ? PX : NX;
+      const shaft = pipeShaft(4, [
+        [0, NZ],
+        [1, PZ],
+        [2, PZ],
+        [3, toBridge],
+      ]);
+      put(ctx, shaft, cx + side * sx, sz, 0, 4220 + side, LOW);
+      // Catwalk from the shaft's third-storey door to the top tier's rim.
+      const z0 = sz + SHAFT_R - 1;
+      const x = cx + side * sx;
+      const rimZ = cz - isqrt(Math.max(0, (rTop - 2) * (rTop - 2) - sx * sx));
+      const len = Math.max(4, rimZ - z0 + 4);
+      ctx.stamp(catwalk(len), x - 2, TOP, z0, 1, 4224 + side);
+    }
+    const span = 2 * (sx - SHAFT_R) + 4;
+    ctx.stamp(pipeBridge(span), cx - (span >> 1), LOW + 3 * STOREY - 1, sz - 5, 0, 4227);
+
+    // Workshops round a cobbled square on the top, the Great Gear in the middle.
+    put(ctx, plaza(S(26)), cx, cz, 0, 4230, TOP);
+    put(ctx, greatGear(), cx, cz, 0, 4231, TOP + 1);
+    const off = S(31);
+    const spots: [number, number, number][] = [
+      [cx - off, cz - off, 2],
+      [cx + off, cz - off, 2],
+      [cx - off, cz + off, 0],
+      [cx + off, cz + off, 0],
+    ];
+    spots.forEach(([x, z, rot], i) =>
+      put(ctx, workshop(i + ctx.rnd(4232, 0, 4)), x, z, rot, 4240 + i, TOP + 1),
+    );
+    // On bigger grids the terraces are wide enough for a lower town on the low terrace.
+    if (rLow - rMid >= 30) {
+      const ring = Math.trunc(((rLow + rMid) >> 1) * 181) >> 8; // * cos 45
+      [
+        [cx + ring, cz + ring, 3],
+        [cx - ring, cz + ring, 1],
+      ].forEach(([x, z, rot], i) => put(ctx, workshop(i + 1), x!, z!, rot!, 4250 + i, LOW + 1));
+    }
+
+    // Street lamps round the square and along the terraces.
+    const lampAt: [number, number][] = [
+      [cx - S(18), cz],
+      [cx + S(18), cz],
+      [cx, cz - S(18)],
+      [cx, cz + S(18)],
+      [cx - S(70), cz + S(30)],
+      [cx + S(70), cz - S(30)],
+      [cx + S(30), cz + S(88)],
+      [cx - S(55), cz + S(72)],
+    ];
+    lampAt.forEach(([x, z], i) => {
+      const y = ctx.surf(x, z);
+      if (y > t.seaY)
+        ctx.decor.push({ kind: "lamp-post", x, y, z, face: UP, v: ctx.rnd(4260, i, 256) });
     });
 
-    const areas: Rect[] = gears.map((g) => ({
-      x0: g.cx - g.r,
-      z0: g.cz - g.r,
-      x1: g.cx + g.r,
-      z1: g.cz + g.r,
-    }));
-    scatterObjects(ctx, areas, 250);
+    scatterObjects(
+      ctx,
+      [
+        { x0: cx - rLow, z0: cz - rLow, x1: cx + rLow, z1: cz + rLow },
+        { x0: cx - rTop, z0: cz - rTop, x1: cx + rTop, z1: cz + rTop },
+      ],
+      250,
+    );
   },
 };

@@ -20,6 +20,8 @@ signal left_match
 ## (HEIGHT, create(team, hat_style, color), animate(root, t, active, moving), set_tag(root, text, color)).
 const CRITTER_MODEL := preload("res://game/squirmling.gd")
 const TERRAIN_SCRIPT := "res://terrain/terrain_view.gd"
+const DecorLife := preload("res://terrain/decor_life.gd")
+const DecorKit := preload("res://terrain/decor_kit.gd")
 const LOBBY_SCENE := "res://ui/lobby.tscn"
 const TITLE_SCENE := "res://ui/title.tscn"
 const BLAST_HOLD_S := 1.4
@@ -46,6 +48,12 @@ var _swing: Dictionary = {}
 var zones: ZoneViews
 var pause: PauseMenu
 var terrain_view: Node3D = null
+var scenery: Scenery = null
+var weather: Weather = null
+## The resolved weather and time of day of this match ({weather, time}), for tests and the HUD.
+var sky: Dictionary = {"weather": "clear", "time": "day"}
+var _theme := MapLook.DEFAULT
+var landmarks: Landmarks = null
 
 var _critters: Dictionary = {}  # id -> Node3D
 var _rig := CameraMath.RigState.new()
@@ -58,6 +66,10 @@ var _following := false
 ## How far from its target the camera may sit now: pulled in at once when terrain gets in the way,
 ## eased back out when it clears (see _update_camera).
 var _cam_pull := 1.0e9
+## Smoothed lift that keeps the camera above the ground (see CameraMath.step_lift).
+var _cam_lift := 0.0
+## The camera settings version last applied (GameSettings.cam_version).
+var _cam_version_seen := -1
 var _marker: MeshInstance3D
 var _target_ring: MeshInstance3D
 var _time := 0.0
@@ -66,7 +78,7 @@ var _ammo_hash := -1
 var _crates_seen := false
 ## Set for a practice match (config.practice): the guided prompts and the label that shows them.
 var _guide: PracticeGuide = null
-var _guide_label: Label = null
+var _guide_label: PromptLabel = null
 var _guide_layer: CanvasLayer = null
 var _spot: TutorialSpotlight = null
 var _done_panel: PanelContainer = null
@@ -176,19 +188,39 @@ func handle_match_start(msg: Dictionary) -> void:
 		node.set_script(script)
 		set_terrain_view(node)
 	_setup_guide(bool((msg.get("config", {}) as Dictionary).get("practice", false)))
-	var look := MapLook.for_theme(MapLook.theme_of(msg))
+	sky = MapLook.sky_of(msg)
+	_theme = MapLook.theme_of(msg)
+	var look := MapLook.with_sky(MapLook.for_theme(_theme), sky["weather"], sky["time"])
+	DecorLife.beam_boost = float(look.get("beam", 1.0))
+	DecorKit.set_window_glow(float(look.get("window_glow", 0.0)))
 	if terrain_view != null and terrain_view.has_method("load_terrain"):
 		terrain_view.call("load_terrain", t)
-		var ground_mat := terrain_view.get("material") as ShaderMaterial
-		if ground_mat != null:
-			MapLook.paint_terrain(ground_mat, look)
+	_paint_ground(look)
 	fx.debris_color = MapLook.color(look, "debris")
 	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
-	var world_env := env.get("_world_env") as WorldEnvironment
-	if world_env != null and world_env.environment != null:
-		world_env.environment.glow_enabled = GameSettings.glow_enabled()
+	if scenery == null:
+		scenery = Scenery.new()
+		scenery.name = "Scenery"
+		add_child(scenery)
+	var density := float(GameSettings.quality_profile(GameSettings.quality).get("props", 1.0))
+	var starts: Array = []
+	for c: Dictionary in vm.snapshot().get("critters", []):
+		starts.append(c["pos"])
+	scenery.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), str(t.get("density", "")).hash(), density, starts)
+	if landmarks == null:
+		landmarks = Landmarks.new()
+		landmarks.name = "Landmarks"
+		add_child(landmarks)
+	landmarks.setup(MapLook.theme_of(msg), _world.x, _world.y, vm.sea_y, str(t.get("density", "")).hash(), density)
+	if weather == null:
+		weather = Weather.new()
+		weather.name = "Weather"
+		add_child(weather)
+	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density, Callable(self, "ground_y"))
+	_apply_glow_setting()
 	_rig.target = Vector3(_world.x * 0.5, vm.sea_y + 25.0, _world.y * 0.5)
-	_rig.dist = 90.0
+	_rig.dist = GameSettings.cam_distance
+	_cam_version_seen = GameSettings.cam_version
 	_built = true
 	_last_turn = -1
 	_last_tick_second = -1
@@ -207,6 +239,8 @@ func handle_events(msg: Dictionary) -> void:
 func handle_terrain_patch(msg: Dictionary) -> void:
 	if terrain_view != null and terrain_view.has_method("apply_patch"):
 		terrain_view.call("apply_patch", msg)
+	if scenery != null:
+		scenery.on_patch(msg)
 
 
 func handle_match_end(_msg: Dictionary) -> void:
@@ -222,6 +256,9 @@ func ground_y(x: float, z: float) -> float:
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev.is_action_pressed("skip_follow"):
 		_follow_skipped = _following
+	if ev is InputEventJoypadButton and ev.is_action_pressed("ui_cancel") and hud.close_grid():
+		get_viewport().set_input_as_handled()
+		return
 	if ev.is_action_pressed("pause") and controls.aim == null:
 		# Pause closes an open weapon grid first, so the two never show together.
 		if not pause.is_open() and hud.close_grid():
@@ -234,24 +271,19 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 ## Walk and aim hints use whatever keys the player has bound.
 func _hint_walk() -> String:
-	var walk := ""
-	for id in ["move_forward", "move_left", "move_back", "move_right"]:
-		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
-	return walk + " walk - " + GameSettings.hint_for(
+	return Prompts.walk_label() + " walk - " + GameSettings.hint_for(
 		[["jump", "jump"], ["backflip", "backflip"], ["toggle_aim", "aim"], ["skip", "skip"]]
 	)
 
 
 func _guide_keys() -> Dictionary:
-	var walk := ""
-	for id in ["move_forward", "move_left", "move_back", "move_right"]:
-		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
 	return {
-		"walk": walk,
-		"jump": GameSettings.key_label(int(GameSettings.keys.get("jump", 0))),
-		"aim": GameSettings.key_label(int(GameSettings.keys.get("toggle_aim", 0))),
-		"fire": GameSettings.key_label(int(GameSettings.keys.get("fire", 0))),
-		"weapon_menu": GameSettings.key_label(int(GameSettings.keys.get("weapon_menu", 0))),
+		"walk": Prompts.walk_label(),
+		"jump": Prompts.label_for("jump"),
+		"aim": Prompts.label_for("toggle_aim"),
+		"aim_move": Prompts.aim_move(),
+		"fire": Prompts.label_for("fire"),
+		"weapon_menu": Prompts.label_for("weapon_menu"),
 	}
 
 
@@ -282,9 +314,8 @@ func _setup_guide(practice: bool) -> void:
 	panel.offset_top = 142.0
 	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.CREAM, 12, 3, 4, 2))
 	layer.add_child(panel)
-	_guide_label = Label.new()
-	_guide_label.add_theme_font_size_override("font_size", 16)
-	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_guide_label = PromptLabel.new()
+	_guide_label.set_font_px(16, MenuStyle.INK)
 	# Long prompts wrap inside a capped width instead of running off the screen.
 	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guide_label.custom_minimum_size.x = minf(300.0, get_viewport().get_visible_rect().size.x - 80.0)
@@ -350,14 +381,11 @@ func _steering(v: Dictionary) -> bool:
 
 
 func _hint_steer() -> String:
-	var walk := ""
-	for id in ["move_forward", "move_left", "move_back", "move_right"]:
-		walk += GameSettings.key_label(int(GameSettings.keys.get(id, 0)))
-	return walk + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
+	return Prompts.walk_label() + " steer - " + GameSettings.hint_for([["trigger", "detonate"]])
 
 
 func _hint_aim() -> String:
-	return "Move the mouse to aim - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
+	return Prompts.aim_phrase() + " - " + GameSettings.hint_for([["fire", "(hold) charge, release to fire"], ["cancel_aim", "cancel"]])
 
 
 func _process(dt: float) -> void:
@@ -416,7 +444,7 @@ func _process(dt: float) -> void:
 	_handle_events(events, v)
 	if _guide != null and _guide_label != null:
 		_guide.feed(v, aim != null, events, controls.weapon_id())
-		_guide_label.text = _guide.text(_guide_keys())
+		_guide_label.set_prompt(_guide.text(_guide_keys()))
 		_guide_label.visible = v["phase"] != "over" and not pause.is_open()
 		_update_tutorial_pointers()
 	_sync_critters(v, active, aim, dt)
@@ -431,6 +459,9 @@ func _process(dt: float) -> void:
 
 	env.set_sea_y(vm.sea_y)
 	env.update(dt, v["wind"])
+	if weather != null:
+		var cam := get_viewport().get_camera_3d()
+		weather.update(dt, (cam if cam != null else camera).global_position, v["wind"])
 	var hint := HINT_WATCH
 	if _following and not _follow_skipped:
 		hint = GameSettings.hint_for([["skip_follow", "skip the camera follow"]])
@@ -661,20 +692,18 @@ func _hidden_by_terrain(from: Vector3, to: Vector3) -> bool:
 ## How far along the line from `target` to `pos` the camera can go before the ground rises above
 ## the line (the target's own surroundings are skipped); at least MIN_CAMERA_DIST.
 func _clear_distance(target: Vector3, pos: Vector3) -> float:
-	var span := target.distance_to(pos)
-	var steps := 28
-	for i in range(1, steps + 1):
-		var t := float(i) / float(steps)
-		var p := target.lerp(pos, t)
-		if p.x < 0.0 or p.z < 0.0 or p.x >= _world.x or p.z >= _world.y:
-			continue
-		if p.y < ground_y(p.x, p.z) + 1.5:
-			return clampf(span * (t - 1.0 / float(steps)) - 1.5, minf(MIN_CAMERA_DIST, span), span)
-	return span
+	return CameraMath.clear_distance(target, pos, Callable(self, "ground_y"), Vector2(_world.x, _world.y), MIN_CAMERA_DIST)
 
 
 func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState, mouse: Dictionary, dt: float) -> void:
+	# Camera settings changed (the pause menu is on top of a running match): take the new field of
+	# view and preferred distance now.
+	camera.fov = GameSettings.cam_fov
+	if _cam_version_seen != GameSettings.cam_version:
+		_cam_version_seen = GameSettings.cam_version
+		_rig.dist = GameSettings.cam_distance
 	if aim == null:
+		# Controls already scaled the movement by the camera orbit speed settings.
 		_rig = CameraMath.drag_orbit(_rig, float(mouse["dx"]), float(mouse["dy"]))
 	_rig = CameraMath.zoom(_rig, float(mouse["wheel"]))
 	_blast_left = maxf(0.0, _blast_left - dt)
@@ -723,22 +752,23 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 			"pitch_deg": clampf(_rig.pitch_deg, CameraMath.ORBIT_MIN_PITCH, CameraMath.ORBIT_MAX_PITCH),
 			"dist": clampf(_rig.dist, CameraMath.ORBIT_MIN_DIST, CameraMath.ORBIT_MAX_DIST),
 		}
-	_rig = CameraMath.step_rig(_rig, goal, dt)
+	_rig = CameraMath.step_rig(_rig, goal, dt, GameSettings.cam_rate_scale())
 	var pos := CameraMath.rig_position(_rig)
 	if _rig.mode != "aim":
 		# Keep the camera out of hills: pull it in along the line to its target when ground is in
 		# the way (at once), and let it back out slowly once the way is clear.
 		var span := pos.distance_to(_rig.target)
-		_cam_pull = minf(_cam_pull, span)
-		var allowed := _clear_distance(_rig.target, pos)
-		if allowed < _cam_pull:
-			_cam_pull = allowed
-		else:
-			_cam_pull = lerpf(_cam_pull, allowed, CameraMath.smoothing(3.0, dt))
+		var allowed := span
+		if GameSettings.cam_pull != CameraMath.PULL_OFF:
+			allowed = _clear_distance(_rig.target, pos)
+		_cam_pull = CameraMath.step_pull(_cam_pull, span, allowed, GameSettings.cam_pull, dt)
 		if _cam_pull < span:
 			pos = _rig.target + (pos - _rig.target).normalized() * _cam_pull
-	# Never let the camera sink under the ground or the soda.
-	pos.y = maxf(pos.y, maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0))
+	# Never let the camera sink under the ground or the soda. The lift that does it rises fast and
+	# settles slowly, so bumps and props do not make the view pump.
+	var floor_y := maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0)
+	_cam_lift = CameraMath.step_lift(_cam_lift, floor_y - pos.y, dt)
+	pos.y = maxf(pos.y + _cam_lift, floor_y - 1.0)
 	fx.listener = camera.position
 	fx.update(dt)
 	camera.position = pos + fx.shake_offset
@@ -813,6 +843,38 @@ func _update_marker(v: Dictionary, active: Dictionary, aim: CameraMath.AimState)
 	if _marker.visible:
 		var p: Vector3 = active["pos"]
 		_marker.position = p + Vector3(0, CRITTER_MODEL.HEIGHT + 3.5 + sin(_time * 4.0) * 0.4, 0)
+
+
+## Change the weather and time of day of the running match (looks only: the playtest harness uses
+## it to shoot every combination from one match). The sim's wind is not touched.
+func set_sky(weather_id: String, time_id: String) -> void:
+	sky = {"weather": weather_id, "time": time_id}
+	var look := MapLook.with_sky(MapLook.for_theme(_theme), weather_id, time_id)
+	DecorLife.beam_boost = float(look.get("beam", 1.0))
+	DecorKit.set_window_glow(float(look.get("window_glow", 0.0)))
+	var decor: Variant = terrain_view.get("decor") if terrain_view != null else null
+	if decor is Node and (decor as Node).get("life") != null:
+		(decor as Node).get("life").call("set_beam_boost", DecorLife.beam_boost)
+	_paint_ground(look)
+	env.setup(_world.x, _world.y, vm.sea_y, Callable(self, "ground_y"), look)
+	var density := float(GameSettings.quality_profile(GameSettings.quality).get("props", 1.0))
+	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density, Callable(self, "ground_y"))
+	_apply_glow_setting()
+
+
+func _paint_ground(look: Dictionary) -> void:
+	var ground_mat := terrain_view.get("material") as ShaderMaterial if terrain_view != null else null
+	if ground_mat == null:
+		return
+	MapLook.paint_terrain(ground_mat, look)
+	ground_mat.set_shader_parameter("wetness", float(look.get("wetness", 0.0)))
+	ground_mat.set_shader_parameter("window_glow", float(look.get("window_glow", 0.0)))
+
+
+func _apply_glow_setting() -> void:
+	var world_env := env.get("_world_env") as WorldEnvironment
+	if world_env != null and world_env.environment != null:
+		world_env.environment.glow_enabled = GameSettings.glow_enabled()
 
 
 func _look(team: int) -> Dictionary:

@@ -245,23 +245,35 @@ static func create(_team: int, hat_style: String, team_color: Color) -> Squirmli
 		# Head (4) in the team colour, then alternating with cream down to a team-coloured tail.
 		var band := team_color if (RING_COUNT - 1 - i) % 2 == 0 else CREAM
 		var body := _part(_sphere(RING_RADIUS[i]), band)
+		body.name = "RingBody"
 		body.material_override = _clay(band)
 		body.scale = Vector3(1.0, RING_SQUASH, 1.0)
+		# The smooth body draws the Squirmling; the beads only show when it pops apart.
+		body.visible = false
 		ring.add_child(body)
 		model.add_child(ring)
 
 		if i == 0:
-			var tuft := _part(_cyl(0.0, 0.12, 0.34, 8), FELT, Vector3(0, -0.2, -0.28), 1.0)
+			# A soft felt dab at the tail tip that flicks when it is idle.
+			var tuft := Node3D.new()
 			tuft.name = "TailTuft"
-			tuft.rotation.x = deg_to_rad(-35.0)
+			var dab := _part(_sphere(0.1), FELT, Vector3(0, -0.5, 0), 1.0)
+			dab.scale = Vector3(1.0, 1.2, 1.0)
+			tuft.add_child(dab)
 			ring.add_child(tuft)
 		elif i == 1:
-			_belt(ring, RING_RADIUS[i])
+			_belt(ring, 0.47)
 		elif i == RING_COUNT - 1:
 			_face(ring)
+			SmoothBody.fit_face(ring, team_color)
 			var hat := build_hat(hat_style, team_color)
-			hat.position.y = RING_RADIUS[i] * RING_SQUASH - 0.24
+			hat.scale = Vector3.ONE * 0.78
+			hat.position = Vector3(0, 0.44, -0.08)
+			hat.rotation.x = deg_to_rad(-8.0)
 			ring.add_child(hat)
+
+	var material := SmoothBody.make_material()
+	model.add_child(SmoothBody.make_skeleton(team_color, material))
 
 	root.add_child(_marker(team_color))
 

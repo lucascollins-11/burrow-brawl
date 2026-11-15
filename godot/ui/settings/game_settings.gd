@@ -49,8 +49,37 @@ static var vsync := true
 static var quality := 2
 static var sensitivity := 1.0
 static var invert_y := false
+## Controller stick aim speed, separate from the mouse. 1.0 turns the aim about 150 degrees a second
+## with the stick fully over.
+static var stick_sensitivity := 1.0
+## Third-person camera. Orbit speed for dragging the mouse and for the right stick (1.0 is the
+## original speed), the preferred distance and field of view, how much the camera smooths its
+## moves (0 snappy, 1 very smooth) and how it avoids terrain (CameraMath.PULL_*).
+const CAM_DISTANCE_MIN := 25.0
+const CAM_DISTANCE_MAX := 120.0
+const CAM_FOV_MIN := 50.0
+const CAM_FOV_MAX := 90.0
+static var cam_orbit_mouse := 0.75
+static var cam_orbit_stick := 0.75
+static var cam_distance := 70.0
+static var cam_fov := 60.0
+static var cam_smoothing := 0.5
+static var cam_pull := CameraMath.PULL_REDUCED
+## Bumped whenever a camera setting changes, so a running match can pick the change up.
+static var cam_version := 0
+## The last choices made on the practice setup screen ("random" or a theme id; edge in voxels or 0
+## for the server's default; seconds per turn).
+static var practice_theme := "random"
+static var practice_size := 0
+static var practice_turn := 90
 ## action id -> physical keycode of the main binding.
 static var keys: Dictionary = {}
+## pad family (PadMap.XBOX...) -> {action id -> pad code}. Each family keeps its own bindings.
+static var pad_codes: Dictionary = {}
+## "keyboard" or "pad": what was used last. The prompts show that device's names and glyphs.
+static var active_device := "keyboard"
+## The family of the pad used last (or of the first pad plugged in), whose bindings are live.
+static var active_family := PadMap.XBOX
 static var _booted := false
 
 
@@ -62,6 +91,19 @@ static func action_def(id: String) -> Dictionary:
 		if a["id"] == id:
 			return a
 	return {}
+
+
+static func default_pad_codes() -> Dictionary:
+	var out := {}
+	for family in PadMap.FAMILIES:
+		out[family] = PadMap.default_codes()
+	return out
+
+
+static func pad_code(family: String, id: String) -> int:
+	if not pad_codes.has(family):
+		return int(PadMap.DEFAULTS.get(id, PadMap.NONE))
+	return int((pad_codes[family] as Dictionary).get(id, PadMap.DEFAULTS.get(id, PadMap.NONE)))
 
 
 static func default_keys() -> Dictionary:
@@ -82,10 +124,32 @@ static func key_label(code: int) -> String:
 static func hint_for(pairs: Array) -> String:
 	var parts: PackedStringArray = []
 	for pair in pairs:
-		var id := str(pair[0])
-		var code := int(keys.get(id, action_def(id).get("key", 0)))
-		parts.append("%s %s" % [key_label(code), pair[1]])
+		parts.append("%s %s" % [Prompts.label_for(str(pair[0])), pair[1]])
 	return " - ".join(parts)
+
+
+## Stick deflection inside this radius is ignored (drift), and the rest is stretched to 0..1.
+const STICK_DEADZONE := 0.18
+## Aim movement per second at full deflection and 1.0x, in the same pixel units as mouse motion.
+const STICK_PIXELS_PER_SECOND := 600.0
+
+
+## Aim movement for one frame from a right-stick reading (-1..1 on each axis): a radial dead zone,
+## a gentle curve so small pushes aim finely, the stick sensitivity, and the invert-Y option.
+static func stick_look(raw: Vector2, dt: float, sens := -1.0) -> Vector2:
+	var mag := raw.length()
+	if mag <= STICK_DEADZONE:
+		return Vector2.ZERO
+	var strength := clampf((mag - STICK_DEADZONE) / (1.0 - STICK_DEADZONE), 0.0, 1.0)
+	var dir := raw / mag
+	var speed := strength * strength * STICK_PIXELS_PER_SECOND * (stick_sensitivity if sens < 0.0 else sens) * dt
+	return Vector2(dir.x * speed, dir.y * speed * (-1.0 if invert_y else 1.0))
+
+
+## Mouse movement for orbiting the camera: its own speed setting, with the vertical axis flipped
+## if asked.
+static func scale_orbit_mouse(dx: float, dy: float) -> Vector2:
+	return Vector2(dx * cam_orbit_mouse, dy * cam_orbit_mouse * (-1.0 if invert_y else 1.0))
 
 
 ## Mouse movement scaled by the sensitivity setting, with the vertical axis flipped if asked.
@@ -93,15 +157,15 @@ static func scale_mouse(dx: float, dy: float) -> Vector2:
 	return Vector2(dx * sensitivity, dy * sensitivity * (-1.0 if invert_y else 1.0))
 
 
-## Shadow atlas size, MSAA and glow for a quality preset (0 low, 1 medium, 2 high).
+## Shadow atlas size, MSAA, glow and scenery prop density for a quality preset (0 low, 1 medium, 2 high).
 static func quality_profile(q: int) -> Dictionary:
 	match clampi(q, 0, QUALITIES.size() - 1):
 		0:
-			return {"shadow_atlas": 1024, "msaa": Viewport.MSAA_DISABLED, "glow": false}
+			return {"shadow_atlas": 1024, "msaa": Viewport.MSAA_DISABLED, "glow": false, "props": 0.35}
 		1:
-			return {"shadow_atlas": 2048, "msaa": Viewport.MSAA_2X, "glow": true}
+			return {"shadow_atlas": 2048, "msaa": Viewport.MSAA_2X, "glow": true, "props": 0.7}
 		_:
-			return {"shadow_atlas": 4096, "msaa": Viewport.MSAA_4X, "glow": true}
+			return {"shadow_atlas": 4096, "msaa": Viewport.MSAA_4X, "glow": true, "props": 1.0}
 
 
 ## For the environment code: should the glow effect be on?
@@ -123,6 +187,7 @@ static func boot() -> void:
 
 static func load_file(path: String = PATH) -> void:
 	keys = default_keys()
+	pad_codes = default_pad_codes()
 	var cfg := ConfigFile.new()
 	if cfg.load(path) != OK:
 		return
@@ -135,9 +200,23 @@ static func load_file(path: String = PATH) -> void:
 	quality = clampi(int(cfg.get_value("video", "quality", quality)), 0, QUALITIES.size() - 1)
 	sensitivity = clampf(float(cfg.get_value("input", "sensitivity", sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
 	invert_y = bool(cfg.get_value("input", "invert_y", invert_y))
+	stick_sensitivity = clampf(float(cfg.get_value("input", "stick_sensitivity", stick_sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
+	cam_orbit_mouse = clampf(float(cfg.get_value("camera", "orbit_mouse", cam_orbit_mouse)), SENSITIVITY_MIN, SENSITIVITY_MAX)
+	cam_orbit_stick = clampf(float(cfg.get_value("camera", "orbit_stick", cam_orbit_stick)), SENSITIVITY_MIN, SENSITIVITY_MAX)
+	cam_distance = clampf(float(cfg.get_value("camera", "distance", cam_distance)), CAM_DISTANCE_MIN, CAM_DISTANCE_MAX)
+	cam_fov = clampf(float(cfg.get_value("camera", "fov", cam_fov)), CAM_FOV_MIN, CAM_FOV_MAX)
+	cam_smoothing = clampf(float(cfg.get_value("camera", "smoothing", cam_smoothing)), 0.0, 1.0)
+	cam_pull = clampi(int(cfg.get_value("camera", "pull", cam_pull)), 0, CameraMath.PULL_NAMES.size() - 1)
+	cam_version += 1
+	practice_theme = str(cfg.get_value("practice", "theme", practice_theme))
+	practice_size = maxi(0, int(cfg.get_value("practice", "size", practice_size)))
+	practice_turn = clampi(int(cfg.get_value("practice", "turn", practice_turn)), 15, 90)
 	for a in ACTIONS:
 		var id: String = a["id"]
 		keys[id] = int(cfg.get_value("keys", id, keys[id]))
+		for family in PadMap.FAMILIES:
+			var codes: Dictionary = pad_codes[family]
+			codes[id] = int(cfg.get_value("pad_" + family, id, codes[id]))
 
 
 static func save_file(path: String = PATH) -> void:
@@ -151,8 +230,21 @@ static func save_file(path: String = PATH) -> void:
 	cfg.set_value("video", "quality", quality)
 	cfg.set_value("input", "sensitivity", sensitivity)
 	cfg.set_value("input", "invert_y", invert_y)
+	cfg.set_value("input", "stick_sensitivity", stick_sensitivity)
+	cfg.set_value("camera", "orbit_mouse", cam_orbit_mouse)
+	cfg.set_value("camera", "orbit_stick", cam_orbit_stick)
+	cfg.set_value("camera", "distance", cam_distance)
+	cfg.set_value("camera", "fov", cam_fov)
+	cfg.set_value("camera", "smoothing", cam_smoothing)
+	cfg.set_value("camera", "pull", cam_pull)
+	cfg.set_value("practice", "theme", practice_theme)
+	cfg.set_value("practice", "size", practice_size)
+	cfg.set_value("practice", "turn", practice_turn)
 	for id in keys:
 		cfg.set_value("keys", id, keys[id])
+	for family in pad_codes:
+		for id in pad_codes[family]:
+			cfg.set_value("pad_" + str(family), id, pad_codes[family][id])
 	cfg.save(path)  # best effort; a read-only disk just forgets the settings
 
 
@@ -165,8 +257,17 @@ static func reset_to_defaults() -> void:
 	vsync = true
 	quality = 2
 	sensitivity = 1.0
+	stick_sensitivity = 1.0
+	cam_orbit_mouse = 0.75
+	cam_orbit_stick = 0.75
+	cam_distance = 70.0
+	cam_fov = 60.0
+	cam_smoothing = 0.5
+	cam_pull = CameraMath.PULL_REDUCED
+	cam_version += 1
 	invert_y = false
 	keys = default_keys()
+	pad_codes = default_pad_codes()
 	apply_all()
 	save_file()
 
@@ -221,6 +322,62 @@ static func set_sensitivity(s: float) -> void:
 	save_file()
 
 
+## Remember the practice setup choices.
+static func set_practice(theme_id: String, size: int, turn: int) -> void:
+	practice_theme = theme_id
+	practice_size = maxi(0, size)
+	practice_turn = clampi(turn, 15, 90)
+	save_file()
+
+
+static func set_cam_orbit_mouse(v: float) -> void:
+	cam_orbit_mouse = clampf(v, SENSITIVITY_MIN, SENSITIVITY_MAX)
+	_cam_changed()
+
+
+static func set_cam_orbit_stick(v: float) -> void:
+	cam_orbit_stick = clampf(v, SENSITIVITY_MIN, SENSITIVITY_MAX)
+	_cam_changed()
+
+
+static func set_cam_distance(v: float) -> void:
+	cam_distance = clampf(v, CAM_DISTANCE_MIN, CAM_DISTANCE_MAX)
+	_cam_changed()
+
+
+static func set_cam_fov(v: float) -> void:
+	cam_fov = clampf(v, CAM_FOV_MIN, CAM_FOV_MAX)
+	_cam_changed()
+
+
+static func set_cam_smoothing(v: float) -> void:
+	cam_smoothing = clampf(v, 0.0, 1.0)
+	_cam_changed()
+
+
+static func set_cam_pull(mode: int) -> void:
+	cam_pull = clampi(mode, 0, CameraMath.PULL_NAMES.size() - 1)
+	_cam_changed()
+
+
+static func _cam_changed() -> void:
+	cam_version += 1
+	save_file()
+
+
+## Camera catch-up speed multiplier for the smoothing setting: 1.0 at the middle (the original
+## feel), up to 2x snappier at 0 and down to a quarter as quick at 1.
+static func cam_rate_scale() -> float:
+	if cam_smoothing < 0.5:
+		return lerpf(2.0, 1.0, cam_smoothing / 0.5)
+	return lerpf(1.0, 0.25, (cam_smoothing - 0.5) / 0.5)
+
+
+static func set_stick_sensitivity(s: float) -> void:
+	stick_sensitivity = clampf(s, SENSITIVITY_MIN, SENSITIVITY_MAX)
+	save_file()
+
+
 static func set_invert_y(on: bool) -> void:
 	invert_y = on
 	save_file()
@@ -244,6 +401,42 @@ static func rebind(id: String, code: int) -> String:
 	apply_bindings()
 	save_file()
 	return swapped
+
+
+## Rebind a pad action in one family. A button already used by another action swaps places with
+## it. Returns the id that was swapped, or "".
+static func rebind_pad(family: String, id: String, code: int) -> String:
+	if not pad_codes.has(family):
+		pad_codes[family] = PadMap.default_codes()
+	var codes: Dictionary = pad_codes[family]
+	var old := int(codes.get(id, PadMap.NONE))
+	var swapped := ""
+	for other in codes:
+		if other != id and int(codes[other]) == code and code != PadMap.NONE:
+			codes[other] = old
+			swapped = other
+	codes[id] = code
+	apply_bindings()
+	save_file()
+	return swapped
+
+
+static func reset_pad(family: String) -> void:
+	pad_codes[family] = PadMap.default_codes()
+	apply_bindings()
+	save_file()
+
+
+## Note which device was used last. Switching to a pad of another family makes that family's
+## bindings the live ones. Returns true when the prompts need to change.
+static func set_active_device(device: String, family := "") -> bool:
+	var changed := device != active_device
+	active_device = device
+	if device == "pad" and family != "" and family != active_family:
+		active_family = family
+		changed = true
+		apply_bindings()
+	return changed
 
 
 static func reset_keys() -> void:
@@ -282,6 +475,16 @@ static func apply_bindings() -> void:
 		var alt := int(a["alt"])
 		if alt != 0:
 			InputMap.action_add_event(id, _key_event(alt))
+		var pad := PadMap.event_for(pad_code(active_family, id))
+		if pad != null:
+			InputMap.action_add_event(id, pad)
+		InputMap.action_set_deadzone(id, 0.5)
+	# The left stick walks, in eight directions like the keys.
+	for walk: Array in PadMap.WALK_AXES:
+		var m := InputEventJoypadMotion.new()
+		m.axis = int(walk[1]) as JoyAxis
+		m.axis_value = float(walk[2])
+		InputMap.action_add_event(str(walk[0]), m)
 
 
 static func _key_event(code: int) -> InputEventKey:

@@ -61,6 +61,7 @@ var _dx: float = 0.0
 var _dy: float = 0.0
 var _wheel: float = 0.0
 var _dragging: bool = false
+var _axis_down: Dictionary = {}  # action id -> held, for triggers
 
 
 func _init() -> void:
@@ -114,6 +115,15 @@ func handle_event(ev: InputEvent) -> void:
 				_actions.append(pair[1])
 		if ev.is_action_released("fire"):
 			_actions.append("fire_up")
+	elif ev is InputEventJoypadButton:
+		if ev.is_pressed():
+			for pair in KEY_ACTIONS:
+				if ev.is_action_pressed(pair[0]):
+					_actions.append(pair[1])
+		elif ev.is_action_released("fire"):
+			_actions.append("fire_up")
+	elif ev is InputEventJoypadMotion:
+		_handle_trigger_axis(ev)
 	elif ev is InputEventMouseButton:
 		var b := ev as InputEventMouseButton
 		if b.button_index == MOUSE_BUTTON_WHEEL_UP and b.pressed:
@@ -131,6 +141,20 @@ func handle_event(ev: InputEvent) -> void:
 			_dy += m.relative.y
 
 
+## A trigger is an axis: turn crossing the halfway point into one press and one release.
+func _handle_trigger_axis(ev: InputEvent) -> void:
+	for pair in KEY_ACTIONS:
+		var id: String = pair[0]
+		if ev.is_action_pressed(id):
+			if not _axis_down.get(id, false):
+				_axis_down[id] = true
+				_actions.append(pair[1])
+		elif ev.is_action_released(id) and _axis_down.get(id, false):
+			_axis_down[id] = false
+			if id == "fire":
+				_actions.append("fire_up")
+
+
 ## Walk keys as -1, 0, 1 axes: forward and right.
 func axes() -> Vector2i:
 	if paused:
@@ -142,6 +166,8 @@ func axes() -> Vector2i:
 
 ## Once per rendered frame. Returns the mouse movement left over for the orbit camera.
 func frame(dt: float) -> Dictionary:
+	var orbit_dx := _dx
+	var orbit_dy := _dy
 	var scaled := GameSettings.scale_mouse(_dx, _dy)
 	var dx := scaled.x
 	var dy := scaled.y
@@ -205,10 +231,28 @@ func frame(dt: float) -> Dictionary:
 			"fire_up":
 				if aim != null and aim.charging:
 					_fire(aim)
+	var stick := stick_vector()
 	if aim != null:
-		aim = CameraMath.charge_aim(CameraMath.nudge_aim(aim, dx, dy), dt)
+		var look := GameSettings.stick_look(stick, dt)
+		aim = CameraMath.charge_aim(CameraMath.nudge_aim(aim, dx + look.x, dy + look.y), dt)
 		return {"dx": 0.0, "dy": 0.0, "wheel": wheel}
-	return {"dx": dx, "dy": dy, "wheel": wheel}
+	# Not aiming: dragging the mouse or pushing the right stick orbits the camera, at their own
+	# camera speeds (not the aim sensitivity).
+	var orbit := GameSettings.scale_orbit_mouse(orbit_dx, orbit_dy)
+	var spin := GameSettings.stick_look(stick, dt, GameSettings.cam_orbit_stick)
+	return {"dx": orbit.x + spin.x, "dy": orbit.y + spin.y, "wheel": wheel}
+
+
+## The right stick of whichever connected pad is pushed furthest, as -1..1 on each axis.
+func stick_vector() -> Vector2:
+	if paused:
+		return Vector2.ZERO
+	var best := Vector2.ZERO
+	for device in Input.get_connected_joypads():
+		var v := Vector2(Input.get_joy_axis(device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(device, JOY_AXIS_RIGHT_Y))
+		if v.length() > best.length():
+			best = v
+	return best
 
 
 func skip() -> void:

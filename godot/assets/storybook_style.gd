@@ -70,15 +70,31 @@ static func material_for(src: Material, opts := {}) -> StandardMaterial3D:
 	m.metallic = 0.0
 	m.metallic_specular = 0.2
 	var flat := bool(opts.get("flat", true))
-	if tex != null and flat:
+	var cutout := base != null and tex != null and base.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+	if cutout:
+		# Leaf cards need the texture for their outline: keep it, but scale it so it averages to
+		# the painted colour instead of the photo's.
+		var avg := average_color(tex)
+		var want := painted(color * avg, float(opts.get("saturation", 1.15)))
+		m.albedo_texture = tex
+		color = Color(
+			want.r / maxf(avg.r, 0.05), want.g / maxf(avg.g, 0.05), want.b / maxf(avg.b, 0.05)
+		)
+	elif tex != null and flat:
 		color *= average_color(tex)
 	elif tex != null:
 		m.albedo_texture = tex
-	color = painted(color, float(opts.get("saturation", 1.15)))
+	if not cutout:
+		color = painted(color, float(opts.get("saturation", 1.15)))
 	if opts.has("tint"):
 		color *= Color(opts["tint"])
 	m.albedo_color = Color(color, 1.0)
-	if base != null and base.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+	if cutout:
+		# Scissor, not blending: hundreds of leaves sort badly when blended.
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = maxf(base.alpha_scissor_threshold, 0.4)
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	elif base != null and base.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.albedo_color.a = base.albedo_color.a
 	if not bool(opts.get("crisp", true)):
@@ -97,8 +113,18 @@ static func average_color(tex: Texture2D) -> Color:
 	img = img.duplicate()
 	if img.is_compressed():
 		img.decompress()
-	img.resize(1, 1, Image.INTERPOLATE_BILINEAR)
-	return img.get_pixel(0, 0)
+	img.resize(16, 16, Image.INTERPOLATE_BILINEAR)
+	# Weighted by alpha, so the empty parts of a leaf card don't darken its colour.
+	var sum := Color(0, 0, 0, 0)
+	var weight := 0.0
+	for y in 16:
+		for x in 16:
+			var p := img.get_pixel(x, y)
+			sum += Color(p.r, p.g, p.b) * p.a
+			weight += p.a
+	if weight <= 0.0:
+		return Color.WHITE
+	return Color(sum.r / weight, sum.g / weight, sum.b / weight)
 
 
 ## Push a colour toward a painted palette: more saturated, lifted out of the darks.

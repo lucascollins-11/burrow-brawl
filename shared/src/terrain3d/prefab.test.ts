@@ -145,11 +145,15 @@ describe("materials and edits", () => {
     expect(t.material![at(t, 16, 16, 22)]).toBe(MAT_PLASTER);
   });
 
-  it("leaves the existing themes without materials or decor", () => {
+  it("leaves the themes that build no prefabs without materials or decor", () => {
+    // These build with prefabs, so they carry materials and decor on purpose.
+    const built = new Set(["lighthouse-village", "clockwork-mesa", "bathtub-bay"]);
     for (const th of THEMES) {
+      if (built.has(th.id)) continue;
       const m = generate(themedRecipe(th.id, 1, MAP_SIZES[0]));
-      expect(m.terrain.material).toBeUndefined();
-      expect(m.terrain.decor).toBeUndefined();
+      // Compare booleans: a failing match on a whole voxel grid would print millions of values.
+      expect(m.terrain.material === undefined).toBe(true);
+      expect(m.terrain.decor === undefined).toBe(true);
     }
   });
 });

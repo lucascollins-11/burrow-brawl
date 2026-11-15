@@ -1,0 +1,17 @@
+{
+  "about": "The HUD hint line and the tutorial prompt with each device's button prompts: keyboard, Xbox, PlayStation and Switch Pro. Then the pad tabs of Settings.",
+  "steps": [
+    { "do": "start", "mode": "practice", "turn_seconds": 60 },
+    { "do": "camera", "dist": 45, "pitch": 30 },
+    { "do": "device", "kind": "keyboard", "name": "prompts-keyboard" },
+    { "do": "device", "kind": "pad", "family": "xbox", "name": "prompts-xbox" },
+    { "do": "device", "kind": "pad", "family": "playstation", "name": "prompts-playstation" },
+    { "do": "device", "kind": "pad", "family": "switch", "name": "prompts-switch" },
+    { "do": "key", "action": "toggle_aim" },
+    { "do": "device", "kind": "pad", "family": "playstation", "name": "prompts-playstation-aim" },
+    { "do": "screen", "scene": "settings", "tab": 4, "name": "settings-xbox" },
+    { "do": "screen", "scene": "settings", "tab": 5, "name": "settings-playstation" },
+    { "do": "screen", "scene": "settings", "tab": 6, "name": "settings-switch" },
+    { "do": "quit" }
+  ]
+}

@@ -118,8 +118,17 @@ interface MatchSettings {
   windMax: number;
   crateChance: number;         // 0..1
   arsenalPreset: string;
+  weather: string;             // "random" | "clear" | "rain" | "storm" | "fog"; default "clear"
+  timeOfDay: string;           // "random" | "day" | "dusk" | "night"; default "day"
 }
 ```
+
+The server resolves "random" when the match starts and sends the result in `MatchConfig.sky`
+(`{ weather, time }`). Weather and time are looks only, except that a storm makes the wind gusty: the turn's wind range
+is half again `windMax` (capped at 100), and a gust from `shared/src/match/gusts.ts` (a pure
+integer function of the match seed and tick, a new peak every 90 ticks, one in four a lull) is
+added on top every tick. `TurnState.gustX/gustZ` carry it, and the sim feels the clamped sum.
+With wind off there are no gusts either.
 
 ### 4.3 Lobby messages
 

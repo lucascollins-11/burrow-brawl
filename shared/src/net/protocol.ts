@@ -123,19 +123,34 @@ export interface MatchSettings {
   windMax: number; // 0..100
   crateChance: number; // 0..1
   arsenalPreset: string;
+  /** "random" or one of WEATHERS. Looks only, except that a storm makes the wind gusty. */
+  weather: string;
+  /** "random" or one of TIMES_OF_DAY. Looks only. */
+  timeOfDay: string;
 }
+
+/** Weather the lobby can pick (besides "random"). */
+export const WEATHERS = ["clear", "rain", "storm", "fog"] as const;
+/** Times of day the lobby can pick (besides "random"). "day" is each theme's own light. */
+export const TIMES_OF_DAY = ["day", "dusk", "night"] as const;
 
 /** What the lobby can pick for the map. Clients show these and never hardcode them. */
 export interface MapOptions {
   themes: { id: string; name: string; minSize: number }[];
   /** Grid edges in voxels: small, medium, large. */
   sizes: number[];
+  /** Weather ids; the lobby adds "random". */
+  weathers: string[];
+  /** Time of day ids; the lobby adds "random". */
+  times: string[];
 }
 
 export function mapOptions(): MapOptions {
   return {
     themes: THEMES.map((t) => ({ id: t.id, name: t.name, minSize: t.minSize })),
     sizes: [...MAP_SIZES],
+    weathers: [...WEATHERS],
+    times: [...TIMES_OF_DAY],
   };
 }
 
@@ -163,6 +178,8 @@ export const DEFAULT_SETTINGS: MatchSettings = {
   windMax: 50,
   crateChance: 0.5,
   arsenalPreset: "standard",
+  weather: "clear",
+  timeOfDay: "day",
 };
 
 // ---------------------------------------------------------------- messages
@@ -191,8 +208,11 @@ export type ClientMessage =
   | { t: "lobby.ready"; seq?: number; ready: boolean }
   | { t: "lobby.kick"; seq?: number; memberId: string }
   | { t: "lobby.start"; seq?: number }
-  /** Host, alone in the room: start a practice match against still target dummies. */
-  | { t: "lobby.practice"; seq?: number }
+  /**
+   * Host, alone in the room: start a practice match against still target dummies. The room's map
+   * settings apply; `turnSeconds` overrides the long default practice turn (15..90).
+   */
+  | { t: "lobby.practice"; seq?: number; turnSeconds?: number }
   | { t: "match.rematch"; seq?: number }
   | { t: "chat"; seq?: number; text: string }
   | { t: "ping"; seq?: number; clientTime: number }
@@ -257,7 +277,7 @@ const ALLOWED_KEYS: Record<ClientMessageType, readonly string[]> = {
   "lobby.ready": ["ready"],
   "lobby.kick": ["memberId"],
   "lobby.start": [],
-  "lobby.practice": [],
+  "lobby.practice": ["turnSeconds"],
   "match.rematch": [],
   chat: ["text"],
   ping: ["clientTime"],
@@ -358,6 +378,8 @@ const SETTINGS_RULES: { [K in keyof MatchSettings]: (v: unknown) => boolean } = 
   windMax: (v) => isInt(v, 0, 100),
   crateChance: (v) => isNum(v, 0, 1),
   arsenalPreset: (v) => isStr(v, 32) && /^[a-z0-9-]+$/.test(v),
+  weather: (v) => v === "random" || (WEATHERS as readonly unknown[]).includes(v),
+  timeOfDay: (v) => v === "random" || (TIMES_OF_DAY as readonly unknown[]).includes(v),
 };
 
 export function validateSettingsPatch(p: unknown): Parsed<Partial<MatchSettings>> {
@@ -422,6 +444,11 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
     case "lobby.kick":
       if (!isStr(raw.memberId, ID_MAX)) return bad("bad memberId");
       return ok();
+    case "lobby.practice":
+      if (raw.turnSeconds !== undefined && !isInt(raw.turnSeconds, 15, 90)) {
+        return bad("bad turnSeconds");
+      }
+      return ok();
     case "chat":
       if (!isStr(raw.text, CHAT_MAX * 2)) return bad("bad text");
       return ok();
@@ -443,7 +470,6 @@ export function parseClientMessage(raw: unknown): Parsed<ClientMessage> {
     case "room.sync":
     case "lobby.addTeam":
     case "lobby.start":
-    case "lobby.practice":
     case "match.rematch":
       return ok();
   }

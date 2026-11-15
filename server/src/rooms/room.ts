@@ -20,6 +20,7 @@ import {
   type TeamSetup,
   type ViewServerMessage,
 } from "@burrow-brawl/shared/src/net";
+import type { MatchConfig } from "@burrow-brawl/shared";
 import { MatchRunner } from "../match/runner";
 
 /** What a room needs from a live connection. */
@@ -319,9 +320,17 @@ export class Room {
 
       case "lobby.setSettings":
         if (!isHost) return "not_host";
-        this.settings = { ...this.settings, ...msg.patch };
-        this.unreadyAll();
-        break;
+        {
+          const before = this.settings;
+          this.settings = { ...this.settings, ...msg.patch };
+          // A new map seed alone is rolled by the host's client right before lobby.start, so it
+          // must not clear ready; any other change does, so players see what they agree to.
+          const changed = (Object.keys(msg.patch) as (keyof typeof before)[]).some(
+            (k) => k !== "mapSeed" && before[k] !== this.settings[k],
+          );
+          if (changed) this.unreadyAll();
+          break;
+        }
 
       case "lobby.ready":
         if (msg.ready && !me.teamId) return "not_allowed";
@@ -359,7 +368,7 @@ export class Room {
         const mine = this.teams.find((t) => t.controllerId === id);
         const dummies = this.teams.find((t) => t.controllerId === null);
         if (this.members.size !== 1 || !mine || !dummies) return "not_allowed";
-        this.startMatch({ dummies: dummies.id });
+        this.startMatch({ dummies: dummies.id, turnSeconds: msg.turnSeconds });
         return null;
       }
     }
@@ -374,24 +383,60 @@ export class Room {
    * Start the match with every controlled team. `practice.dummies` adds that uncontrolled team as
    * target dummies: nobody controls it, so the runner skips its turns.
    */
-  private startMatch(practice?: { dummies: string }): void {
+  private startMatch(practice?: { dummies: string; turnSeconds?: number | undefined }): void {
     const teams = this.teams.filter((t) => t.controllerId !== null || t.id === practice?.dummies);
-    let config = MatchRunner.configFor(this.settings, teams.length);
-    if (practice) {
-      config = {
-        ...config,
-        practice: true,
-        dummyTeam: teams.findIndex((t) => t.id === practice.dummies),
-        teamSizes: teams.map((t) => (t.id === practice.dummies ? PRACTICE_DUMMIES : 1)),
-        turnTicks: PRACTICE_TURN_SECONDS * TICKS_PER_SECOND,
-        windMax: 0,
-      };
-    }
     this.phase = "match";
     for (const m of this.members.values()) m.ready = false;
     this.bump();
     this.broadcast({ t: "room.update", room: this.state() });
-    this.match = new MatchRunner(
+    const t0 = performance.now();
+    let config: MatchConfig;
+    try {
+      config = this.configFor(teams, practice);
+      this.match = this.buildRunner(config, teams);
+      this.match.start();
+    } catch (err) {
+      // Generation or setup failed: say so and put everyone back in the lobby, instead of leaving
+      // the room in "match" with no match (which looks like being asked to ready up again).
+      console.error(`[room ${this.code}] match failed to start`, err);
+      this.match?.stop();
+      this.match = null;
+      this.phase = "lobby";
+      this.bump();
+      this.broadcast({
+        t: "error",
+        code: "internal",
+        message: "The match could not start. Try again, or pick another map.",
+      });
+      this.broadcast({ t: "room.update", room: this.state() });
+      return;
+    }
+    const map = config.map;
+    const ms = Math.round(performance.now() - t0);
+    console.log(`[room ${this.code}] match started: ${map.theme} ${map.sizeX} in ${ms} ms`);
+  }
+
+  private configFor(
+    teams: { id: string }[],
+    practice?: { dummies: string; turnSeconds?: number | undefined },
+  ): MatchConfig {
+    const config = MatchRunner.configFor(this.settings, teams.length);
+    if (!practice) return config;
+    return {
+      ...config,
+      practice: true,
+      dummyTeam: teams.findIndex((t) => t.id === practice.dummies),
+      teamSizes: teams.map((t) => (t.id === practice.dummies ? PRACTICE_DUMMIES : 1)),
+      turnTicks: (practice.turnSeconds ?? PRACTICE_TURN_SECONDS) * TICKS_PER_SECOND,
+      windMax: 0,
+    };
+  }
+
+  private buildRunner(
+    config: MatchConfig,
+    teams: { id: string; controllerId: string | null }[],
+  ): MatchRunner {
+    return new MatchRunner(
       config,
       teams.map((t) => t.id),
       // "" is nobody: a dummy team's turn starts with its controller absent and is skipped.
@@ -409,7 +454,6 @@ export class Room {
       },
       { ticker: this.opts.ticker },
     );
-    this.match.start();
   }
 
   /** The match finished: show results until the host sends match.rematch. */

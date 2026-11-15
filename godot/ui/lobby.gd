@@ -17,25 +17,85 @@ var _start_button: Button
 var _status: Label
 var _theme_pick: OptionButton
 var _size_pick: OptionButton
+var _weather_pick: OptionButton
+var _time_pick: OptionButton
 var _turn_pick: OptionButton
 var _count_pick: OptionButton
+var _copy_button: Button
+var _leave_button: Button
+var _teams_card: Control
+var _players_card: Control
+var _setup_side: Control
+var _cards: HBoxContainer
+var _count_widgets: Array[Control] = []
+## Practice mode: opened from the Practice button. A solo setup screen (map, size, turn time) with
+## one big Start button; the choices are remembered in GameSettings.
+var _practice := false
+var _practice_turn := 90
 
 
 func _ready() -> void:
 	if not Net.lobby.is_active():
 		get_tree().change_scene_to_file.call_deferred(TITLE_SCENE)
 		return
+	_practice = Net.practice_pending
+	Net.practice_pending = false
+	_practice_turn = GameSettings.practice_turn
 	_build()
 	Net.room_changed.connect(_refresh)
 	Net.room_left.connect(_on_back_to_title)
 	Net.disconnected.connect(_on_disconnected)
 	Net.server_error.connect(_on_server_error)
 	Net.match_started.connect(_on_match_started)
+	if _practice:
+		_apply_practice_layout()
+		_apply_remembered_choices()
 	_refresh()
-	if Net.practice_pending:
-		Net.practice_pending = false
-		_status.text = "Starting practice."
-		Net.start_practice()
+	# Focus the main action so a pad can navigate the lobby.
+	(_start_button if _practice else _ready_button).grab_focus.call_deferred()
+
+
+## Practice shows only the Match card, centred, with a Start practice button.
+func _apply_practice_layout() -> void:
+	_teams_card.visible = false
+	_players_card.visible = false
+	_copy_button.visible = false
+	_ready_button.visible = false
+	for w in _count_widgets:
+		w.visible = false
+	_leave_button.text = "Back"
+	_cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	_setup_side.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_setup_side.custom_minimum_size = Vector2(620, 0)
+	_start_button.text = "Start practice"
+	_status.text = "Pick a map, then start. Your choices are remembered."
+
+
+## Send the last practice choices to the room, if the server still offers them.
+func _apply_remembered_choices() -> void:
+	var options := Net.lobby.map_options()
+	var patch := {}
+	for t: Dictionary in options.get("themes", []):
+		if str(t.get("id", "")) == GameSettings.practice_theme:
+			patch["mapTheme"] = GameSettings.practice_theme
+	if GameSettings.practice_theme == "random":
+		patch["mapTheme"] = "random"
+	for edge in options.get("sizes", []):
+		if int(edge) == GameSettings.practice_size:
+			patch["mapSize"] = GameSettings.practice_size
+	if not patch.is_empty():
+		Net.set_settings(patch)
+
+
+## Save what the pickers show now as the next practice's starting point.
+func _remember_practice() -> void:
+	var theme_id := "random"
+	if _theme_pick.selected >= 0:
+		theme_id = str(_theme_pick.get_item_metadata(_theme_pick.selected))
+	var edge := 0
+	if _size_pick.selected >= 0:
+		edge = int(_size_pick.get_item_metadata(_size_pick.selected))
+	GameSettings.set_practice(theme_id, edge, _practice_turn)
 
 
 func _build() -> void:
@@ -67,20 +127,22 @@ func _build() -> void:
 	_phase_label = Label.new()
 	_phase_label.label_settings = MenuStyle.heading(22, Color.WHITE, 6)
 	code_col.add_child(_phase_label)
-	var copy := _button(header, "Copy code", _on_copy_pressed)
-	copy.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var leave := _button(header, "Leave room", _on_leave_pressed)
-	leave.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	MenuStyle.paint(leave, MenuStyle.RED.lightened(0.25))
+	_copy_button = _button(header, "Copy code", _on_copy_pressed)
+	_copy_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_leave_button = _button(header, "Leave room", _on_leave_pressed)
+	_leave_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	MenuStyle.paint(_leave_button, MenuStyle.RED.lightened(0.25))
 
 	# Two cards side by side: teams (wide) and players.
 	var cards := HBoxContainer.new()
 	cards.add_theme_constant_override("separation", 20)
 	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(cards)
+	_cards = cards
 
 	var teams_col := MenuStyle.card(cards, "Teams (up to %d)" % Proto.MAX_TEAMS)
-	(teams_col.get_parent() as Control).size_flags_stretch_ratio = 1.6
+	_teams_card = teams_col.get_parent() as Control
+	_teams_card.size_flags_stretch_ratio = 1.6
 	_teams_box = VBoxContainer.new()
 	_teams_box.add_theme_constant_override("separation", 8)
 	teams_col.add_child(_teams_box)
@@ -94,8 +156,10 @@ func _build() -> void:
 	side.add_theme_constant_override("separation", 10)
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cards.add_child(side)
+	_setup_side = side
 	var players_col := MenuStyle.card(side, "Players")
-	(players_col.get_parent() as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_players_card = players_col.get_parent() as Control
+	_players_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_members_box = VBoxContainer.new()
 	_members_box.add_theme_constant_override("separation", 8)
 	players_col.add_child(_members_box)
@@ -109,11 +173,15 @@ func _build() -> void:
 	setup.add_child(grid)
 	_theme_pick = _setting(grid, "Map", "mapTheme")
 	_size_pick = _setting(grid, "Size", "mapSize")
+	_weather_pick = _setting(grid, "Weather", "weather")
+	_time_pick = _setting(grid, "Time of day", "timeOfDay")
 	_turn_pick = _setting(grid, "Turn time", "turnSeconds")
 	for secs in TURN_CHOICES:
 		_turn_pick.add_item("%d seconds" % secs)
 		_turn_pick.set_item_metadata(_turn_pick.item_count - 1, secs)
 	_count_pick = _setting(grid, "Squirmlings each", "crittersPerTeam")
+	var count_label := grid.get_child(grid.get_child_count() - 2) as Control
+	_count_widgets = [count_label, _count_pick]
 	for n in range(1, 5):
 		_count_pick.add_item(str(n))
 		_count_pick.set_item_metadata(_count_pick.item_count - 1, n)
@@ -138,8 +206,8 @@ func _refresh() -> void:
 	if not Net.lobby.is_active():
 		return
 	var lobby := Net.lobby
-	_code_label.text = "Room " + lobby.code()
-	_phase_label.text = _phase_text(lobby.phase())
+	_code_label.text = "Practice" if _practice else "Room " + lobby.code()
+	_phase_label.text = "Set up your practice range" if _practice else _phase_text(lobby.phase())
 	_rebuild_members()
 	_rebuild_teams()
 	_refresh_setup()
@@ -156,6 +224,9 @@ func _refresh() -> void:
 	_add_button.disabled = team_count >= Proto.MAX_TEAMS
 	_remove_button.disabled = team_count <= Proto.MIN_TEAMS
 	_start_button.disabled = not lobby.can_start()
+	if _practice:
+		_start_button.disabled = lobby.my_team_id() == "" or lobby.phase() != "lobby"
+		return
 	if lobby.phase() == "lobby":
 		if host:
 			_status.text = "" if lobby.can_start() else "Everyone needs a team and to press Ready."
@@ -176,10 +247,33 @@ func _setting(grid: GridContainer, title: String, key: String) -> OptionButton:
 		var tint := MenuStyle.CREAM.lightened(0.18) if state == "hover" else MenuStyle.CREAM
 		pick.add_theme_stylebox_override(state, MenuStyle.box(tint, 12, 3, 5, 2))
 	pick.item_selected.connect(
-		func(index: int) -> void: Net.set_settings({key: pick.get_item_metadata(index)})
+		func(index: int) -> void:
+			if _practice and key == "turnSeconds":
+				# Practice turns are not a room setting; they ride along with the start request.
+				_practice_turn = int(pick.get_item_metadata(index))
+			else:
+				Net.set_settings({key: pick.get_item_metadata(index)})
+			if _practice:
+				_remember_practice()
 	)
 	grid.add_child(pick)
 	return pick
+
+
+## Fill a drop-down with "Random" and then the ids the server offers, shown capitalised. An older
+## server offers none, and the row stays empty and disabled.
+func _fill_choices(pick: OptionButton, ids: Array) -> void:
+	if ids.is_empty():
+		pick.clear()
+		return
+	if pick.item_count == ids.size() + 1:
+		return
+	pick.clear()
+	pick.add_item("Random")
+	pick.set_item_metadata(0, "random")
+	for id in ids:
+		pick.add_item(str(id).capitalize())
+		pick.set_item_metadata(pick.item_count - 1, str(id))
 
 
 ## Fill the map drop-downs from what the server offers, and show the current choices. Only the
@@ -196,6 +290,8 @@ func _refresh_setup() -> void:
 		for t: Dictionary in themes:
 			_theme_pick.add_item(str(t.get("name", t.get("id", "?"))))
 			_theme_pick.set_item_metadata(_theme_pick.item_count - 1, str(t.get("id", "")))
+	_fill_choices(_weather_pick, options.get("weathers", []))
+	_fill_choices(_time_pick, options.get("times", []))
 	if _size_pick.item_count != sizes.size():
 		_size_pick.clear()
 		for i in range(sizes.size()):
@@ -205,10 +301,12 @@ func _refresh_setup() -> void:
 			_size_pick.set_item_metadata(i, edge)
 	var current := lobby.settings()
 	var can_edit := lobby.is_host() and lobby.phase() == "lobby"
-	for pair in [[_theme_pick, "mapTheme"], [_size_pick, "mapSize"], [_turn_pick, "turnSeconds"], [_count_pick, "crittersPerTeam"]]:
+	for pair in [[_theme_pick, "mapTheme"], [_size_pick, "mapSize"], [_weather_pick, "weather"], [_time_pick, "timeOfDay"], [_turn_pick, "turnSeconds"], [_count_pick, "crittersPerTeam"]]:
 		var pick: OptionButton = pair[0]
 		pick.disabled = not can_edit
 		var want: Variant = current.get(pair[1], null)
+		if _practice and pair[1] == "turnSeconds":
+			want = _practice_turn
 		for i in range(pick.item_count):
 			var have: Variant = pick.get_item_metadata(i)
 			# Numbers arrive from JSON as floats; compare as text for ids and as numbers otherwise.
@@ -355,9 +453,21 @@ func _on_remove_pressed() -> void:
 
 
 func _on_start_pressed() -> void:
+	if _practice:
+		start_practice_now()
+		return
 	# A fresh map every match: roll a new seed just before starting.
 	Net.set_settings({"mapSeed": randi()})
 	Net.start_match()
+
+
+## Practice: roll a fresh map seed, then start against the target dummies.
+func start_practice_now() -> void:
+	_remember_practice()
+	_status.text = "Starting practice."
+	_start_button.disabled = true
+	Net.set_settings({"mapSeed": randi()})
+	Net.start_practice(_practice_turn)
 
 
 func _on_copy_pressed() -> void:

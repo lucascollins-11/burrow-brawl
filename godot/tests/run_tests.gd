@@ -11,8 +11,11 @@ const SUITES := [
 	"res://tests/test_hats.gd",
 	"res://tests/test_critter_smoother.gd",
 	"res://tests/test_squirmling_look.gd",
+	"res://tests/test_smooth_body.gd",
 	"res://tests/test_critter_names.gd",
 	"res://tests/test_aim_guide.gd",
+	"res://tests/test_pad_input.gd",
+	"res://tests/test_camera_settings.gd",
 	"res://tests/test_game_math.gd",
 	"res://tests/test_audio.gd",
 	"res://tests/test_effects.gd",
@@ -22,6 +25,8 @@ const SUITES := [
 	"res://tests/test_weapon_grid.gd",
 	"res://tests/test_how_to_play.gd",
 	"res://tests/test_storybook_style.gd",
+	"res://tests/test_scenery.gd",
+	"res://tests/test_weather.gd",
 ]
 
 
