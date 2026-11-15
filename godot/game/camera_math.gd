@@ -211,11 +211,11 @@ const PULL_CLEARANCE := 1.5
 const PULL_SKIP_NEAR := 6.0
 ## A block must show on this many probe samples in a row, so a thin post, a prop or a single
 ## voxel bump does not pull the camera in.
-const PULL_MIN_RUN := 2
+const PULL_MIN_RUN := 3
 ## Hysteresis: the camera only eases back out once the way is clear by this much (voxels).
-const PULL_EASE_OUT_GAP := 3.0
+const PULL_EASE_OUT_GAP := 4.0
 ## In "reduced" mode a pull-in smaller than this is ignored.
-const PULL_EASE_IN_GAP := 0.75
+const PULL_EASE_IN_GAP := 1.5
 
 
 ## How far along the line from `target` to `pos` the camera can go before ground that is wide
@@ -258,9 +258,9 @@ static func step_pull(pull: float, span: float, allowed: float, mode: int, dt: f
 			return lerpf(pull, allowed, smoothing(3.0, dt))
 		return pull
 	if allowed < pull - PULL_EASE_IN_GAP:
-		return lerpf(pull, allowed, smoothing(7.0, dt))
+		return lerpf(pull, allowed, smoothing(4.0, dt))
 	if allowed > pull + PULL_EASE_OUT_GAP:
-		return lerpf(pull, allowed, smoothing(1.0, dt))
+		return lerpf(pull, allowed, smoothing(0.7, dt))
 	return pull
 
 
