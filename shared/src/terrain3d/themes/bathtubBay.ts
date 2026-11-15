@@ -16,7 +16,8 @@ import {
 } from "../materials.js";
 import { type Prefab } from "../prefab.js";
 import { pipeBridge, pipeShaft, put, SHAFT_R, STOREY, type PipeMats } from "./clockworkMesa.js";
-import { fillFromHeightField, scatterObjects, type Rect, type Theme } from "./kit.js";
+import { fillFromHeightField, type Theme, type ThemeCtx } from "./kit.js";
+import { withIslets } from "./layout.js";
 
 // Bathtub Bay (v2, the layout Lucas approved on 2026-11-14): a chain of five soap-bar islands in
 // the tub, every one of them joined to the others on foot.
@@ -214,138 +215,153 @@ function bathHouse(i: number): Prefab {
 
 // --------------------------------------------------------------------------------------- build
 
+/** The bay itself, on withIslets' CORE grid (256 square). */
+function core(ctx: ThemeCtx): void {
+  const { w, d, t } = ctx;
+  const e = Math.min(w, d);
+  const S = (v: number): number => Math.trunc((v * e) / 256);
+  // The core grid is 256, so S is the identity; kept so the layout reads in 256 units.
+  const ox = (w - e) >> 1;
+  const oz = (d - e) >> 1;
+  const bars = BARS.map((b) => ({
+    cx: ox + S(b.cx),
+    cz: oz + S(b.cz),
+    hx: S(b.hx),
+    hz: S(b.hz),
+  }));
+  const [tower, bath, east, south, hub] = bars as [Bar, Bar, Bar, Bar, Bar];
+
+  // The bars: rounded rectangles with a steep bevel and a flat top.
+  const inside = (x: number, z: number, b: Bar): number => {
+    const qx = Math.abs(x - b.cx) - (b.hx - ROUND);
+    const qz = Math.abs(z - b.cz) - (b.hz - ROUND);
+    const outside =
+      isqrt(Math.max(qx, 0) ** 2 + Math.max(qz, 0) ** 2) + Math.min(Math.max(qx, qz), 0);
+    return ROUND - outside;
+  };
+  const hfs = new Int32Array(w * d).fill(SEABED * 256);
+  for (const b of bars) {
+    const reach = Math.max(b.hx, b.hz) + 2;
+    for (let z = Math.max(0, b.cz - reach); z <= Math.min(d - 1, b.cz + reach); z++)
+      for (let x = Math.max(0, b.cx - reach); x <= Math.min(w - 1, b.cx + reach); x++) {
+        const s = inside(x, z, b);
+        if (s <= 0) continue;
+        const h = Math.min(LEVEL * 256 + 255, SEABED * 256 + s * 256 * SLOPE);
+        if (h > hfs[z * w + x]!) hfs[z * w + x] = h;
+      }
+  }
+  fillFromHeightField(t, hfs);
+  const g = LEVEL;
+
+  // The Shampoo Tower on the big bar and the shaft by the bathhouse, joined by the high pipe
+  // at the third storey (walked at g + 1 + 2 * STOREY).
+  const tx = tower.cx + S(20);
+  const tz = tower.cz - S(10);
+  const sx = bath.cx - S(18);
+  put(
+    ctx,
+    shampooTower([
+      [0, NX],
+      [0, PZ],
+      [2, PX],
+    ]),
+    tx,
+    tz,
+    0,
+    4301,
+    g,
+  );
+  put(
+    ctx,
+    pipeShaft(
+      3,
+      [
+        [0, PX],
+        [2, NX],
+      ],
+      PORCELAIN,
+    ),
+    sx,
+    tz,
+    0,
+    4302,
+    g,
+  );
+  const p0 = tx + SHAFT_R - 1;
+  const p1 = sx - SHAFT_R + 1;
+  ctx.stamp(
+    pipeBridge(p1 - p0 + 1, MAT_PAINT_WHITE, MAT_PAINT_BLUE),
+    p0,
+    g + 2 * STOREY - 1,
+    tz - 5,
+    0,
+    4303,
+  );
+  // The bathhouse beside the shaft, its side door facing it.
+  put(ctx, bathhouse(), sx + SHAFT_R + 14, bath.cz, 0, 4304, g + 1);
+
+  // Low gutter pipes: every bar joins the hub, and the bathhouse bar joins the east bar.
+  // Each one runs ROUND + 4 onto the flat top of the bars at both ends.
+  const runZ = (x: number, z0: number, z1: number, salt: number): void =>
+    void ctx.stamp(gutter(z1 - z0 + 1), x - 4, g - 1, z0, 1, salt);
+  const runX = (z: number, x0: number, x1: number, salt: number): void =>
+    void ctx.stamp(gutter(x1 - x0 + 1), x0, g - 1, z - 4, 0, salt);
+  const lap = ROUND + 4;
+  const gx = hub.cx - S(16);
+  runZ(gx, tower.cz + tower.hz - lap, hub.cz - hub.hz + lap, 4310);
+  runZ(gx, hub.cz + hub.hz - lap, south.cz - south.hz + lap, 4311);
+  runX(east.cz - east.hz + S(8), hub.cx + hub.hx - lap, east.cx - east.hx + lap, 4312);
+  runZ(bath.cx + S(12), bath.cz + bath.hz - lap, east.cz - east.hz + lap, 4313);
+
+  // Houses: two on the east bar, one on the south bar, one on the big bar, fronts to the pipes.
+  put(ctx, bathHouse(ctx.rnd(4320, 0, 4)), east.cx - S(14), east.cz + S(8), 0, 4320, g + 1);
+  put(ctx, bathHouse(ctx.rnd(4320, 1, 4) + 1), east.cx + S(18), east.cz + S(8), 0, 4321, g + 1);
+  put(ctx, bathHouse(2), south.cx - S(12), south.cz + S(2), 2, 4322, g + 1);
+  put(ctx, bathHouse(1), tower.cx - S(24), tower.cz + S(4), 1, 4323, g + 1);
+  // The hub: a fountain well in the middle of the dish.
+  put(ctx, well(), hub.cx + S(6), hub.cz, 0, 4330, g + 1);
+  // The duck ferry, afloat in the bay between the southern bars.
+  put(ctx, duckFerry(), ox + S(140), oz + S(200), 1, 4331, t.seaY - 4);
+
+  const lampAt: [number, number][] = [
+    [hub.cx - S(4), hub.cz - S(8)],
+    [hub.cx + S(16), hub.cz + S(8)],
+    [tower.cx - S(4), tower.cz - S(18)],
+    [south.cx + S(18), south.cz - S(6)],
+    [east.cx - S(2), east.cz - S(14)],
+    [bath.cx + S(20), bath.cz - S(16)],
+  ];
+  lampAt.forEach(([x, z], i) => {
+    const y = ctx.surf(x, z);
+    if (y > t.seaY)
+      ctx.decor.push({ kind: "lamp-post", x, y, z, face: UP, v: ctx.rnd(4340, i, 256) });
+  });
+}
+
 export const bathtubBay: Theme = {
   id: "bathtub-bay",
   name: "Bathtub Bay",
-  minSize: 256,
+  minSize: 384,
   sizeY: 128,
   build(ctx) {
-    const { w, d, t } = ctx;
-    const e = Math.min(w, d);
-    const S = (v: number): number => Math.trunc((v * e) / 256);
-    // The 256 layout sits centred on bigger grids, scaled up.
-    const ox = (w - e) >> 1;
-    const oz = (d - e) >> 1;
-    const bars = BARS.map((b) => ({
-      cx: ox + S(b.cx),
-      cz: oz + S(b.cz),
-      hx: S(b.hx),
-      hz: S(b.hz),
-    }));
-    const [tower, bath, east, south, hub] = bars as [Bar, Bar, Bar, Bar, Bar];
-
-    // The bars: rounded rectangles with a steep bevel and a flat top.
-    const inside = (x: number, z: number, b: Bar): number => {
-      const qx = Math.abs(x - b.cx) - (b.hx - ROUND);
-      const qz = Math.abs(z - b.cz) - (b.hz - ROUND);
-      const outside =
-        isqrt(Math.max(qx, 0) ** 2 + Math.max(qz, 0) ** 2) + Math.min(Math.max(qx, qz), 0);
-      return ROUND - outside;
-    };
-    const hfs = new Int32Array(w * d).fill(SEABED * 256);
-    for (const b of bars) {
-      const reach = Math.max(b.hx, b.hz) + 2;
-      for (let z = Math.max(0, b.cz - reach); z <= Math.min(d - 1, b.cz + reach); z++)
-        for (let x = Math.max(0, b.cx - reach); x <= Math.min(w - 1, b.cx + reach); x++) {
-          const s = inside(x, z, b);
-          if (s <= 0) continue;
-          const h = Math.min(LEVEL * 256 + 255, SEABED * 256 + s * 256 * SLOPE);
-          if (h > hfs[z * w + x]!) hfs[z * w + x] = h;
-        }
-    }
-    fillFromHeightField(t, hfs);
-    const g = LEVEL;
-
-    // The Shampoo Tower on the big bar and the shaft by the bathhouse, joined by the high pipe
-    // at the third storey (walked at g + 1 + 2 * STOREY).
-    const tx = tower.cx + S(20);
-    const tz = tower.cz - S(10);
-    const sx = bath.cx - S(18);
-    put(
-      ctx,
-      shampooTower([
-        [0, NX],
-        [0, PZ],
-        [2, PX],
-      ]),
-      tx,
-      tz,
-      0,
-      4301,
-      g,
-    );
-    put(
-      ctx,
-      pipeShaft(
-        3,
-        [
-          [0, PX],
-          [2, NX],
-        ],
-        PORCELAIN,
-      ),
-      sx,
-      tz,
-      0,
-      4302,
-      g,
-    );
-    const p0 = tx + SHAFT_R - 1;
-    const p1 = sx - SHAFT_R + 1;
-    ctx.stamp(
-      pipeBridge(p1 - p0 + 1, MAT_PAINT_WHITE, MAT_PAINT_BLUE),
-      p0,
-      g + 2 * STOREY - 1,
-      tz - 5,
-      0,
-      4303,
-    );
-    // The bathhouse beside the shaft, its side door facing it.
-    put(ctx, bathhouse(), sx + SHAFT_R + 14, bath.cz, 0, 4304, g + 1);
-
-    // Low gutter pipes: every bar joins the hub, and the bathhouse bar joins the east bar.
-    // Each one runs ROUND + 4 onto the flat top of the bars at both ends.
-    const runZ = (x: number, z0: number, z1: number, salt: number): void =>
-      void ctx.stamp(gutter(z1 - z0 + 1), x - 4, g - 1, z0, 1, salt);
-    const runX = (z: number, x0: number, x1: number, salt: number): void =>
-      void ctx.stamp(gutter(x1 - x0 + 1), x0, g - 1, z - 4, 0, salt);
-    const lap = ROUND + 4;
-    const gx = hub.cx - S(16);
-    runZ(gx, tower.cz + tower.hz - lap, hub.cz - hub.hz + lap, 4310);
-    runZ(gx, hub.cz + hub.hz - lap, south.cz - south.hz + lap, 4311);
-    runX(east.cz - east.hz + S(8), hub.cx + hub.hx - lap, east.cx - east.hx + lap, 4312);
-    runZ(bath.cx + S(12), bath.cz + bath.hz - lap, east.cz - east.hz + lap, 4313);
-
-    // Houses: two on the east bar, one on the south bar, one on the big bar, fronts to the pipes.
-    put(ctx, bathHouse(ctx.rnd(4320, 0, 4)), east.cx - S(14), east.cz + S(8), 0, 4320, g + 1);
-    put(ctx, bathHouse(ctx.rnd(4320, 1, 4) + 1), east.cx + S(18), east.cz + S(8), 0, 4321, g + 1);
-    put(ctx, bathHouse(2), south.cx - S(12), south.cz + S(2), 2, 4322, g + 1);
-    put(ctx, bathHouse(1), tower.cx - S(24), tower.cz + S(4), 1, 4323, g + 1);
-    // The hub: a fountain well in the middle of the dish.
-    put(ctx, well(), hub.cx + S(6), hub.cz, 0, 4330, g + 1);
-    // The duck ferry, afloat in the bay between the southern bars.
-    put(ctx, duckFerry(), ox + S(140), oz + S(200), 1, 4331, t.seaY - 4);
-
-    const lampAt: [number, number][] = [
-      [hub.cx - S(4), hub.cz - S(8)],
-      [hub.cx + S(16), hub.cz + S(8)],
-      [tower.cx - S(4), tower.cz - S(18)],
-      [south.cx + S(18), south.cz - S(6)],
-      [east.cx - S(2), east.cz - S(14)],
-      [bath.cx + S(20), bath.cz - S(16)],
-    ];
-    lampAt.forEach(([x, z], i) => {
-      const y = ctx.surf(x, z);
-      if (y > t.seaY)
-        ctx.decor.push({ kind: "lamp-post", x, y, z, face: UP, v: ctx.rnd(4340, i, 256) });
+    withIslets(ctx, core, {
+      house: (i) =>
+        house({
+          ...HOUSES[i % HOUSES.length]!,
+          id: `bathtub-islet-${i}`,
+          storeys: 1,
+          w: 18,
+          d: 16,
+          balcony: 0,
+          garden: false,
+          shop: false,
+        }),
+      salt: 4380,
+      maxLevel: 40,
+      // The bay is open water in the middle: look further along each side for a bar near the
+      // edge, and never land an islet between the bars.
+      shifts: [-72, -48, -24, 0, 24, 48, 72],
+      reach: 64,
     });
-
-    const areas: Rect[] = bars.map((b) => ({
-      x0: b.cx - b.hx + 8,
-      z0: b.cz - b.hz + 8,
-      x1: b.cx + b.hx - 8,
-      z1: b.cz + b.hz - 8,
-    }));
-    scatterObjects(ctx, areas, 4350);
   },
 };

@@ -186,6 +186,14 @@ export interface IsletOptions {
   readonly salt: number;
   /** Islet top, clamped to sea + 2 .. this. */
   readonly maxLevel?: number;
+  /** Lines tried either side of each lane when looking for the shore (default [-24, -8, 8, 24]). */
+  readonly shifts?: readonly number[];
+  /**
+   * Only land a bridge on shore at most this far inside the core's edge. Default: anywhere. For
+   * layouts with open water inside them (a chain of islands), so an islet never lands in the
+   * middle of the map.
+   */
+  readonly reach?: number;
 }
 
 /**
@@ -249,14 +257,17 @@ export function withIslets(ctx: ThemeCtx, layout: (c: ThemeCtx) => void, opts: I
       // March in from the map edge along a few lines near this lane; keep the one whose shore is
       // furthest out (the shortest bridge).
       let best: { x: number; z: number; depth: number } | null = null;
-      for (const shift of [-24, -8, 8, 24]) {
+      const edge = dx !== 0 ? off : offZ;
+      for (const shift of opts.shifts ?? [-24, -8, 8, 24]) {
         const along = (dx !== 0 ? ctx.d : ctx.w) / 2 + lane + shift + ctx.rnd(opts.salt, k, 9) - 4;
         for (let depth = 0; depth < (dx !== 0 ? ctx.w : ctx.d) / 2; depth++) {
           const x = dx === 1 ? depth : dx === -1 ? ctx.w - 1 - depth : along;
           const z = dz === 1 ? depth : dz === -1 ? ctx.d - 1 - depth : along;
           if (top(x, z) > sea + 1) {
             // Land the bridge on open ground, not against a building, crane or cliff.
-            const ok = top(x + dx * 6, z + dz * 6) <= (opts.maxLevel ?? 40) + 2;
+            const ok =
+              top(x + dx * 6, z + dz * 6) <= (opts.maxLevel ?? 40) + 2 &&
+              depth - edge <= (opts.reach ?? CORE);
             if (ok && (!best || depth < best.depth)) best = { x, z, depth };
             break;
           }
