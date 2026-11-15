@@ -68,6 +68,9 @@ var _ever_driven := false
 var _pop_vel: Array[Vector3] = []
 var _pop_spin: Array[Vector3] = []
 var _marker_scale := 0.0
+var _skel: Skeleton3D
+var _skin_mat: ShaderMaterial
+var _ring_bodies: Array[Node] = []
 var _rng := RandomNumberGenerator.new()
 
 
@@ -89,6 +92,10 @@ func bind() -> void:
 		_mouths[shape] = head.get_node("Mouth" + shape) as Node3D
 	_tuft = _model.find_child("TailTuft", true, false) as Node3D
 	_prop = _model.find_child("Propeller", true, false) as Node3D
+	_skel = _model.get_node_or_null("BodySkeleton") as Skeleton3D
+	if _skel != null:
+		_skin_mat = (_skel.get_node("Skin") as MeshInstance3D).material_override as ShaderMaterial
+		_ring_bodies = _model.find_children("RingBody", "MeshInstance3D", true, false)
 	_off.resize(N)
 	_vel.resize(N)
 	_rng.seed = 7919
@@ -307,6 +314,7 @@ func set_alive(value: bool) -> void:
 			_tag.visible = true
 		for ring in _rings:
 			ring.scale = Vector3.ONE
+		_show_skin(true)
 		_pose_rings()
 		return
 	if _tag != null:
@@ -315,6 +323,7 @@ func set_alive(value: bool) -> void:
 		_show_marker(1.0)
 		return
 	pop_time = 0.0
+	_show_skin(false)
 	_pop_vel.clear()
 	_pop_spin.clear()
 	for i in range(N):
@@ -322,6 +331,27 @@ func set_alive(value: bool) -> void:
 		var out := _rng.randf_range(1.6, 3.2)
 		_pop_vel.append(Vector3(cos(ang) * out, _rng.randf_range(3.5, 6.0), sin(ang) * out))
 		_pop_spin.append(Vector3(_rng.randf_range(-7.0, 7.0), 0.0, _rng.randf_range(-7.0, 7.0)))
+
+
+## Carry the smooth skin with the rings: each bone follows its ring, so the body bends, stretches
+## and slithers with them. While the rings fly apart (knock-out) the skin is swapped for the beads.
+func _sync_skin() -> void:
+	if _skel == null:
+		return
+	for i in range(N):
+		var t := _rings[i].transform  # bones are parentless and the pose replaces the rest
+		_skel.set_bone_pose_position(i, t.origin)
+		_skel.set_bone_pose_rotation(i, t.basis.get_rotation_quaternion())
+		_skel.set_bone_pose_scale(i, t.basis.get_scale())
+	_skin_mat.set_shader_parameter("flash", clampf(_hurt * 2.5, 0.0, 1.0) * 0.7)
+
+
+func _show_skin(on: bool) -> void:
+	if _skel == null:
+		return
+	_skel.visible = on
+	for b in _ring_bodies:
+		(b as Node3D).visible = not on
 
 
 func is_wobbling() -> bool:
@@ -350,6 +380,7 @@ func _pose_rings() -> void:
 		var lean := (above - below) / (2.0 * Squirmling.RING_STEP)
 		var tip := lerpf(Squirmling.curl_angle(i), 0.0, _air)
 		ring.rotation = Vector3(tip + atan(lean.y) * 0.8, atan(wave_slope) * 0.7, -atan(lean.x) * 0.8)
+	_sync_skin()
 
 
 ## Head turn (yaw, pitch in radians, clamped) towards a direction in the Squirmling's own frame.
@@ -461,7 +492,7 @@ func _face(dt: float, active: bool, grounded: bool) -> void:
 		var sx: float = brow.get_meta("side", 1.0)
 		# Determined: inner ends down. Worried: inner ends up and the whole brow lifts.
 		brow.rotation.z = deg_to_rad((-6.0 + 22.0 * _mood) * sx)
-		brow.position.y = 0.22 + maxf(0.0, -_mood) * 0.06 + raise * (0.07 if bi == 0 else 0.04)
+		brow.position.y = float(brow.get_meta("home_y", 0.22)) + maxf(0.0, -_mood) * 0.06 + raise * (0.07 if bi == 0 else 0.04)
 	# One mouth at a time, most urgent first.
 	var shape := "stitch"
 	if _hurt > 0.0 or _fire > 0.0 or _startle > 0.3:
