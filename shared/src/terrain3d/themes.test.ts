@@ -124,8 +124,11 @@ describe.each(THEME_CASES)("$id", ({ id, golden }) => {
     expect(t.edits).toHaveLength(1);
   });
 
-  it("stays roomy and connected across seeds", () => {
+  it("stays roomy and connected across seeds", async () => {
     for (let seed = 1; seed <= 12; seed++) {
+      // Yield between seeds: a big map takes over a second, and a worker that never yields
+      // misses vitest's own RPC deadlines (onTaskUpdate timeouts) even when every check passes.
+      await new Promise((r) => setImmediate(r));
       const a = generate(themedRecipe(id, seed, min));
       expect(a.spawns.length).toBeGreaterThanOrEqual(32);
       expect(a.objects!.length).toBeGreaterThan(8);
