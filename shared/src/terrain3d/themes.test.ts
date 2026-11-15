@@ -64,7 +64,7 @@ const THEME_CASES = [
   },
   {
     id: "toybox-harbor",
-    golden: { 384: 1278538020, 512: 370632370 } as Record<number, number>,
+    golden: { 384: 1991564246, 512: 2273277046 } as Record<number, number>,
   },
   {
     id: "clockwork-mesa",

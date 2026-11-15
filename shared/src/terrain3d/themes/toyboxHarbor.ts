@@ -162,7 +162,7 @@ function core(ctx: ThemeCtx): void {
       box(x, z, 150, 236, 214, 250),
     );
   const level = (x: number, z: number): number =>
-    z > 204 ? 30 : x < 92 && z < 100 ? 46 : x > 200 && z > 140 ? 40 : 34;
+    z > 204 ? 32 : x < 92 && z < 100 ? 46 : x > 200 && z > 140 ? 40 : 34;
   shape(ctx, inside, level, 40);
   // Keep across the channel, with a passage through its ground floor from one half to the other.
   const g = put(ctx, blockKeep(), 128, 120, 0, 4001, 35);
@@ -191,11 +191,11 @@ function core(ctx: ThemeCtx): void {
   });
   // Piers: bollards and moored boats along the arm, a crane at its head.
   for (let z = 206; z < 246; z += 6) {
-    ctx.decor.push({ kind: "bollard", x: 150, y: 30, z, face: UP, v: z });
-    ctx.decor.push({ kind: "moored-boat", x: 150, y: 30, z, face: NX, v: z * 7 });
-    ctx.decor.push({ kind: "moored-boat", x: 214, y: 30, z: z - 2, face: PX, v: z * 3 });
+    ctx.decor.push({ kind: "bollard", x: 150, y: 32, z, face: UP, v: z });
+    ctx.decor.push({ kind: "moored-boat", x: 150, y: 32, z, face: NX, v: z * 7 });
+    ctx.decor.push({ kind: "moored-boat", x: 214, y: 32, z: z - 2, face: PX, v: z * 3 });
   }
-  put(ctx, crane(), 206, 246, 3, 4040, 31);
+  put(ctx, crane(), 206, 246, 3, 4040, 33);
   // A plank footbridge over the channel's south end, so the halves also meet in the open.
   put(ctx, plankBridge(34, 7), 128, 190, 0, 4050, 32);
   lamps(ctx, [

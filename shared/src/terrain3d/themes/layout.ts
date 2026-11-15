@@ -30,8 +30,8 @@ export function isin(turn: number): number {
   const q = a & 63;
   if (a < 64) return QUARTER[q]!;
   if (a < 128) return QUARTER[64 - q]!;
-  if (a < 192) return -QUARTER[q]!;
-  return -QUARTER[64 - q]!;
+  if (a < 192) return -QUARTER[q]! | 0;
+  return -QUARTER[64 - q]! | 0;
 }
 export function icos(turn: number): number {
   return isin(turn + 64);
@@ -255,7 +255,9 @@ export function withIslets(ctx: ThemeCtx, layout: (c: ThemeCtx) => void, opts: I
           const x = dx === 1 ? depth : dx === -1 ? ctx.w - 1 - depth : along;
           const z = dz === 1 ? depth : dz === -1 ? ctx.d - 1 - depth : along;
           if (top(x, z) > sea + 1) {
-            if (!best || depth < best.depth) best = { x, z, depth };
+            // Land the bridge on open ground, not against a building, crane or cliff.
+            const ok = top(x + dx * 6, z + dz * 6) <= (opts.maxLevel ?? 40) + 2;
+            if (ok && (!best || depth < best.depth)) best = { x, z, depth };
             break;
           }
         }
@@ -287,8 +289,10 @@ export function withIslets(ctx: ThemeCtx, layout: (c: ThemeCtx) => void, opts: I
       // couple of voxels onto each, deck level with the lower end.
       let a = 0;
       while (a < 40 && top(ix + dx * a, iz + dz * a) >= lvl - 1) a++;
+      // Down the islet's shore to open water, then across to where the mainland is up again.
       let b = a;
-      while (b < a + 60 && top(ix + dx * b, iz + dz * b) < lvl - 2) b++;
+      while (b < a + 20 && top(ix + dx * b, iz + dz * b) > sea) b++;
+      while (b < a + 80 && top(ix + dx * b, iz + dz * b) < lvl - 2) b++;
       const s0 = a - 3;
       const s1 = b + 3;
       const y0 = top(ix + dx * s0, iz + dz * s0);
