@@ -68,7 +68,7 @@ const THEME_CASES = [
   },
   {
     id: "clockwork-mesa",
-    golden: { 256: 1621764385, 384: 3512871344, 512: 2703441375 } as Record<number, number>,
+    golden: { 384: 3177638315, 512: 3744573976 } as Record<number, number>,
   },
   {
     id: "frosted-bakery",
@@ -76,7 +76,7 @@ const THEME_CASES = [
   },
   {
     id: "bathtub-bay",
-    golden: { 256: 3193768409, 384: 3613564150, 512: 3619998724 } as Record<number, number>,
+    golden: { 384: 1435844129, 512: 2299029629 } as Record<number, number>,
   },
   {
     id: "garden-patch",
@@ -140,7 +140,7 @@ describe.each(THEME_CASES)("$id", ({ id, golden }) => {
 
 describe("clockwork-mesa layout", () => {
   it("has players on every tier, all joined by the cliff stairs and pipe shafts", () => {
-    for (const size of [256, 384]) {
+    for (const size of [384]) {
       const a = generate(themedRecipe("clockwork-mesa", 3, size));
       const tiers = new Set(a.spawns.map((s) => s.y - 1));
       for (const y of [34, 46, 62, 78]) expect(tiers.has(y)).toBe(true);
@@ -152,19 +152,32 @@ describe("clockwork-mesa layout", () => {
 
 describe("bathtub-bay layout", () => {
   it("joins all five soap bars on foot through the gutter pipes", () => {
-    for (const size of [256, 384]) {
-      const a = generate(themedRecipe("bathtub-bay", 2, size));
-      const k = size / 256;
-      // The bar centres at the 256 layout, scaled.
+    for (const seed of [2, 3]) {
+      const size = 384;
+      const a = generate(themedRecipe("bathtub-bay", seed, size));
+      // The bar centres in the 256 core, turned a quarter step per seed and centred (withIslets).
+      const off = (size - 256) >> 1;
+      const turn = seed & 3;
       const bars = [
         [72, 86],
         [188, 74],
         [196, 164],
         [86, 196],
         [122, 142],
-      ].map(([x, z]) => [Math.trunc(x! * k), Math.trunc(z! * k)] as const);
+      ].map(([x, z]) => {
+        const [rx, rz] =
+          turn === 0
+            ? [x!, z!]
+            : turn === 1
+              ? [255 - z!, x!]
+              : turn === 2
+                ? [255 - x!, 255 - z!]
+                : [z!, 255 - x!];
+        return [rx + off, rz + off] as const;
+      });
       const seen = new Set<number>();
       for (const s of a.spawns) {
+        if (s.y - 1 !== 36) continue; // islets and rooftops are not bars
         let best = 0;
         let bestD = Infinity;
         bars.forEach(([x, z], i) => {

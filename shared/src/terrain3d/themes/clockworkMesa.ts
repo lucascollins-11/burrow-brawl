@@ -16,14 +16,9 @@ import {
   MAT_TIMBER,
 } from "../materials.js";
 import { octave, sample } from "../mapgen.js";
+import { withIslets } from "./layout.js";
 import { rotatedSize, type Prefab } from "../prefab.js";
-import {
-  fillFromHeightField,
-  pseudoAngle,
-  scatterObjects,
-  type Theme,
-  type ThemeCtx,
-} from "./kit.js";
+import { fillFromHeightField, pseudoAngle, type Theme, type ThemeCtx } from "./kit.js";
 
 // Clockwork Mesa (v2, the layout Lucas approved on 2026-11-14): one tall mesa in three tiers
 // (terraces at 46 and 62 cut into the cliffs, a gear-toothed top at 78) over a beach.
@@ -418,143 +413,143 @@ function workshop(i: number): Prefab {
 
 // --------------------------------------------------------------------------------------- build
 
+/** The mesa itself, on withIslets' CORE grid (256 square). */
+function core(ctx: ThemeCtx): void {
+  const { w, d, t } = ctx;
+  const e = Math.min(w, d);
+  /** A distance in the 256 layout at this grid's scale (the core grid is 256, so as is). */
+  const S = (v: number): number => Math.trunc((v * e) / 256);
+  const cx = w >> 1;
+  const cz = (d >> 1) - S(4);
+  const o = octave(ctx.seed, 4201, w, d, 32);
+  const wob = (x: number, z: number): number => Math.trunc(((sample(o, x, z) - 32768) * 5) / 32768);
+
+  // The mesa: a wobbly round shore, three cliffs, and a gear-toothed rim on the top tier.
+  const rTop = S(R_TOP);
+  const rMid = S(R_MID);
+  const rLow = S(R_LOW);
+  const rShore = S(R_SHORE);
+  const hfs = new Int32Array(w * d);
+  for (let z = 0; z < d; z++)
+    for (let x = 0; x < w; x++) {
+      const dx = x - cx;
+      const dz = z - cz;
+      // The tiers are machined true circles; only the shore wobbles.
+      const r = isqrt(dx * dx + dz * dz);
+      const tooth = ((pseudoAngle(dx, dz) * TEETH) >> 12) & 1 ? TOOTH : 0;
+      const level = r < rTop + tooth ? TOP : r < rMid ? MID : r < rLow ? LOW : BEACH;
+      const top = level * 256 + 255;
+      const s = rShore - r - wob(x, z);
+      hfs[z * w + x] = s <= 0 ? SEABED * 256 : Math.min(top, SEABED * 256 + s * 512);
+    }
+  fillFromHeightField(t, hfs);
+
+  // The Clock Foundry, dug into the south cliff: hall in the rock, clock tower to the sea.
+  put(ctx, clockFoundry(), cx, cz + S(R_LOW) - 19, 2, 4201, LOW + 1);
+
+  // Cliff stairs on the east and west: one flight per tier, cut tangentially into each cliff,
+  // switching direction from tier to tier.
+  const flights: [edge: number, lo: number, hi: number][] = [
+    [rLow, BEACH, LOW],
+    [rMid, LOW, MID],
+    [rTop, MID, TOP],
+  ];
+  for (const side of [1, -1]) {
+    flights.forEach(([edge, lo, hi], i) => {
+      const up = (i + (side > 0 ? 0 : 1)) & 1 ? 3 : 1; // 1 climbs +z, 3 climbs -z
+      // Open the cut to the sky first, so the flight is a notch in the cliff, not a tunnel.
+      const sx0 = cx + side * (edge - 3);
+      const half = hi - lo + 1;
+      const outer = sx0 + side * 3; // the column on the low terrace side stays open too
+      clearBox(
+        ctx,
+        Math.min(sx0 - 2, outer),
+        lo + 1,
+        cz - half,
+        Math.max(sx0 + 2, outer),
+        hi + 12,
+        cz + half - 1,
+      );
+      put(ctx, stairFlight(hi - lo, 5, MAT_STONE), sx0, cz, up, 4210 + i, lo + 1);
+    });
+  }
+
+  // Two pipe shafts on the low terrace against the north cliff. Each has a door to the low
+  // terrace (north), one onto the mid terrace (south), one to a catwalk across to the top, and
+  // one into the pipe bridge that joins the two high up.
+  const sx = S(40);
+  const rShaft = S(89);
+  const sz = cz - isqrt(rShaft * rShaft - sx * sx);
+  for (const side of [-1, 1]) {
+    const toBridge = side < 0 ? PX : NX;
+    const shaft = pipeShaft(4, [
+      [0, NZ],
+      [1, PZ],
+      [2, PZ],
+      [3, toBridge],
+    ]);
+    put(ctx, shaft, cx + side * sx, sz, 0, 4220 + side, LOW);
+    // Catwalk from the shaft's third-storey door to the top tier's rim.
+    const z0 = sz + SHAFT_R - 1;
+    const x = cx + side * sx;
+    const rimZ = cz - isqrt(Math.max(0, (rTop - 2) * (rTop - 2) - sx * sx));
+    const len = Math.max(4, rimZ - z0 + 4);
+    ctx.stamp(catwalk(len), x - 2, TOP, z0, 1, 4224 + side);
+  }
+  const span = 2 * (sx - SHAFT_R) + 4;
+  ctx.stamp(pipeBridge(span), cx - (span >> 1), LOW + 3 * STOREY - 1, sz - 5, 0, 4227);
+
+  // Workshops round a cobbled square on the top, the Great Gear in the middle.
+  put(ctx, plaza(S(26)), cx, cz, 0, 4230, TOP);
+  put(ctx, greatGear(), cx, cz, 0, 4231, TOP + 1);
+  const off = S(31);
+  const spots: [number, number, number][] = [
+    [cx - off, cz - off, 2],
+    [cx + off, cz - off, 2],
+    [cx - off, cz + off, 0],
+    [cx + off, cz + off, 0],
+  ];
+  spots.forEach(([x, z, rot], i) =>
+    put(ctx, workshop(i + ctx.rnd(4232, 0, 4)), x, z, rot, 4240 + i, TOP + 1),
+  );
+  // Street lamps round the square and along the terraces.
+  const lampAt: [number, number][] = [
+    [cx - S(18), cz],
+    [cx + S(18), cz],
+    [cx, cz - S(18)],
+    [cx, cz + S(18)],
+    [cx - S(70), cz + S(30)],
+    [cx + S(70), cz - S(30)],
+    [cx + S(30), cz + S(88)],
+    [cx - S(55), cz + S(72)],
+  ];
+  lampAt.forEach(([x, z], i) => {
+    const y = ctx.surf(x, z);
+    if (y > t.seaY)
+      ctx.decor.push({ kind: "lamp-post", x, y, z, face: UP, v: ctx.rnd(4260, i, 256) });
+  });
+}
+
 export const clockworkMesa: Theme = {
   id: "clockwork-mesa",
   name: "Clockwork Mesa",
-  minSize: 256,
+  minSize: 384,
   sizeY: 128,
   build(ctx) {
-    const { w, d, t } = ctx;
-    const e = Math.min(w, d);
-    /** A 256-layout distance at this grid's scale. */
-    const S = (v: number): number => Math.trunc((v * e) / 256);
-    const cx = w >> 1;
-    const cz = (d >> 1) - S(4);
-    const o = octave(ctx.seed, 4201, w, d, 32);
-    const wob = (x: number, z: number): number =>
-      Math.trunc(((sample(o, x, z) - 32768) * 5) / 32768);
-
-    // The mesa: a wobbly round shore, three cliffs, and a gear-toothed rim on the top tier.
-    const rTop = S(R_TOP);
-    const rMid = S(R_MID);
-    const rLow = S(R_LOW);
-    const rShore = S(R_SHORE);
-    const hfs = new Int32Array(w * d);
-    for (let z = 0; z < d; z++)
-      for (let x = 0; x < w; x++) {
-        const dx = x - cx;
-        const dz = z - cz;
-        // The tiers are machined true circles; only the shore wobbles.
-        const r = isqrt(dx * dx + dz * dz);
-        const tooth = ((pseudoAngle(dx, dz) * TEETH) >> 12) & 1 ? TOOTH : 0;
-        const level = r < rTop + tooth ? TOP : r < rMid ? MID : r < rLow ? LOW : BEACH;
-        const top = level * 256 + 255;
-        const s = rShore - r - wob(x, z);
-        hfs[z * w + x] = s <= 0 ? SEABED * 256 : Math.min(top, SEABED * 256 + s * 512);
-      }
-    fillFromHeightField(t, hfs);
-
-    // The Clock Foundry, dug into the south cliff: hall in the rock, clock tower to the sea.
-    put(ctx, clockFoundry(), cx, cz + S(R_LOW) - 19, 2, 4201, LOW + 1);
-
-    // Cliff stairs on the east and west: one flight per tier, cut tangentially into each cliff,
-    // switching direction from tier to tier.
-    const flights: [edge: number, lo: number, hi: number][] = [
-      [rLow, BEACH, LOW],
-      [rMid, LOW, MID],
-      [rTop, MID, TOP],
-    ];
-    for (const side of [1, -1]) {
-      flights.forEach(([edge, lo, hi], i) => {
-        const up = (i + (side > 0 ? 0 : 1)) & 1 ? 3 : 1; // 1 climbs +z, 3 climbs -z
-        // Open the cut to the sky first, so the flight is a notch in the cliff, not a tunnel.
-        const sx0 = cx + side * (edge - 3);
-        const half = hi - lo + 1;
-        const outer = sx0 + side * 3; // the column on the low terrace side stays open too
-        clearBox(
-          ctx,
-          Math.min(sx0 - 2, outer),
-          lo + 1,
-          cz - half,
-          Math.max(sx0 + 2, outer),
-          hi + 12,
-          cz + half - 1,
-        );
-        put(ctx, stairFlight(hi - lo, 5, MAT_STONE), sx0, cz, up, 4210 + i, lo + 1);
-      });
-    }
-
-    // Two pipe shafts on the low terrace against the north cliff. Each has a door to the low
-    // terrace (north), one onto the mid terrace (south), one to a catwalk across to the top, and
-    // one into the pipe bridge that joins the two high up.
-    const sx = S(40);
-    const rShaft = S(89);
-    const sz = cz - isqrt(rShaft * rShaft - sx * sx);
-    for (const side of [-1, 1]) {
-      const toBridge = side < 0 ? PX : NX;
-      const shaft = pipeShaft(4, [
-        [0, NZ],
-        [1, PZ],
-        [2, PZ],
-        [3, toBridge],
-      ]);
-      put(ctx, shaft, cx + side * sx, sz, 0, 4220 + side, LOW);
-      // Catwalk from the shaft's third-storey door to the top tier's rim.
-      const z0 = sz + SHAFT_R - 1;
-      const x = cx + side * sx;
-      const rimZ = cz - isqrt(Math.max(0, (rTop - 2) * (rTop - 2) - sx * sx));
-      const len = Math.max(4, rimZ - z0 + 4);
-      ctx.stamp(catwalk(len), x - 2, TOP, z0, 1, 4224 + side);
-    }
-    const span = 2 * (sx - SHAFT_R) + 4;
-    ctx.stamp(pipeBridge(span), cx - (span >> 1), LOW + 3 * STOREY - 1, sz - 5, 0, 4227);
-
-    // Workshops round a cobbled square on the top, the Great Gear in the middle.
-    put(ctx, plaza(S(26)), cx, cz, 0, 4230, TOP);
-    put(ctx, greatGear(), cx, cz, 0, 4231, TOP + 1);
-    const off = S(31);
-    const spots: [number, number, number][] = [
-      [cx - off, cz - off, 2],
-      [cx + off, cz - off, 2],
-      [cx - off, cz + off, 0],
-      [cx + off, cz + off, 0],
-    ];
-    spots.forEach(([x, z, rot], i) =>
-      put(ctx, workshop(i + ctx.rnd(4232, 0, 4)), x, z, rot, 4240 + i, TOP + 1),
-    );
-    // On bigger grids the terraces are wide enough for a lower town on the low terrace.
-    if (rLow - rMid >= 30) {
-      const ring = Math.trunc(((rLow + rMid) >> 1) * 181) >> 8; // * cos 45
-      [
-        [cx + ring, cz + ring, 3],
-        [cx - ring, cz + ring, 1],
-      ].forEach(([x, z, rot], i) => put(ctx, workshop(i + 1), x!, z!, rot!, 4250 + i, LOW + 1));
-    }
-
-    // Street lamps round the square and along the terraces.
-    const lampAt: [number, number][] = [
-      [cx - S(18), cz],
-      [cx + S(18), cz],
-      [cx, cz - S(18)],
-      [cx, cz + S(18)],
-      [cx - S(70), cz + S(30)],
-      [cx + S(70), cz - S(30)],
-      [cx + S(30), cz + S(88)],
-      [cx - S(55), cz + S(72)],
-    ];
-    lampAt.forEach(([x, z], i) => {
-      const y = ctx.surf(x, z);
-      if (y > t.seaY)
-        ctx.decor.push({ kind: "lamp-post", x, y, z, face: UP, v: ctx.rnd(4260, i, 256) });
+    withIslets(ctx, core, {
+      house: (i) =>
+        house({
+          ...WORKSHOPS[i % WORKSHOPS.length]!,
+          id: `clockwork-islet-${i}`,
+          storeys: 1,
+          w: 18,
+          d: 16,
+          balcony: 0,
+          garden: false,
+          shop: false,
+        }),
+      salt: 4280,
+      maxLevel: 40,
     });
-
-    scatterObjects(
-      ctx,
-      [
-        { x0: cx - rLow, z0: cz - rLow, x1: cx + rLow, z1: cz + rLow },
-        { x0: cx - rTop, z0: cz - rTop, x1: cx + rTop, z1: cz + rTop },
-      ],
-      250,
-    );
   },
 };
