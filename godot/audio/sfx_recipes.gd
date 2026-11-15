@@ -17,6 +17,7 @@ const NAMES := [
 	"ui_click",
 	"ui_hover",
 	"ui_confirm",
+	"thunder",
 ]
 
 ## Explosions come in three sizes so a bigger blast sounds bigger.
@@ -59,6 +60,8 @@ static func make(name: String, variant: String = "") -> PackedFloat32Array:
 			return _ui_hover()
 		"ui_confirm":
 			return _ui_confirm()
+		"thunder":
+			return _thunder(variant != "far")
 	return PackedFloat32Array()
 
 
@@ -160,3 +163,15 @@ static func _ui_confirm() -> PackedFloat32Array:
 	var a := _v({"wave": "square", "duty": 0.4, "freq": 520, "attack": 0.001, "sustain": 0.05, "decay": 0.04, "volume": 0.3, "lowpass": 0.7})
 	var b := AudioSynth.shift(_v({"wave": "square", "duty": 0.4, "freq": 780, "attack": 0.001, "sustain": 0.07, "decay": 0.08, "volume": 0.3, "lowpass": 0.7}), 0.07)
 	return AudioSynth.mix([a, b])
+
+
+## Thunder: a crack (near strikes only) and a long low rolling rumble.
+static func _thunder(near: bool) -> PackedFloat32Array:
+	var layers := [
+		_v({"wave": "noise", "freq": 220.0, "slide": -0.25, "attack": 0.08, "sustain": 0.6, "decay": 2.2, "volume": 0.9, "lowpass": 0.06}, 21),
+		_v({"wave": "noise", "freq": 140.0, "slide": -0.15, "attack": 0.3, "sustain": 0.4, "decay": 1.8, "volume": 0.7, "lowpass": 0.04}, 22),
+		_v({"wave": "sine", "freq": 48.0, "slide": -0.3, "attack": 0.05, "sustain": 0.5, "decay": 1.6, "volume": 0.5}),
+	]
+	if near:
+		layers.append(_v({"wave": "noise", "freq": 5000, "slide": -3.0, "attack": 0.001, "sustain": 0.03, "decay": 0.25, "volume": 0.6, "lowpass": 0.8}, 23))
+	return AudioSynth.mix(layers)

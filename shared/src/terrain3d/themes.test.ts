@@ -68,7 +68,7 @@ const THEME_CASES = [
   },
   {
     id: "clockwork-mesa",
-    golden: { 256: 2217790638, 384: 3663389062, 512: 1011430248 } as Record<number, number>,
+    golden: { 256: 1621764385, 384: 3512871344, 512: 2703441375 } as Record<number, number>,
   },
   {
     id: "frosted-bakery",
@@ -133,4 +133,16 @@ describe.each(THEME_CASES)("$id", ({ id, golden }) => {
       for (const sp of a.spawns) expect(reach.has(sp.z * min + sp.x)).toBe(true);
     }
   }, 60_000);
+});
+
+describe("clockwork-mesa layout", () => {
+  it("has players on every tier, all joined by the cliff stairs and pipe shafts", () => {
+    for (const size of [256, 384]) {
+      const a = generate(themedRecipe("clockwork-mesa", 3, size));
+      const tiers = new Set(a.spawns.map((s) => s.y - 1));
+      for (const y of [34, 46, 62, 78]) expect(tiers.has(y)).toBe(true);
+      const reach = walkable(a.terrain, a.spawns[0]!.x, a.spawns[0]!.z);
+      for (const s of a.spawns) expect(reach.has(s.z * a.terrain.sizeX + s.x)).toBe(true);
+    }
+  });
 });

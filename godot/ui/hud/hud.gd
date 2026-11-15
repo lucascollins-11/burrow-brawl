@@ -22,7 +22,7 @@ var _cross: Crosshair
 var _power_panel: PanelContainer
 var _power_label: Label
 var _power_bar: ProgressBar
-var _hint: Label
+var _hint: PromptLabel
 var _weapon_grid: WeaponGrid
 var _full_ammo: Dictionary = {}  # the catalogue's starting ammo: id -> count, -1 unlimited
 var _weapon_menu_button: Button
@@ -157,9 +157,9 @@ func _ready() -> void:
 	_weapon_grid.offset_bottom = -WeaponGrid.MARGIN_BELOW
 	_weapon_grid.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	root.add_child(_weapon_grid)
-	_hint = _label(13, false)
-	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint = PromptLabel.new()
+	_hint.set_font_px(13, INK)
+	_hint.centered = true
 	# Between the minimap on the left and the weapon bar on the right (see update); wraps to a
 	# second line, growing upwards, instead of running into the bar.
 	_hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -345,7 +345,7 @@ func update(
 		if weapon_name.begins_with(str(_weapon_list[i]["name"])):
 			_weapon_grid.set_current(_weapon_id(i))
 	_skip.disabled = not (v["my_turn"] and (v["phase"] == "control" or v["phase"] == "retreat"))
-	_hint.text = "" if over else hint
+	_hint.set_prompt("" if over else hint)
 	if _bottom_bar != null:
 		_hint.offset_right = -(_bottom_bar.size.x + 24.0)
 	_end_panel.visible = over

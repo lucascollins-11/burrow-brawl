@@ -157,6 +157,8 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _start(s)
 		"screen":
 			return await _screen(s)
+		"device":
+			return await _device(s)
 		"practice_setup":
 			return await _practice_setup(s)
 		"wait":
@@ -186,6 +188,20 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _view(s)
 		"carve":
 			return await _carve(s)
+		"sky":
+			# Change weather and time of day in the running match (looks only).
+			if scene == null:
+				return _fail("no match")
+			scene.set_sky(str(s.get("weather", "clear")), str(s.get("time", "day")))
+			await _frames(int(s.get("frames", 8)))
+			return _ok("sky %s" % [scene.sky])
+		"strike":
+			# A lightning strike now (storm screenshots), then wait `frames` for the flash.
+			if scene == null or scene.weather == null:
+				return _fail("no match")
+			scene.weather.strike()
+			await _frames(int(s.get("frames", 2)))
+			return _ok("lightning strike %d, sky %s" % [scene.weather.strikes, scene.sky])
 		"menu":
 			return await _menu(str(s.get("open", "none")))
 		"opponent":
@@ -240,6 +256,10 @@ func _start(s: Dictionary) -> Dictionary:
 		}
 		if s.has("theme"):
 			patch["mapTheme"] = str(s["theme"])
+		if s.has("weather"):
+			patch["weather"] = str(s["weather"])
+		if s.has("time"):
+			patch["timeOfDay"] = str(s["time"])
 		a.set_settings(patch)
 		# Settings un-ready everyone, so wait for them to land before readying (else a race).
 		if not await _until(func() -> bool: return int(a.lobby.settings().get("mapSeed", -1)) == patch["mapSeed"] and int(b.lobby.settings().get("mapSeed", -1)) == patch["mapSeed"]):
@@ -341,6 +361,20 @@ func _practice_setup(s: Dictionary) -> Dictionary:
 			return _fail("no %s choice '%s' on the setup screen" % [pair[0], s[pair[0]]])
 	await _seconds(0.6)
 	return _ok("practice setup showing")
+
+
+## {do:device, kind: keyboard|pad, family: xbox|playstation|switch}: pretend the player just used
+## that device, so the HUD and tutorial prompts switch to its names and glyphs.
+func _device(s: Dictionary) -> Dictionary:
+	var kind := str(s.get("kind", "keyboard"))
+	var family := str(s.get("family", "xbox"))
+	if kind != "keyboard" and kind != "pad":
+		return _fail("kind must be keyboard or pad")
+	if kind == "pad" and not PadMap.FAMILIES.has(family):
+		return _fail("family must be one of %s" % [PadMap.FAMILIES])
+	get_node("/root/PadInput").use(kind, family)
+	await _seconds(0.4)
+	return _ok("prompts now follow %s" % [kind if kind == "keyboard" else family])
 
 
 func _close_screen() -> void:

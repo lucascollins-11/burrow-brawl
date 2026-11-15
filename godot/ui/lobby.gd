@@ -17,6 +17,8 @@ var _start_button: Button
 var _status: Label
 var _theme_pick: OptionButton
 var _size_pick: OptionButton
+var _weather_pick: OptionButton
+var _time_pick: OptionButton
 var _turn_pick: OptionButton
 var _count_pick: OptionButton
 var _copy_button: Button
@@ -49,6 +51,8 @@ func _ready() -> void:
 		_apply_practice_layout()
 		_apply_remembered_choices()
 	_refresh()
+	# Focus the main action so a pad can navigate the lobby.
+	(_start_button if _practice else _ready_button).grab_focus.call_deferred()
 
 
 ## Practice shows only the Match card, centred, with a Start practice button.
@@ -169,6 +173,8 @@ func _build() -> void:
 	setup.add_child(grid)
 	_theme_pick = _setting(grid, "Map", "mapTheme")
 	_size_pick = _setting(grid, "Size", "mapSize")
+	_weather_pick = _setting(grid, "Weather", "weather")
+	_time_pick = _setting(grid, "Time of day", "timeOfDay")
 	_turn_pick = _setting(grid, "Turn time", "turnSeconds")
 	for secs in TURN_CHOICES:
 		_turn_pick.add_item("%d seconds" % secs)
@@ -254,6 +260,22 @@ func _setting(grid: GridContainer, title: String, key: String) -> OptionButton:
 	return pick
 
 
+## Fill a drop-down with "Random" and then the ids the server offers, shown capitalised. An older
+## server offers none, and the row stays empty and disabled.
+func _fill_choices(pick: OptionButton, ids: Array) -> void:
+	if ids.is_empty():
+		pick.clear()
+		return
+	if pick.item_count == ids.size() + 1:
+		return
+	pick.clear()
+	pick.add_item("Random")
+	pick.set_item_metadata(0, "random")
+	for id in ids:
+		pick.add_item(str(id).capitalize())
+		pick.set_item_metadata(pick.item_count - 1, str(id))
+
+
 ## Fill the map drop-downs from what the server offers, and show the current choices. Only the
 ## host can change them.
 func _refresh_setup() -> void:
@@ -268,6 +290,8 @@ func _refresh_setup() -> void:
 		for t: Dictionary in themes:
 			_theme_pick.add_item(str(t.get("name", t.get("id", "?"))))
 			_theme_pick.set_item_metadata(_theme_pick.item_count - 1, str(t.get("id", "")))
+	_fill_choices(_weather_pick, options.get("weathers", []))
+	_fill_choices(_time_pick, options.get("times", []))
 	if _size_pick.item_count != sizes.size():
 		_size_pick.clear()
 		for i in range(sizes.size()):
@@ -277,7 +301,7 @@ func _refresh_setup() -> void:
 			_size_pick.set_item_metadata(i, edge)
 	var current := lobby.settings()
 	var can_edit := lobby.is_host() and lobby.phase() == "lobby"
-	for pair in [[_theme_pick, "mapTheme"], [_size_pick, "mapSize"], [_turn_pick, "turnSeconds"], [_count_pick, "crittersPerTeam"]]:
+	for pair in [[_theme_pick, "mapTheme"], [_size_pick, "mapSize"], [_weather_pick, "weather"], [_time_pick, "timeOfDay"], [_turn_pick, "turnSeconds"], [_count_pick, "crittersPerTeam"]]:
 		var pick: OptionButton = pair[0]
 		pick.disabled = not can_edit
 		var want: Variant = current.get(pair[1], null)

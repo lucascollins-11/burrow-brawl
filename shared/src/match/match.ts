@@ -31,6 +31,7 @@ import {
   settleCrates,
   type Crate,
 } from "./crates";
+import { gustAmplitude, gustAt, isStorm, stormWindMax, windWithGust } from "./gusts";
 import { basicTurns, type TurnRules, type TurnState } from "./turns";
 
 // ------------------------------------------------------------ commands
@@ -175,6 +176,11 @@ export interface MatchConfig {
   dummyTeam?: number;
   /** Sudden death: from the round after this one the soda rises every turn. 0 or absent = off. */
   suddenDeathRound?: number;
+  /**
+   * Weather and time of day, already resolved (never "random"). Clients draw them; the sim only
+   * reads `weather` for storm gusts. Absent means clear weather in the theme's own light.
+   */
+  sky?: { weather: string; time: string };
   /** Voxels the soda rises per turn once sudden death starts. Default 2. */
   seaRisePerTurn?: number;
 }
@@ -258,8 +264,21 @@ export function rulesFor(cfg: MatchConfig): TurnRules {
     turnTicks: cfg.turnTicks,
     retreatTicks: cfg.retreatTicks,
     settleCapTicks: cfg.settleCapTicks,
-    windMax: cfg.windMax,
+    windMax: isStorm(cfg.sky) ? stormWindMax(cfg.windMax) : cfg.windMax,
   };
+}
+
+/** Storms: stamp the gust on `tick` onto the turn state. Anything else passes through untouched. */
+function withGust(cfg: MatchConfig, ts: TurnState, tick: number): TurnState {
+  if (!isStorm(cfg.sky)) return ts;
+  const g = gustAt(cfg.seed, tick, gustAmplitude(cfg.windMax));
+  return { ...ts, gustX: g.x, gustZ: g.z };
+}
+
+/** The wind the sim feels: the turn's wind plus any gust stamped on it. */
+function simWind(ts: TurnState): { windX: number; windZ: number } {
+  if (ts.gustX === undefined && ts.gustZ === undefined) return { windX: ts.windX, windZ: ts.windZ };
+  return windWithGust(ts.windX, ts.windZ, { x: ts.gustX ?? 0, z: ts.gustZ ?? 0 });
 }
 
 /** Build the initial match. Pure function of the config (map, spawns, first turn). */
@@ -293,9 +312,9 @@ export function createMatch(cfg: MatchConfig): MatchState {
   if (cfg.dummyTeam !== undefined)
     moveDummyNear(critters, cfg.dummyTeam, map.spawns.slice(spawnIndex));
   const sim = createWorld(map.terrain, critters);
-  const first = turns.init(sim, rulesFor(cfg), 0, rng);
+  const first = withGust(cfg, turns.init(sim, rulesFor(cfg), 0, rng), 0);
   return {
-    sim: { ...sim, windX: first.windX, windZ: first.windZ },
+    sim: { ...sim, ...simWind(first) },
     turns: first,
     rng: rng.getState(),
     moveYaw: -1,
@@ -433,7 +452,9 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
 
   const rng = Prng.fromState(state.rng);
   // The turn controller owns wind; the sim reads it from SimState.
-  const sim: SimState = { ...simIn, windX: ts.windX, windZ: ts.windZ };
+  // In a storm the gust for this tick rides on top (gusts.ts).
+  ts = withGust(cfg, ts, tick);
+  const sim: SimState = { ...simIn, ...simWind(ts) };
   const r = stepWorld(sim, inputs, rng);
   let ammo = state.ammo;
   for (const e of r.events) {
@@ -446,10 +467,10 @@ export function stepMatch(cfg: MatchConfig, state: MatchState, cmds: readonly Cm
     // Utilities like the Drill Hat leave the turn running.
     if (loadWeapons()[e.weaponId].endsTurn) ts = turns.endTurn(ts, rules, "fired", tick);
   }
-  const next = turns.update(ts, rules, r.state, r.events, r.state.tick, rng);
+  const next = withGust(cfg, turns.update(ts, rules, r.state, r.events, r.state.tick, rng), tick);
   const turnChanged =
     next.turn !== state.turns.turn || (next.phase === "over") !== (state.turns.phase === "over");
-  let simOut: SimState = { ...r.state, windX: next.windX, windZ: next.windZ };
+  let simOut: SimState = { ...r.state, ...simWind(next) };
   // Sudden death: once the round limit passes, the soda rises at the start of every turn.
   const sdRound = cfg.suddenDeathRound ?? 0;
   if (turnChanged && next.phase !== "over" && sdRound > 0 && next.round > sdRound) {

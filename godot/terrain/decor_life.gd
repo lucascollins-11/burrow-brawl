@@ -30,6 +30,10 @@ void fragment() {
 }
 """
 
+## How much brighter the beam is than by day (the match sets it from the time of day before the
+## map loads: about 3 at night, so the sweep is the brightest thing in the village).
+static var beam_boost := 1.0
+
 var _view: Node3D = null
 var _movers := []  # [kind, instance, mode, phase]
 var _flues := []  # [kind, instance, world point]
@@ -158,6 +162,21 @@ func _add_smoke() -> void:
 	_smoke = p
 
 
+## Re-light an existing beam (the time of day changed).
+func set_beam_boost(k: float) -> void:
+	beam_boost = k
+	if _beam == null:
+		return
+	for c in _beam.get_children():
+		if c is SpotLight3D:
+			(c as SpotLight3D).light_energy = 6.0 * k
+			(c as SpotLight3D).spot_range = 160.0 * minf(1.6, sqrt(k))
+		elif c is MeshInstance3D:
+			var m := ((c as MeshInstance3D).mesh as PrimitiveMesh).material as ShaderMaterial
+			if m != null:
+				m.set_shader_parameter("strength", minf(0.95, BEAM_STRENGTH * k))
+
+
 func _add_beam(at: Vector3) -> void:
 	_beam = Node3D.new()
 	_beam.name = "LighthouseBeam"
@@ -167,7 +186,7 @@ func _add_beam(at: Vector3) -> void:
 	sh.code = BEAM_SHADER
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
-	mat.set_shader_parameter("strength", BEAM_STRENGTH)
+	mat.set_shader_parameter("strength", minf(0.95, BEAM_STRENGTH * beam_boost))
 	for side in [1.0, -1.0]:
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.9
@@ -186,8 +205,8 @@ func _add_beam(at: Vector3) -> void:
 		_beam.add_child(shaft)
 		var spot := SpotLight3D.new()
 		spot.light_color = Color(1.0, 0.88, 0.6)
-		spot.light_energy = 6.0
-		spot.spot_range = 160.0
+		spot.light_energy = 6.0 * beam_boost
+		spot.spot_range = 160.0 * minf(1.6, sqrt(beam_boost))
 		spot.spot_angle = 7.0
 		spot.shadow_enabled = false
 		# Spot lights shine down their -z; turn that to +-x and tip it a little toward the sea.

@@ -59,6 +59,12 @@ static var practice_size := 0
 static var practice_turn := 90
 ## action id -> physical keycode of the main binding.
 static var keys: Dictionary = {}
+## pad family (PadMap.XBOX...) -> {action id -> pad code}. Each family keeps its own bindings.
+static var pad_codes: Dictionary = {}
+## "keyboard" or "pad": what was used last. The prompts show that device's names and glyphs.
+static var active_device := "keyboard"
+## The family of the pad used last (or of the first pad plugged in), whose bindings are live.
+static var active_family := PadMap.XBOX
 static var _booted := false
 
 
@@ -70,6 +76,19 @@ static func action_def(id: String) -> Dictionary:
 		if a["id"] == id:
 			return a
 	return {}
+
+
+static func default_pad_codes() -> Dictionary:
+	var out := {}
+	for family in PadMap.FAMILIES:
+		out[family] = PadMap.default_codes()
+	return out
+
+
+static func pad_code(family: String, id: String) -> int:
+	if not pad_codes.has(family):
+		return int(PadMap.DEFAULTS.get(id, PadMap.NONE))
+	return int((pad_codes[family] as Dictionary).get(id, PadMap.DEFAULTS.get(id, PadMap.NONE)))
 
 
 static func default_keys() -> Dictionary:
@@ -90,9 +109,7 @@ static func key_label(code: int) -> String:
 static func hint_for(pairs: Array) -> String:
 	var parts: PackedStringArray = []
 	for pair in pairs:
-		var id := str(pair[0])
-		var code := int(keys.get(id, action_def(id).get("key", 0)))
-		parts.append("%s %s" % [key_label(code), pair[1]])
+		parts.append("%s %s" % [Prompts.label_for(str(pair[0])), pair[1]])
 	return " - ".join(parts)
 
 
@@ -149,6 +166,7 @@ static func boot() -> void:
 
 static func load_file(path: String = PATH) -> void:
 	keys = default_keys()
+	pad_codes = default_pad_codes()
 	var cfg := ConfigFile.new()
 	if cfg.load(path) != OK:
 		return
@@ -168,6 +186,9 @@ static func load_file(path: String = PATH) -> void:
 	for a in ACTIONS:
 		var id: String = a["id"]
 		keys[id] = int(cfg.get_value("keys", id, keys[id]))
+		for family in PadMap.FAMILIES:
+			var codes: Dictionary = pad_codes[family]
+			codes[id] = int(cfg.get_value("pad_" + family, id, codes[id]))
 
 
 static func save_file(path: String = PATH) -> void:
@@ -187,6 +208,9 @@ static func save_file(path: String = PATH) -> void:
 	cfg.set_value("practice", "turn", practice_turn)
 	for id in keys:
 		cfg.set_value("keys", id, keys[id])
+	for family in pad_codes:
+		for id in pad_codes[family]:
+			cfg.set_value("pad_" + str(family), id, pad_codes[family][id])
 	cfg.save(path)  # best effort; a read-only disk just forgets the settings
 
 
@@ -202,6 +226,7 @@ static func reset_to_defaults() -> void:
 	stick_sensitivity = 1.0
 	invert_y = false
 	keys = default_keys()
+	pad_codes = default_pad_codes()
 	apply_all()
 	save_file()
 
@@ -294,6 +319,42 @@ static func rebind(id: String, code: int) -> String:
 	return swapped
 
 
+## Rebind a pad action in one family. A button already used by another action swaps places with
+## it. Returns the id that was swapped, or "".
+static func rebind_pad(family: String, id: String, code: int) -> String:
+	if not pad_codes.has(family):
+		pad_codes[family] = PadMap.default_codes()
+	var codes: Dictionary = pad_codes[family]
+	var old := int(codes.get(id, PadMap.NONE))
+	var swapped := ""
+	for other in codes:
+		if other != id and int(codes[other]) == code and code != PadMap.NONE:
+			codes[other] = old
+			swapped = other
+	codes[id] = code
+	apply_bindings()
+	save_file()
+	return swapped
+
+
+static func reset_pad(family: String) -> void:
+	pad_codes[family] = PadMap.default_codes()
+	apply_bindings()
+	save_file()
+
+
+## Note which device was used last. Switching to a pad of another family makes that family's
+## bindings the live ones. Returns true when the prompts need to change.
+static func set_active_device(device: String, family := "") -> bool:
+	var changed := device != active_device
+	active_device = device
+	if device == "pad" and family != "" and family != active_family:
+		active_family = family
+		changed = true
+		apply_bindings()
+	return changed
+
+
 static func reset_keys() -> void:
 	keys = default_keys()
 	apply_bindings()
@@ -330,6 +391,16 @@ static func apply_bindings() -> void:
 		var alt := int(a["alt"])
 		if alt != 0:
 			InputMap.action_add_event(id, _key_event(alt))
+		var pad := PadMap.event_for(pad_code(active_family, id))
+		if pad != null:
+			InputMap.action_add_event(id, pad)
+		InputMap.action_set_deadzone(id, 0.5)
+	# The left stick walks, in eight directions like the keys.
+	for walk: Array in PadMap.WALK_AXES:
+		var m := InputEventJoypadMotion.new()
+		m.axis = int(walk[1]) as JoyAxis
+		m.axis_value = float(walk[2])
+		InputMap.action_add_event(str(walk[0]), m)
 
 
 static func _key_event(code: int) -> InputEventKey:

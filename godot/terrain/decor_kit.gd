@@ -50,6 +50,9 @@ const ROPE := Color("c9a56a")
 const NET := Color("4b6a5a")
 const STONE := Color("9a9aa2")
 const RED := Color("d8483c")
+## Window glass. By day a cool reflective pane; lit warm from inside by set_window_glow at night.
+const PANE := Color("6f8ea8")
+const PANE_LIT := Color("ffc879")
 
 static var _meshes: Dictionary = {}
 static var _materials: Dictionary = {}
@@ -169,8 +172,30 @@ static func _material(c: Color) -> Material:
 		m.emission_enabled = true
 		m.emission = c
 		m.emission_energy_multiplier = 1.5
+	if c == PANE:
+		m.roughness = 0.2
+		m.metallic_specular = 0.8
+		m.emission_enabled = true
+		m.emission = PANE_LIT
+		m.emission_energy_multiplier = 0.0
+		_pane_glow(m, _window_glow)
 	_materials[c] = m
 	return m
+
+
+static var _window_glow := 0.0
+
+
+## Light every window pane from inside: 0 by day, 1 at night. Applies to panes already built too.
+static func set_window_glow(k: float) -> void:
+	_window_glow = clampf(k, 0.0, 1.0)
+	if _materials.has(PANE):
+		_pane_glow(_materials[PANE], _window_glow)
+
+
+static func _pane_glow(m: StandardMaterial3D, k: float) -> void:
+	m.albedo_color = PANE.lerp(PANE_LIT, k)
+	m.emission_energy_multiplier = 2.2 * k
 
 
 static func _box(sx: float, sy: float, sz: float, at: Vector3, c: Color, rot := Basis()) -> Array:
@@ -217,6 +242,7 @@ static func _window(w: float, h: float, shutters: bool) -> Array:
 	p.append(_box(t, h + 0.4, 0.35, Vector3(-w * 0.5 - t * 0.5 + 0.05, cy, 0.12), WHITE))
 	p.append(_box(t, h + 0.4, 0.35, Vector3(w * 0.5 + t * 0.5 - 0.05, cy, 0.12), WHITE))
 	p.append(_box(w + 1.0, 0.25, 0.7, Vector3(0, 0.45, 0.3), WHITE))
+	p.append(_box(w - 0.1, h - 0.1, 0.05, Vector3(0, cy, -0.5), PANE))
 	p.append(_box(0.14, h, 0.12, Vector3(0, cy, -0.4), WHITE))
 	p.append(_box(w, 0.14, 0.12, Vector3(0, cy + h * 0.1, -0.4), WHITE))
 	if shutters:

@@ -114,6 +114,15 @@ describe("parseClientMessage", () => {
     expect(validateSettingsPatch({ mapId: "../etc" }).ok).toBe(false);
     expect(validateSettingsPatch({ hasOwnProperty: 1 }).ok).toBe(false);
   });
+
+  it("accepts the weather and time of day choices and random", () => {
+    for (const weather of ["clear", "rain", "storm", "fog", "random"])
+      expect(validateSettingsPatch({ weather }).ok).toBe(true);
+    for (const timeOfDay of ["day", "dusk", "night", "random"])
+      expect(validateSettingsPatch({ timeOfDay }).ok).toBe(true);
+    expect(validateSettingsPatch({ weather: "snow" }).ok).toBe(false);
+    expect(validateSettingsPatch({ timeOfDay: 3 }).ok).toBe(false);
+  });
 });
 
 describe("text helpers", () => {
