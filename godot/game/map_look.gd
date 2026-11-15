@@ -32,6 +32,7 @@ const LOOKS := {
 	},
 	# Brass and copper under a violet dusk.
 	"clockwork-mesa": {
+		"materials": {},
 		"grass": "c9a23a", "grass_dark": "9c7a2b", "soil": "b5673a", "rock": "6d5a52",
 		"sand": "e3c58f", "bedrock": "33303f",
 		"sea_shallow": "9ad6c9", "sea_deep": "24506b", "sea_horizon": "e8a6b8",
@@ -42,6 +43,7 @@ const LOOKS := {
 	},
 	# A sunny vegetable patch: bright lawn, dark soil, terracotta pots, a green pond.
 	"garden-patch": {
+		"materials": {},
 		# Storybook palette (the look Lucas picked): violet rock with gold bands, a dark turf lip.
 		"grass": "8be04e", "grass_dark": "45b04a", "grass_lip": "2f7a3a", "soil": "c8794a",
 		"rock": "8a6a8f", "rock_band": "f0c070", "sand": "ffe3a3", "bedrock": "3e3b34",
@@ -53,6 +55,7 @@ const LOOKS := {
 	},
 	# Soap bars and a sponge in a steamy bathtub: porcelain blues, pink foam, warm light.
 	"bathtub-bay": {
+		"materials": {},
 		"grass": "f7b6d6", "grass_dark": "c9a3ea", "soil": "fbd9a4", "rock": "a6c4f2",
 		"sand": "d9b04e", "bedrock": "5a5f8c",
 		"sea_shallow": "7fd4f2", "sea_deep": "1c63b0", "sea_horizon": "d6efff",
@@ -63,6 +66,7 @@ const LOOKS := {
 	},
 	# A fishing village at dusk: low golden sun, deep harbour blue, slate and stone, lush terraces.
 	"lighthouse-village": {
+		"materials": {},
 		"grass": "7fd04a", "grass_dark": "3f9a40", "grass_lip": "2f7a3a", "soil": "b8774a",
 		"rock": "8a7f8f", "rock_band": "e8b878", "sand": "f5d9a0", "bedrock": "3a3f4f",
 		"sea_shallow": "5fd0c8", "sea_deep": "0f4f7a", "sea_horizon": "ffb88a",
@@ -73,6 +77,7 @@ const LOOKS := {
 	},
 	# Icing on sponge cake in strawberry soda.
 	"frosted-bakery": {
+		"materials": {},
 		"grass": "fff6f0", "grass_dark": "ffd6e3", "soil": "e8b56b", "rock": "b5763f",
 		"sand": "fff0c9", "bedrock": "6b3f33",
 		"sea_shallow": "ffc2d6", "sea_deep": "c2477a", "sea_horizon": "ffe3d6",
