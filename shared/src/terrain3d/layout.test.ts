@@ -38,10 +38,14 @@ function reach(t: VoxelTerrain, sx: number, sz: number): Uint8Array {
 }
 
 describe("islets", () => {
-  it.each([384, 512])(
-    "Toybox Harbor at %i: islets round the harbour, all walkable from the mainland",
-    (size) => {
-      const m = generate(themedRecipe("toybox-harbor", 4, size));
+  it.each([
+    ["toybox-harbor", 384],
+    ["toybox-harbor", 512],
+    ["picnic-atoll", 384],
+  ] as const)(
+    "%s at %i: islets round the core, all walkable from the mainland",
+    (id, size) => {
+      const m = generate(themedRecipe(id, 4, size));
       const t = m.terrain;
       const r = reach(t, m.spawns[0]!.x, m.spawns[0]!.z);
       const lo = (size - 256) / 2;

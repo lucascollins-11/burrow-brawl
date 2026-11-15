@@ -147,7 +147,13 @@ describe("materials and edits", () => {
 
   it("leaves the themes that build no prefabs without materials or decor", () => {
     // These build with prefabs, so they carry materials and decor on purpose.
-    const built = new Set(["lighthouse-village", "clockwork-mesa", "bathtub-bay", "toybox-harbor"]);
+    const built = new Set([
+      "lighthouse-village",
+      "clockwork-mesa",
+      "bathtub-bay",
+      "toybox-harbor",
+      "picnic-atoll",
+    ]);
     for (const th of THEMES) {
       if (built.has(th.id)) continue;
       const m = generate(themedRecipe(th.id, 1, MAP_SIZES[0]));

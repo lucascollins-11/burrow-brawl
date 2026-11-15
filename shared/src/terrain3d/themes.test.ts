@@ -60,7 +60,7 @@ describe("theme registry", () => {
 const THEME_CASES = [
   {
     id: "picnic-atoll",
-    golden: { 256: 2855479326, 384: 3677026463, 512: 1716054583 } as Record<number, number>,
+    golden: { 384: 4285207213, 512: 3225110002 } as Record<number, number>,
   },
   {
     id: "toybox-harbor",

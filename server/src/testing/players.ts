@@ -77,10 +77,18 @@ export async function startTwoPlayerMatch(
   cb.send({ t: "room.join", code });
   await cb.next("room.joined");
   await ca.room((s) => s.members.length === 2);
-  // Short turns so tests can cycle them.
+  // Short turns so tests can cycle them. A fixed map with land in the middle (the weapon cases
+  // aim and jump toward the centre), so a theme's redesign doesn't move the goalposts.
   await ca.request({
     t: "lobby.setSettings",
-    patch: { turnSeconds: 15, crittersPerTeam: 2, mapSeed: 99, ...settings },
+    patch: {
+      turnSeconds: 15,
+      crittersPerTeam: 2,
+      mapSeed: 99,
+      mapTheme: "garden-patch",
+      mapSize: 384,
+      ...settings,
+    },
   });
   ca.send({ t: "lobby.ready", ready: true });
   cb.send({ t: "lobby.ready", ready: true });

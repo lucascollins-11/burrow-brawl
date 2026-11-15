@@ -9,6 +9,8 @@ const DEFAULT := "picnic-atoll"
 const LOOKS := {
 	# A sunny picnic at sunset: grass, warm soil, lime soda.
 	"picnic-atoll": {
+		# Structure palette: bread, lettuce, cheese and a red-checked cloth.
+		"materials": {1: "f0cf8a", 3: "7fbf4a", 5: "d9a066", 6: "e0b070", 13: "d8a85a", 7: "e0453a", 15: "ffd84a"},
 		"grass": "6bcc33", "grass_dark": "3d9929", "soil": "c78047", "rock": "8f756b",
 		"sand": "f2d18a", "bedrock": "474d6b",
 		"sea_shallow": "6bf2c7", "sea_deep": "0f6b8c", "sea_horizon": "ffc294",
