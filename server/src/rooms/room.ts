@@ -320,9 +320,17 @@ export class Room {
 
       case "lobby.setSettings":
         if (!isHost) return "not_host";
-        this.settings = { ...this.settings, ...msg.patch };
-        this.unreadyAll();
-        break;
+        {
+          const before = this.settings;
+          this.settings = { ...this.settings, ...msg.patch };
+          // A new map seed alone is rolled by the host's client right before lobby.start, so it
+          // must not clear ready; any other change does, so players see what they agree to.
+          const changed = (Object.keys(msg.patch) as (keyof typeof before)[]).some(
+            (k) => k !== "mapSeed" && before[k] !== this.settings[k],
+          );
+          if (changed) this.unreadyAll();
+          break;
+        }
 
       case "lobby.ready":
         if (msg.ready && !me.teamId) return "not_allowed";

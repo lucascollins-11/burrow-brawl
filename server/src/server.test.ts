@@ -287,6 +287,19 @@ describe("lobby", () => {
     expect(await host.request({ t: "lobby.addTeam" })).toMatchObject({ code: "match_in_progress" });
   });
 
+  it("a new map seed keeps ready, so the host's start goes through", async () => {
+    h = await startHarness();
+    const { host, others } = await lobby(2);
+    const [b] = others as [TestClient];
+    host.send({ t: "lobby.ready", ready: true });
+    b.send({ t: "lobby.ready", ready: true });
+    await host.room((s) => s.members.every((m) => m.ready));
+    // What the Godot lobby sends on Start: a fresh seed, then lobby.start.
+    host.send({ t: "lobby.setSettings", patch: { mapSeed: 12345 } });
+    expect(await host.request({ t: "lobby.start" })).toMatchObject({ t: "ok" });
+    expect((await b.room((s) => s.phase === "match")).phase).toBe("match");
+  });
+
   it("relays chat with cleaning and a rate limit", async () => {
     h = await startHarness();
     const { host, others } = await lobby(2);
