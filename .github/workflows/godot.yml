@@ -296,7 +296,8 @@ jobs:
           gh release upload "$TAG" build/BurrowBrawl-windows.zip --clobber
 
       - name: Publish the playtest build (main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Every merge to main publishes it; "Run workflow" on main in the Actions tab republishes it.
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
