@@ -6,9 +6,9 @@ extends Control
 
 signal closed
 
-const TABS := ["Sound", "Video", "Controls", "Xbox", "PlayStation", "Switch Pro"]
+const TABS := ["Sound", "Video", "Controls", "Camera", "Xbox", "PlayStation", "Switch Pro"]
 ## Tab index of the first pad tab; the pad tabs follow in PadMap.FAMILIES order.
-const PAD_TAB_FIRST := 3
+const PAD_TAB_FIRST := 4
 
 var _tabs: TabContainer
 var _rebinding: String = ""
@@ -57,6 +57,7 @@ func _build() -> void:
 	_tabs.add_child(_sound_tab())
 	_tabs.add_child(_video_tab())
 	_tabs.add_child(_controls_tab())
+	_tabs.add_child(_camera_tab())
 	for family in PadMap.FAMILIES:
 		_tabs.add_child(_pad_tab(family))
 	for i in range(TABS.size()):
@@ -192,6 +193,22 @@ func _video_tab() -> Control:
 	page.add_child(note)
 	# The resolution list only applies to the windowed mode.
 	modes.item_selected.connect(func(i: int) -> void: res.disabled = i != 0)
+	return page
+
+
+func _camera_tab() -> Control:
+	var page := _page("Camera")
+	_slider(page, "Mouse orbit speed", GameSettings.cam_orbit_mouse, GameSettings.SENSITIVITY_MIN, GameSettings.SENSITIVITY_MAX, 0.05, GameSettings.set_cam_orbit_mouse, "%.2fx")
+	_slider(page, "Stick orbit speed", GameSettings.cam_orbit_stick, GameSettings.SENSITIVITY_MIN, GameSettings.SENSITIVITY_MAX, 0.05, GameSettings.set_cam_orbit_stick, "%.2fx")
+	_slider(page, "Camera distance", GameSettings.cam_distance, GameSettings.CAM_DISTANCE_MIN, GameSettings.CAM_DISTANCE_MAX, 1.0, GameSettings.set_cam_distance, "%d")
+	_slider(page, "Field of view", GameSettings.cam_fov, GameSettings.CAM_FOV_MIN, GameSettings.CAM_FOV_MAX, 1.0, GameSettings.set_cam_fov, "%d deg")
+	_slider(page, "Smoothing", GameSettings.cam_smoothing, 0.0, 1.0, 0.05, GameSettings.set_cam_smoothing, "%.2f")
+	_options(page, "Terrain pull-in", CameraMath.PULL_NAMES, GameSettings.cam_pull, GameSettings.set_cam_pull)
+	var note := Label.new()
+	note.text = "Distance is where the camera starts (the wheel still zooms). Smoothing: higher is steadier and slower to catch up. Pull-in: Full moves the camera in at once when terrain blocks it, Reduced eases in and back slowly, Off lets terrain get in the way."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.modulate = Color(1, 1, 1, 0.65)
+	page.add_child(note)
 	return page
 
 

@@ -1,0 +1,13 @@
+{
+  "about": "Walk through the Lighthouse Village streets and measure how much the third-person camera distance moves, plus pictures. Run on two builds to compare before and after.",
+  "steps": [
+    { "do": "practice_setup", "theme": "lighthouse-village", "size": 512, "turn_seconds": 90 },
+    { "do": "start", "mode": "practice", "turn_seconds": 90 },
+    { "do": "camera", "dist": 45, "pitch": 28, "name": "street-start" },
+    { "do": "camera_trace", "dir": "forward", "seconds": 8, "name": "trace-forward" },
+    { "do": "camera_trace", "dir": "left", "seconds": 8, "name": "trace-left" },
+    { "do": "camera_trace", "dir": "forward", "seconds": 8, "name": "trace-forward-2" },
+    { "do": "camera_trace", "dir": "right", "seconds": 8, "name": "trace-right" },
+    { "do": "quit" }
+  ]
+}

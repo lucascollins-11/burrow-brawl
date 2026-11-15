@@ -177,9 +177,13 @@ static func rig_position(r: RigState) -> Vector3:
 
 ## Move the rig toward a goal. A goal is {mode, target, optional yaw_deg, pitch_deg, dist}.
 ## Orbit keeps the player's yaw, pitch and zoom unless the goal overrides them.
-static func step_rig(r: RigState, goal: Dictionary, dt: float) -> RigState:
+## `rate_scale` stretches how quickly the orbit and follow cameras catch up (the smoothing
+## setting); the first-person aim camera ignores it so aiming stays crisp.
+static func step_rig(r: RigState, goal: Dictionary, dt: float, rate_scale := 1.0) -> RigState:
 	var mode: String = goal.get("mode", "orbit")
 	var rate := 14.0 if mode == "aim" else (5.0 if mode == "follow" else 6.0)
+	if mode != "aim":
+		rate *= rate_scale
 	var k := smoothing(rate, dt)
 	var n := r.duplicate_state()
 	n.mode = mode
@@ -191,3 +195,77 @@ static func step_rig(r: RigState, goal: Dictionary, dt: float) -> RigState:
 	if goal.has("dist"):
 		n.dist = r.dist + (float(goal["dist"]) - r.dist) * k
 	return n
+
+
+# ------------------------------------------------------------------ terrain pull-in
+
+## How the third-person camera avoids terrain between it and its target.
+const PULL_FULL := 0  ## pulled in at once, eased back out
+const PULL_REDUCED := 1  ## pulled in smoothly, eased back out slowly: no snapping
+const PULL_OFF := 2  ## never pulled in (it still stays above the ground)
+const PULL_NAMES: Array[String] = ["Full", "Reduced", "Off"]
+
+## The line must pass this far above the ground to count as clear.
+const PULL_CLEARANCE := 1.5
+## Ground this close to the target (voxels) is the target's own surroundings and is ignored.
+const PULL_SKIP_NEAR := 6.0
+## A block must show on this many probe samples in a row, so a thin post, a prop or a single
+## voxel bump does not pull the camera in.
+const PULL_MIN_RUN := 2
+## Hysteresis: the camera only eases back out once the way is clear by this much (voxels).
+const PULL_EASE_OUT_GAP := 3.0
+## In "reduced" mode a pull-in smaller than this is ignored.
+const PULL_EASE_IN_GAP := 0.75
+
+
+## How far along the line from `target` to `pos` the camera can go before ground that is wide
+## enough to matter rises above the line. `ground` is a Callable (x, z) -> height; `world` is the
+## map size in voxels (the probe skips points outside it). Never less than `min_dist` (or the
+## whole span if that is shorter).
+static func clear_distance(target: Vector3, pos: Vector3, ground: Callable, world: Vector2, min_dist: float, steps := 40) -> float:
+	var span := target.distance_to(pos)
+	if span <= 0.001:
+		return span
+	var run := 0
+	for i in range(1, steps + 1):
+		var t := float(i) / float(steps)
+		var p := target.lerp(pos, t)
+		if span * t < PULL_SKIP_NEAR:
+			continue
+		if p.x < 0.0 or p.z < 0.0 or p.x >= world.x or p.z >= world.y:
+			run = 0
+			continue
+		if p.y < float(ground.call(p.x, p.z)) + PULL_CLEARANCE:
+			run += 1
+			if run >= PULL_MIN_RUN:
+				var first := t - float(PULL_MIN_RUN) / float(steps)
+				return clampf(span * first - 1.5, minf(min_dist, span), span)
+		else:
+			run = 0
+	return span
+
+
+## One frame of the camera's pull-in distance. `pull` is the current limit (a huge number when
+## nothing pulls), `span` the wanted distance and `allowed` what the probe says is clear.
+static func step_pull(pull: float, span: float, allowed: float, mode: int, dt: float) -> float:
+	if mode == PULL_OFF:
+		return 1.0e9
+	pull = minf(pull, span)
+	if mode == PULL_FULL:
+		if allowed < pull:
+			return allowed
+		if allowed > pull + PULL_EASE_OUT_GAP:
+			return lerpf(pull, allowed, smoothing(3.0, dt))
+		return pull
+	if allowed < pull - PULL_EASE_IN_GAP:
+		return lerpf(pull, allowed, smoothing(7.0, dt))
+	if allowed > pull + PULL_EASE_OUT_GAP:
+		return lerpf(pull, allowed, smoothing(1.0, dt))
+	return pull
+
+
+## Lift for the camera's height so it never sinks under the ground: `need` is how far it would
+## be under the floor. Rises quickly and settles back slowly, so a bump does not make it pump.
+static func step_lift(lift: float, need: float, dt: float) -> float:
+	var rate := 10.0 if need > lift else 2.0
+	return lerpf(lift, maxf(need, 0.0), smoothing(rate, dt))

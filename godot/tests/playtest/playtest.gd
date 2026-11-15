@@ -157,6 +157,8 @@ func _dispatch(what: String, s: Dictionary) -> Dictionary:
 			return await _start(s)
 		"screen":
 			return await _screen(s)
+		"camera_trace":
+			return await _camera_trace(s)
 		"device":
 			return await _device(s)
 		"practice_setup":
@@ -361,6 +363,48 @@ func _practice_setup(s: Dictionary) -> Dictionary:
 			return _fail("no %s choice '%s' on the setup screen" % [pair[0], s[pair[0]]])
 	await _seconds(0.6)
 	return _ok("practice setup showing")
+
+
+## {do:camera_trace, dir, seconds}: hold a walk key and record the camera every frame: its
+## distance from its target and its height. The note gives the range of the distance, how much it
+## moved in total, how many times it changed direction (pumping) and the biggest one-frame jump.
+func _camera_trace(s: Dictionary) -> Dictionary:
+	if scene == null:
+		return _fail("no match")
+	var dir := str(s.get("dir", "forward"))
+	if not WALK.has(dir):
+		return _fail("dir must be one of %s" % [WALK.keys()])
+	_close_screen()
+	var code := int(GameSettings.keys[WALK[dir]])
+	var secs := float(s.get("seconds", 5.0))
+	var dists: Array[float] = []
+	var start := Time.get_ticks_msec()
+	_send_key(code, true)
+	while (Time.get_ticks_msec() - start) / 1000.0 < secs:
+		await get_tree().process_frame
+		dists.append(scene.camera.global_position.distance_to(scene._rig.target))
+	_send_key(code, false)
+	await _frames(2)
+	if dists.size() < 3:
+		return _fail("too few frames (%d) to measure" % dists.size())
+	var lo := dists[0]
+	var hi := dists[0]
+	var travel := 0.0
+	var flips := 0
+	var biggest := 0.0
+	var last_sign := 0
+	for i in range(1, dists.size()):
+		lo = minf(lo, dists[i])
+		hi = maxf(hi, dists[i])
+		var d := dists[i] - dists[i - 1]
+		travel += absf(d)
+		biggest = maxf(biggest, absf(d))
+		if absf(d) > 0.05:
+			var sgn := 1 if d > 0.0 else -1
+			if last_sign != 0 and sgn != last_sign:
+				flips += 1
+			last_sign = sgn
+	return _ok("walk %s %.0f s, %d frames: camera distance %.1f to %.1f (range %.1f), total movement %.1f, direction changes %d, biggest one-frame jump %.2f" % [dir, secs, dists.size(), lo, hi, hi - lo, travel, flips, biggest])
 
 
 ## {do:device, kind: keyboard|pad, family: xbox|playstation|switch}: pretend the player just used

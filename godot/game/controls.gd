@@ -166,6 +166,8 @@ func axes() -> Vector2i:
 
 ## Once per rendered frame. Returns the mouse movement left over for the orbit camera.
 func frame(dt: float) -> Dictionary:
+	var orbit_dx := _dx
+	var orbit_dy := _dy
 	var scaled := GameSettings.scale_mouse(_dx, _dy)
 	var dx := scaled.x
 	var dy := scaled.y
@@ -229,12 +231,16 @@ func frame(dt: float) -> Dictionary:
 			"fire_up":
 				if aim != null and aim.charging:
 					_fire(aim)
-	var look := GameSettings.stick_look(stick_vector(), dt)
+	var stick := stick_vector()
 	if aim != null:
+		var look := GameSettings.stick_look(stick, dt)
 		aim = CameraMath.charge_aim(CameraMath.nudge_aim(aim, dx + look.x, dy + look.y), dt)
 		return {"dx": 0.0, "dy": 0.0, "wheel": wheel}
-	# Not aiming: the right stick orbits the camera like dragging the mouse.
-	return {"dx": dx + look.x, "dy": dy + look.y, "wheel": wheel}
+	# Not aiming: dragging the mouse or pushing the right stick orbits the camera, at their own
+	# camera speeds (not the aim sensitivity).
+	var orbit := GameSettings.scale_orbit_mouse(orbit_dx, orbit_dy)
+	var spin := GameSettings.stick_look(stick, dt, GameSettings.cam_orbit_stick)
+	return {"dx": orbit.x + spin.x, "dy": orbit.y + spin.y, "wheel": wheel}
 
 
 ## The right stick of whichever connected pad is pushed furthest, as -1..1 on each axis.

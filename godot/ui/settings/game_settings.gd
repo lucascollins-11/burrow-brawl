@@ -52,6 +52,21 @@ static var invert_y := false
 ## Controller stick aim speed, separate from the mouse. 1.0 turns the aim about 150 degrees a second
 ## with the stick fully over.
 static var stick_sensitivity := 1.0
+## Third-person camera. Orbit speed for dragging the mouse and for the right stick (1.0 is the
+## original speed), the preferred distance and field of view, how much the camera smooths its
+## moves (0 snappy, 1 very smooth) and how it avoids terrain (CameraMath.PULL_*).
+const CAM_DISTANCE_MIN := 25.0
+const CAM_DISTANCE_MAX := 120.0
+const CAM_FOV_MIN := 50.0
+const CAM_FOV_MAX := 90.0
+static var cam_orbit_mouse := 0.75
+static var cam_orbit_stick := 0.75
+static var cam_distance := 70.0
+static var cam_fov := 60.0
+static var cam_smoothing := 0.5
+static var cam_pull := CameraMath.PULL_REDUCED
+## Bumped whenever a camera setting changes, so a running match can pick the change up.
+static var cam_version := 0
 ## The last choices made on the practice setup screen ("random" or a theme id; edge in voxels or 0
 ## for the server's default; seconds per turn).
 static var practice_theme := "random"
@@ -121,14 +136,20 @@ const STICK_PIXELS_PER_SECOND := 600.0
 
 ## Aim movement for one frame from a right-stick reading (-1..1 on each axis): a radial dead zone,
 ## a gentle curve so small pushes aim finely, the stick sensitivity, and the invert-Y option.
-static func stick_look(raw: Vector2, dt: float) -> Vector2:
+static func stick_look(raw: Vector2, dt: float, sens := -1.0) -> Vector2:
 	var mag := raw.length()
 	if mag <= STICK_DEADZONE:
 		return Vector2.ZERO
 	var strength := clampf((mag - STICK_DEADZONE) / (1.0 - STICK_DEADZONE), 0.0, 1.0)
 	var dir := raw / mag
-	var speed := strength * strength * STICK_PIXELS_PER_SECOND * stick_sensitivity * dt
+	var speed := strength * strength * STICK_PIXELS_PER_SECOND * (stick_sensitivity if sens < 0.0 else sens) * dt
 	return Vector2(dir.x * speed, dir.y * speed * (-1.0 if invert_y else 1.0))
+
+
+## Mouse movement for orbiting the camera: its own speed setting, with the vertical axis flipped
+## if asked.
+static func scale_orbit_mouse(dx: float, dy: float) -> Vector2:
+	return Vector2(dx * cam_orbit_mouse, dy * cam_orbit_mouse * (-1.0 if invert_y else 1.0))
 
 
 ## Mouse movement scaled by the sensitivity setting, with the vertical axis flipped if asked.
@@ -180,6 +201,13 @@ static func load_file(path: String = PATH) -> void:
 	sensitivity = clampf(float(cfg.get_value("input", "sensitivity", sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
 	invert_y = bool(cfg.get_value("input", "invert_y", invert_y))
 	stick_sensitivity = clampf(float(cfg.get_value("input", "stick_sensitivity", stick_sensitivity)), SENSITIVITY_MIN, SENSITIVITY_MAX)
+	cam_orbit_mouse = clampf(float(cfg.get_value("camera", "orbit_mouse", cam_orbit_mouse)), SENSITIVITY_MIN, SENSITIVITY_MAX)
+	cam_orbit_stick = clampf(float(cfg.get_value("camera", "orbit_stick", cam_orbit_stick)), SENSITIVITY_MIN, SENSITIVITY_MAX)
+	cam_distance = clampf(float(cfg.get_value("camera", "distance", cam_distance)), CAM_DISTANCE_MIN, CAM_DISTANCE_MAX)
+	cam_fov = clampf(float(cfg.get_value("camera", "fov", cam_fov)), CAM_FOV_MIN, CAM_FOV_MAX)
+	cam_smoothing = clampf(float(cfg.get_value("camera", "smoothing", cam_smoothing)), 0.0, 1.0)
+	cam_pull = clampi(int(cfg.get_value("camera", "pull", cam_pull)), 0, CameraMath.PULL_NAMES.size() - 1)
+	cam_version += 1
 	practice_theme = str(cfg.get_value("practice", "theme", practice_theme))
 	practice_size = maxi(0, int(cfg.get_value("practice", "size", practice_size)))
 	practice_turn = clampi(int(cfg.get_value("practice", "turn", practice_turn)), 15, 90)
@@ -203,6 +231,12 @@ static func save_file(path: String = PATH) -> void:
 	cfg.set_value("input", "sensitivity", sensitivity)
 	cfg.set_value("input", "invert_y", invert_y)
 	cfg.set_value("input", "stick_sensitivity", stick_sensitivity)
+	cfg.set_value("camera", "orbit_mouse", cam_orbit_mouse)
+	cfg.set_value("camera", "orbit_stick", cam_orbit_stick)
+	cfg.set_value("camera", "distance", cam_distance)
+	cfg.set_value("camera", "fov", cam_fov)
+	cfg.set_value("camera", "smoothing", cam_smoothing)
+	cfg.set_value("camera", "pull", cam_pull)
 	cfg.set_value("practice", "theme", practice_theme)
 	cfg.set_value("practice", "size", practice_size)
 	cfg.set_value("practice", "turn", practice_turn)
@@ -224,6 +258,13 @@ static func reset_to_defaults() -> void:
 	quality = 2
 	sensitivity = 1.0
 	stick_sensitivity = 1.0
+	cam_orbit_mouse = 0.75
+	cam_orbit_stick = 0.75
+	cam_distance = 70.0
+	cam_fov = 60.0
+	cam_smoothing = 0.5
+	cam_pull = CameraMath.PULL_REDUCED
+	cam_version += 1
 	invert_y = false
 	keys = default_keys()
 	pad_codes = default_pad_codes()
@@ -287,6 +328,49 @@ static func set_practice(theme_id: String, size: int, turn: int) -> void:
 	practice_size = maxi(0, size)
 	practice_turn = clampi(turn, 15, 90)
 	save_file()
+
+
+static func set_cam_orbit_mouse(v: float) -> void:
+	cam_orbit_mouse = clampf(v, SENSITIVITY_MIN, SENSITIVITY_MAX)
+	_cam_changed()
+
+
+static func set_cam_orbit_stick(v: float) -> void:
+	cam_orbit_stick = clampf(v, SENSITIVITY_MIN, SENSITIVITY_MAX)
+	_cam_changed()
+
+
+static func set_cam_distance(v: float) -> void:
+	cam_distance = clampf(v, CAM_DISTANCE_MIN, CAM_DISTANCE_MAX)
+	_cam_changed()
+
+
+static func set_cam_fov(v: float) -> void:
+	cam_fov = clampf(v, CAM_FOV_MIN, CAM_FOV_MAX)
+	_cam_changed()
+
+
+static func set_cam_smoothing(v: float) -> void:
+	cam_smoothing = clampf(v, 0.0, 1.0)
+	_cam_changed()
+
+
+static func set_cam_pull(mode: int) -> void:
+	cam_pull = clampi(mode, 0, CameraMath.PULL_NAMES.size() - 1)
+	_cam_changed()
+
+
+static func _cam_changed() -> void:
+	cam_version += 1
+	save_file()
+
+
+## Camera catch-up speed multiplier for the smoothing setting: 1.0 at the middle (the original
+## feel), up to 2x snappier at 0 and down to a quarter as quick at 1.
+static func cam_rate_scale() -> float:
+	if cam_smoothing < 0.5:
+		return lerpf(2.0, 1.0, cam_smoothing / 0.5)
+	return lerpf(1.0, 0.25, (cam_smoothing - 0.5) / 0.5)
 
 
 static func set_stick_sensitivity(s: float) -> void:
