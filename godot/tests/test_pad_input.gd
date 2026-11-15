@@ -224,7 +224,7 @@ func test_settings_menu_has_a_tab_and_button_per_pad_family() -> void:
 	_reset()
 	var menu := SettingsMenu.new()
 	menu._ready()
-	check_eq(menu._tabs.get_tab_count(), 6, "sound, video, controls and three pad tabs")
+	check_eq(menu._tabs.get_tab_count(), 7, "sound, video, controls, camera and three pad tabs")
 	var rebindable := 0
 	for a in GameSettings.ACTIONS:
 		if not String(a["id"]).begins_with("move_"):

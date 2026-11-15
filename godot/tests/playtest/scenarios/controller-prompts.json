@@ -9,9 +9,9 @@
     { "do": "device", "kind": "pad", "family": "switch", "name": "prompts-switch" },
     { "do": "key", "action": "toggle_aim" },
     { "do": "device", "kind": "pad", "family": "playstation", "name": "prompts-playstation-aim" },
-    { "do": "screen", "scene": "settings", "tab": 3, "name": "settings-xbox" },
-    { "do": "screen", "scene": "settings", "tab": 4, "name": "settings-playstation" },
-    { "do": "screen", "scene": "settings", "tab": 5, "name": "settings-switch" },
+    { "do": "screen", "scene": "settings", "tab": 4, "name": "settings-xbox" },
+    { "do": "screen", "scene": "settings", "tab": 5, "name": "settings-playstation" },
+    { "do": "screen", "scene": "settings", "tab": 6, "name": "settings-switch" },
     { "do": "quit" }
   ]
 }

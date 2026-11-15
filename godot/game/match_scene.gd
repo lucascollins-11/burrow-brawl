@@ -66,6 +66,10 @@ var _following := false
 ## How far from its target the camera may sit now: pulled in at once when terrain gets in the way,
 ## eased back out when it clears (see _update_camera).
 var _cam_pull := 1.0e9
+## Smoothed lift that keeps the camera above the ground (see CameraMath.step_lift).
+var _cam_lift := 0.0
+## The camera settings version last applied (GameSettings.cam_version).
+var _cam_version_seen := -1
 var _marker: MeshInstance3D
 var _target_ring: MeshInstance3D
 var _time := 0.0
@@ -215,7 +219,8 @@ func handle_match_start(msg: Dictionary) -> void:
 	weather.setup(look, env, _world.x, _world.y, vm.sea_y, density, Callable(self, "ground_y"))
 	_apply_glow_setting()
 	_rig.target = Vector3(_world.x * 0.5, vm.sea_y + 25.0, _world.y * 0.5)
-	_rig.dist = 90.0
+	_rig.dist = GameSettings.cam_distance
+	_cam_version_seen = GameSettings.cam_version
 	_built = true
 	_last_turn = -1
 	_last_tick_second = -1
@@ -687,20 +692,18 @@ func _hidden_by_terrain(from: Vector3, to: Vector3) -> bool:
 ## How far along the line from `target` to `pos` the camera can go before the ground rises above
 ## the line (the target's own surroundings are skipped); at least MIN_CAMERA_DIST.
 func _clear_distance(target: Vector3, pos: Vector3) -> float:
-	var span := target.distance_to(pos)
-	var steps := 28
-	for i in range(1, steps + 1):
-		var t := float(i) / float(steps)
-		var p := target.lerp(pos, t)
-		if p.x < 0.0 or p.z < 0.0 or p.x >= _world.x or p.z >= _world.y:
-			continue
-		if p.y < ground_y(p.x, p.z) + 1.5:
-			return clampf(span * (t - 1.0 / float(steps)) - 1.5, minf(MIN_CAMERA_DIST, span), span)
-	return span
+	return CameraMath.clear_distance(target, pos, Callable(self, "ground_y"), Vector2(_world.x, _world.y), MIN_CAMERA_DIST)
 
 
 func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState, mouse: Dictionary, dt: float) -> void:
+	# Camera settings changed (the pause menu is on top of a running match): take the new field of
+	# view and preferred distance now.
+	camera.fov = GameSettings.cam_fov
+	if _cam_version_seen != GameSettings.cam_version:
+		_cam_version_seen = GameSettings.cam_version
+		_rig.dist = GameSettings.cam_distance
 	if aim == null:
+		# Controls already scaled the movement by the camera orbit speed settings.
 		_rig = CameraMath.drag_orbit(_rig, float(mouse["dx"]), float(mouse["dy"]))
 	_rig = CameraMath.zoom(_rig, float(mouse["wheel"]))
 	_blast_left = maxf(0.0, _blast_left - dt)
@@ -749,22 +752,23 @@ func _update_camera(v: Dictionary, active: Dictionary, aim: CameraMath.AimState,
 			"pitch_deg": clampf(_rig.pitch_deg, CameraMath.ORBIT_MIN_PITCH, CameraMath.ORBIT_MAX_PITCH),
 			"dist": clampf(_rig.dist, CameraMath.ORBIT_MIN_DIST, CameraMath.ORBIT_MAX_DIST),
 		}
-	_rig = CameraMath.step_rig(_rig, goal, dt)
+	_rig = CameraMath.step_rig(_rig, goal, dt, GameSettings.cam_rate_scale())
 	var pos := CameraMath.rig_position(_rig)
 	if _rig.mode != "aim":
 		# Keep the camera out of hills: pull it in along the line to its target when ground is in
 		# the way (at once), and let it back out slowly once the way is clear.
 		var span := pos.distance_to(_rig.target)
-		_cam_pull = minf(_cam_pull, span)
-		var allowed := _clear_distance(_rig.target, pos)
-		if allowed < _cam_pull:
-			_cam_pull = allowed
-		else:
-			_cam_pull = lerpf(_cam_pull, allowed, CameraMath.smoothing(3.0, dt))
+		var allowed := span
+		if GameSettings.cam_pull != CameraMath.PULL_OFF:
+			allowed = _clear_distance(_rig.target, pos)
+		_cam_pull = CameraMath.step_pull(_cam_pull, span, allowed, GameSettings.cam_pull, dt)
 		if _cam_pull < span:
 			pos = _rig.target + (pos - _rig.target).normalized() * _cam_pull
-	# Never let the camera sink under the ground or the soda.
-	pos.y = maxf(pos.y, maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0))
+	# Never let the camera sink under the ground or the soda. The lift that does it rises fast and
+	# settles slowly, so bumps and props do not make the view pump.
+	var floor_y := maxf(ground_y(pos.x, pos.z) + 2.5, float(v["sea_y"]) + 2.0)
+	_cam_lift = CameraMath.step_lift(_cam_lift, floor_y - pos.y, dt)
+	pos.y = maxf(pos.y + _cam_lift, floor_y - 1.0)
 	fx.listener = camera.position
 	fx.update(dt)
 	camera.position = pos + fx.shake_offset

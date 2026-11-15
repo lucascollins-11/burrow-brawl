@@ -57,7 +57,7 @@ file name) and `"shot": false` (no screenshot).
 | `do` | Fields | What happens |
 | --- | --- | --- |
 | `start` | `mode`: `match` (default) or `practice`; `theme` (`toybox-harbor`, `bathtub-bay`, `garden-patch`), `size`, `critters`, `seed`, `turn_seconds`, `opponent` | `match`: a second client joins as the rival, settings are set, both ready, the match starts. `practice`: the solo tutorial against dummies. Waits for the island to mesh and the first turn. |
-| `screen` | `scene`: `title`, `howto`, `lobby`, `settings`; `page` (how-to-play page, 0 based), `tab` (settings tab: 0 Sound, 1 Video, 2 Controls, 3 Xbox, 4 PlayStation, 5 Switch Pro) | Shows a menu screen over everything until the next step that needs the match. |
+| `screen` | `scene`: `title`, `howto`, `lobby`, `settings`; `page` (how-to-play page, 0 based), `tab` (settings tab: 0 Sound, 1 Video, 2 Controls, 3 Camera, 4 Xbox, 5 PlayStation, 6 Switch Pro) | Shows a menu screen over everything until the next step that needs the match. |
 | `practice_setup` | `theme`, `size`, `turn_seconds` (picked on the real screen) | Opens the practice setup screen over everything (creating a room for it). A later `start` with `mode: practice` reuses that room and its map choices. |
 | `device` | `kind` (`keyboard` or `pad`), `family` (`xbox`, `playstation`, `switch`) | Pretends the player just used that device, so the HUD and tutorial prompts switch to its names and glyphs. |
 | `walk` | `dir`: `forward`, `back`, `left`, `right`; `seconds` | Holds the bound walk key. Directions are relative to the camera. |
