@@ -14,6 +14,10 @@ uniform vec3 bedrock_color : source_color = vec3(0.28, 0.30, 0.42);
 uniform vec3 foam_color : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec3 shadow_tint : source_color = vec3(0.42, 0.35, 0.80);
 uniform float sea_y = 26.0;
+// Per-theme structure palette (MapLook "materials"): when use_palette, palette[id] replaces the
+// built-in colour of material id.
+uniform bool use_palette = false;
+uniform vec4 palette[16];
 uniform float bedrock_y = 3.0;
 uniform float grain_scale = 0.9;
 uniform float grain_amount = 0.2;
@@ -64,6 +68,7 @@ void vertex() {
 // on the face's own plane, so bricks, tiles and planks line up across voxels and chunks.
 
 vec3 mat_color(int id) {
+	if (use_palette && palette[id].a > 0.5) return palette[id].rgb;
 	if (id == 1) return vec3(0.95, 0.89, 0.76);  // plaster
 	if (id == 2) return vec3(0.42, 0.26, 0.16);  // timber
 	if (id == 3) return vec3(0.84, 0.40, 0.26);  // roof tile

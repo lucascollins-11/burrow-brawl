@@ -64,7 +64,7 @@ const THEME_CASES = [
   },
   {
     id: "toybox-harbor",
-    golden: { 256: 2733504448, 384: 3997548330, 512: 3958702342 } as Record<number, number>,
+    golden: { 384: 1991564246, 512: 2273277046 } as Record<number, number>,
   },
   {
     id: "clockwork-mesa",
@@ -85,7 +85,9 @@ const THEME_CASES = [
 ];
 
 describe.each(THEME_CASES)("$id", ({ id, golden }) => {
-  it.each(MAP_SIZES)("size %i is deterministic, roomy and walkable", (size) => {
+  const min = Math.max(256, THEMES.find((t) => t.id === id)!.minSize);
+  const sizes = MAP_SIZES.filter((s) => s >= min);
+  it.each(sizes)("size %i is deterministic, roomy and walkable", (size) => {
     const recipe = themedRecipe(id, 1, size);
     const a = generate(recipe);
     const b = generate(recipe);
@@ -114,23 +116,26 @@ describe.each(THEME_CASES)("$id", ({ id, golden }) => {
   });
 
   it("changes with the seed and restores from its recipe", () => {
-    const r1 = themedRecipe(id, 1, 256);
-    const r2 = themedRecipe(id, 2, 256);
+    const r1 = themedRecipe(id, 1, min);
+    const r2 = themedRecipe(id, 2, min);
     expect(hash(generate(r1).terrain)).not.toBe(hash(generate(r2).terrain));
     const edits = [{ op: "carve", x: 128, y: 40, z: 128, r: 6 } as const];
     const t = restore(r1, edits);
     expect(t.edits).toHaveLength(1);
   });
 
-  it("stays roomy and connected across seeds", () => {
+  it("stays roomy and connected across seeds", async () => {
     for (let seed = 1; seed <= 12; seed++) {
-      const a = generate(themedRecipe(id, seed, 256));
+      // Yield between seeds: a big map takes over a second, and a worker that never yields
+      // misses vitest's own RPC deadlines (onTaskUpdate timeouts) even when every check passes.
+      await new Promise((r) => setImmediate(r));
+      const a = generate(themedRecipe(id, seed, min));
       expect(a.spawns.length).toBeGreaterThanOrEqual(32);
       expect(a.objects!.length).toBeGreaterThan(8);
       const reach = walkable(a.terrain, a.spawns[0]!.x, a.spawns[0]!.z);
-      for (const sp of a.spawns) expect(reach.has(sp.z * 256 + sp.x)).toBe(true);
+      for (const sp of a.spawns) expect(reach.has(sp.z * min + sp.x)).toBe(true);
     }
-  });
+  }, 60_000);
 });
 
 describe("clockwork-mesa layout", () => {

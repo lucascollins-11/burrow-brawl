@@ -1,0 +1,21 @@
+{
+  "about": "Toybox Harbor shots: overview, street and the Block Keep (seed 4 keeps the harbour unturned)",
+  "steps": [
+    {
+      "do": "start",
+      "mode": "match",
+      "theme": "toybox-harbor",
+      "size": 384,
+      "critters": 2,
+      "seed": 4,
+      "turn_seconds": 60,
+      "opponent": "skip"
+    },
+    { "do": "wait", "seconds": 3 },
+    { "do": "view", "pos": [192, 290, 480], "at": [192, 20, 196], "name": "overview" },
+    { "do": "view", "pos": [296, 60, 188], "at": [254, 52, 142], "fov": 65, "name": "street" },
+    { "do": "view", "pos": [192, 52, 242], "at": [192, 55, 184], "fov": 60, "name": "set-piece" },
+    { "do": "view", "pos": [96, 62, 218], "at": [66, 34, 169], "fov": 70, "name": "islet-bridge" },
+    { "do": "quit" }
+  ]
+}
