@@ -214,6 +214,10 @@ export const toyboxHarbor: Theme = {
   minSize: 384,
   sizeY: 128,
   build(ctx) {
-    withIslets(ctx, core, { house: (i) => home(i, { storeys: 1 }), salt: 4900, maxLevel: 36 });
+    withIslets(ctx, core, {
+      house: (i) => home(i, { storeys: 1, w: 18, d: 16, balcony: 0, garden: false }),
+      salt: 4900,
+      maxLevel: 36,
+    });
   },
 };
