@@ -1,0 +1,10 @@
+{
+  "about": "Open the weapon picker in practice after the weapon pictures have had time to bake (software rendering is slow), for a screenshot of the icons.",
+  "steps": [
+    { "do": "start", "mode": "practice", "turn_seconds": 90, "seed": 7 },
+    { "do": "wait", "seconds": 90 },
+    { "do": "menu", "open": "weapons" },
+    { "do": "wait", "seconds": 4 },
+    { "do": "quit" }
+  ]
+}

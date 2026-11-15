@@ -9,7 +9,7 @@ extends PanelContainer
 signal picked(id: String)
 
 const COLUMNS := 8
-const TILE := Vector2(112, 98)
+const TILE := Vector2(112, 112)
 ## Room kept free around the grid: the bottom bar below it, the banner and team bars above.
 const MARGIN_BELOW := 84.0
 const MARGIN_ABOVE := 70.0
@@ -20,6 +20,8 @@ var _tiles: Dictionary = {}  # id -> Button
 var _desc: Label
 var _grid: GridContainer
 var _scroll: ScrollContainer
+var _baker: WeaponIcons
+var _pics: Dictionary = {}  # id -> TextureRect
 
 
 func _ready() -> void:
@@ -47,6 +49,12 @@ func _ready() -> void:
 	_desc.add_theme_font_size_override("font_size", 16)
 	col.add_child(_desc)
 	_refresh()
+	_baker = WeaponIcons.new()
+	add_child(_baker)
+	_baker.baked.connect(_on_baked)
+	_baker.request(_tiles.keys())
+	for id in _tiles:
+		_on_baked(id)
 	var vp := get_viewport()
 	if vp != null:
 		vp.size_changed.connect(_fit)
@@ -63,9 +71,9 @@ func _make_tile(it: Dictionary) -> Button:
 	b.focus_entered.connect(func() -> void: _describe(it))
 	var icon := ColorRect.new()
 	icon.color = WeaponCatalog.category_color(it["cat"])
-	icon.custom_minimum_size = Vector2(44, 34)
-	icon.position = Vector2(30, 6)
-	icon.size = Vector2(44, 34)
+	icon.custom_minimum_size = Vector2(60, 48)
+	icon.position = Vector2(26, 3)
+	icon.size = Vector2(60, 48)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(icon)
 	var initials := Label.new()
@@ -75,18 +83,30 @@ func _make_tile(it: Dictionary) -> Button:
 	initials.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	initials.label_settings = MenuStyle.heading(20, Color.WHITE, 5)
 	initials.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	initials.name = "Initials"
 	icon.add_child(initials)
+	var pic := TextureRect.new()
+	pic.name = "Pic"
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	pic.position = Vector2(24, 1)
+	pic.size = Vector2(64, 52)
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pic.visible = false
+	b.add_child(pic)
+	_pics[str(it["id"])] = pic
 	var name_label := Label.new()
 	name_label.name = "Name"
 	name_label.text = two_lines(str(it["name"]))
 	# Long names ("Pinecone Popper", "Mousetrap Snapper") wrap onto a second line.
-	name_label.position = Vector2(2, 39)
-	name_label.size = Vector2(TILE.x - 4, 30)
+	name_label.position = Vector2(2, 54)
+	name_label.size = Vector2(TILE.x - 4, 28)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	# Two short lines break at the space nearest the middle (see two_lines), so nothing runs off the tile.
 	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	name_label.custom_minimum_size = Vector2(TILE.x - 4, 30)
+	name_label.custom_minimum_size = Vector2(TILE.x - 4, 28)
 	name_label.add_theme_font_size_override("font_size", 10)
 	name_label.add_theme_constant_override("line_spacing", -2)
 	name_label.clip_text = true
@@ -94,7 +114,7 @@ func _make_tile(it: Dictionary) -> Button:
 	b.add_child(name_label)
 	var ammo := Label.new()
 	ammo.name = "Ammo"
-	ammo.position = Vector2(2, 77)
+	ammo.position = Vector2(2, 90)
 	ammo.size = Vector2(TILE.x - 4, 18)
 	ammo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ammo.add_theme_font_size_override("font_size", 13)
@@ -125,6 +145,20 @@ static func initials_of(item_name: String) -> String:
 	return out
 
 
+func _on_baked(id: String) -> void:
+	var tex := WeaponIcons.get_icon(id)
+	var pic: TextureRect = _pics.get(id)
+	if tex == null or pic == null:
+		return
+	pic.texture = tex
+	pic.visible = true
+	var icon := pic.get_parent().get_child(0) as ColorRect
+	icon.color = icon.color.lerp(Color.WHITE, 0.55)
+	var ini := icon.get_node_or_null("Initials") as Label
+	if ini != null:
+		ini.visible = false
+
+
 ## Make sure a weapon the server offers has a tile, even when the built-in list does not know it.
 ## `it` is {id, name, description} from the server's catalogue.
 func ensure_item(it: Dictionary) -> void:
@@ -136,6 +170,8 @@ func ensure_item(it: Dictionary) -> void:
 	)
 	_grid.add_child(tile)
 	_tiles[id] = tile
+	if _baker != null:
+		_baker.request([id])
 
 
 ## ammo: item id -> count (-1 unlimited). Items not in the table are unavailable.
