@@ -130,7 +130,7 @@ function clearBox(
 }
 
 /** Stamp a prefab with its rotated footprint centred on (cx, cz), its local y 0 at world y. */
-function put(
+export function put(
   ctx: ThemeCtx,
   p: Prefab,
   cx: number,
@@ -226,8 +226,8 @@ export function clockFoundry(): Prefab {
 }
 
 /** Inner storey height of the pipe shafts: matches the gap between the tiers. */
-const STOREY = 16;
-const SHAFT_R = 13;
+export const STOREY = 16;
+export const SHAFT_R = 13;
 
 /**
  * A brass pipe shaft: a round tower SHAFT_R in radius, `storeys` storeys of STOREY, a switchback
@@ -235,20 +235,41 @@ const SHAFT_R = 13;
  * `doors` says: [storey, face] pairs (faces in local terms). Local y 0 is the plinth; storey k is
  * walked at local 1 + k * STOREY.
  */
-export function pipeShaft(storeys: number, doors: readonly (readonly [number, number])[]): Prefab {
+export interface PipeMats {
+  readonly body: number;
+  /** The stripe near the top of every storey. */
+  readonly stripe: number;
+  /** The band at the foot of every storey. */
+  readonly band: number;
+  /** The little cap on the dome. */
+  readonly cap: number;
+}
+
+const BRASS: PipeMats = {
+  body: MAT_METAL,
+  stripe: MAT_PAINT_YELLOW,
+  band: MAT_BRICK,
+  cap: MAT_PAINT_RED,
+};
+
+export function pipeShaft(
+  storeys: number,
+  doors: readonly (readonly [number, number])[],
+  mats: PipeMats = BRASS,
+): Prefab {
   const R = SHAFT_R;
   const c = R;
   const top = storeys * STOREY;
   const b = new PrefabBuilder("pipe-shaft", 2 * R + 1, top + 10, 2 * R + 1);
   b.footing(MAT_STONE, 1, 1, 2 * R - 1, 2 * R - 1);
   b.disc("solid", MAT_STONE, c, c, R, 0, 0);
-  b.disc("solid", MAT_METAL, c, c, R, 1, top + 1);
+  b.disc("solid", mats.body, c, c, R, 1, top + 1);
   for (let k = 0; k < storeys; k++)
     b.disc("air", 0, c, c, R - 2, 1 + k * STOREY, (k + 1) * STOREY - 2);
   // Riveted bands and a yellow stripe every storey.
   for (let k = 0; k < storeys; k++) {
-    b.ring("paint", MAT_PAINT_YELLOW, c, c, R, 2, k * STOREY + 12, k * STOREY + 13);
-    b.ring("paint", MAT_BRICK, c, c, R, 2, k * STOREY + 1, k * STOREY + 2);
+    b.ring("paint", mats.stripe, c, c, R, 2, k * STOREY + 12, k * STOREY + 13);
+    b.ring("paint", mats.band, c, c, R, 2, k * STOREY + 1, k * STOREY + 2);
   }
   for (let k = 0; k < storeys; k++) {
     const yb = 1 + k * STOREY;
@@ -282,8 +303,8 @@ export function pipeShaft(storeys: number, doors: readonly (readonly [number, nu
     const y = k * STOREY + 7;
     b.anchor("porthole", c + R, y, c + 6, PX).anchor("porthole", c - R, y, c - 6, NX);
   }
-  for (let i = 0; i < 5; i++) b.disc("solid", MAT_METAL, c, c, R - 2 * i, top + 2 + i, top + 2 + i);
-  b.disc("solid", MAT_PAINT_RED, c, c, 2, top + 7, top + 8);
+  for (let i = 0; i < 5; i++) b.disc("solid", mats.body, c, c, R - 2 * i, top + 2 + i, top + 2 + i);
+  b.disc("solid", mats.cap, c, c, 2, top + 7, top + 8);
   b.anchor("warning-light", c, top + 9, c, UP).anchor("chimney-pot", c + 5, top + 4, c, UP);
   return b.build();
 }
@@ -292,15 +313,15 @@ export function pipeShaft(storeys: number, doors: readonly (readonly [number, nu
  * A walkable brass pipe along +x, `len` long: 11 x 11 outside, 7 wide and 8 tall inside on a plank
  * floor at local y 1, open at both ends, with portholes along both sides.
  */
-export function pipeBridge(len: number): Prefab {
+export function pipeBridge(len: number, body = MAT_METAL, band = MAT_PAINT_YELLOW): Prefab {
   const b = new PrefabBuilder("pipe-bridge", len, 11, 11);
   // An octagon in section: a tall box and a wide box, then the bore.
-  b.solid(MAT_METAL, 0, 0, 2, len - 1, 10, 8).solid(MAT_METAL, 0, 2, 0, len - 1, 8, 10);
-  b.solid(MAT_METAL, 0, 1, 1, len - 1, 9, 9);
+  b.solid(body, 0, 0, 2, len - 1, 10, 8).solid(body, 0, 2, 0, len - 1, 8, 10);
+  b.solid(body, 0, 1, 1, len - 1, 9, 9);
   b.air(0, 2, 2, len - 1, 9, 8);
   b.solid(MAT_PLANKS, 0, 1, 2, len - 1, 1, 8);
   for (let x = 3; x < len - 3; x += 9) {
-    b.paint(MAT_PAINT_YELLOW, x, 0, 0, x + 1, 10, 10);
+    b.paint(band, x, 0, 0, x + 1, 10, 10);
     b.air(x + 4, 5, 0, x + 6, 6, 1).air(x + 4, 5, 9, x + 6, 6, 10);
     b.anchor("porthole", x + 5, 4, 0, NZ).anchor("porthole", x + 5, 4, 10, PZ);
   }
