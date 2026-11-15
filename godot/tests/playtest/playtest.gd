@@ -753,8 +753,9 @@ func _menu(which: String) -> Dictionary:
 			scene.pause.open()
 			scene.pause.call("_open_settings")
 		"weapons":
-			_send_key(int(GameSettings.keys["weapon_menu"]), true)
-			_send_key(int(GameSettings.keys["weapon_menu"]), false)
+			var grid: WeaponGrid = scene.hud.get("_weapon_grid")
+			if not grid.visible:
+				grid.open()
 		"none":
 			if scene.pause.is_open():
 				scene.pause.close()

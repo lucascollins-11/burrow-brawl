@@ -16,6 +16,7 @@ const SUITES := [
 	"res://tests/test_aim_guide.gd",
 	"res://tests/test_pad_input.gd",
 	"res://tests/test_camera_settings.gd",
+	"res://tests/test_weapon_icons.gd",
 	"res://tests/test_game_math.gd",
 	"res://tests/test_audio.gd",
 	"res://tests/test_effects.gd",
